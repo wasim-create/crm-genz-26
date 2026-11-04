@@ -1,0 +1,328 @@
+=====================================================================
+APEXDRIVE CRM: IMPROVEMENT PASS v2
+(Assist flow, introduction incentives, no-financials rule, product catalog, live gamification, AI coach with manual control, reporting)
+=====================================================================
+
+This is an IMPROVEMENT of the existing ApexDrive CRM build, not a rebuild. Where these instructions conflict with anything earlier, THESE WIN.
+
+KEEP:
+- The LEFT NAVIGATION BAR concept and role-based layout. Everyone is happy with it. Only refine labels where this prompt renames things.
+- Every existing feature, unless this prompt removes or changes it.
+- The US localization, demo users and regions, Google Sheets / LocalStorage data layer, Google Workspace integration, the Planner and the Executive Desk. Upgrade them as described below.
+
+GOAL
+The CRM is a tool our reps, managers and owners use all day to plan and optimize their day, week and month with AI, while EARNING POINTS for doing the right things. It must become far more engaging both for people WORKING in it during their day and for people VIEWING it for reporting.
+
+BEFORE BUILDING: write a short plan covering sections 1–10 and the files you'll change. Then build. Finish with the checklist in section 11.
+
+---------------------------------------------------------------------
+1. NO MONETARY / FINANCIAL DATA (global rule)
+---------------------------------------------------------------------
+The system must NOT capture or store any monetary or financial details, anywhere.
+
+Remove from the UI, types, storage adapters, the Google Sheets schema / setup script, seed data, Workspace mock data, exports and AI prompts:
+- deal values
+- prices, unit prices and pricing models
+- "pricing discussed"
+- revenue
+- restock dollar totals
+- dealership-related payout amounts (incentive payouts are the exception; see section 4)
+- incentive spend and ROI
+- any $ figures
+
+EXCEPTION: incentive dollar amounts ARE stored and shown, under the visibility rules in section 4. This is the only monetary data allowed in the system.
+
+Make sure the AI never generates or displays money figures either.
+
+Replace money-based metrics with counts and quantities:
+- number of prospects, visits, deals won and clients signed
+- products signed per client
+- product penetration
+- upsells won (count)
+- Keyfetch units restocked (quantity)
+- conversion rates
+- cycle times
+
+Pipeline cards and prioritization use stage, heat, relationship temperature, dealership size (rooftops, used inventory) and likelihood to close, never value.
+
+Seed data: strip every $ value. Fix any text like "$3,800 VSC package".
+
+---------------------------------------------------------------------
+2. PRODUCT CATALOG AND HOW PRODUCTS FLOW THROUGH THE LIFECYCLE
+---------------------------------------------------------------------
+Replace the current product catalog with exactly this default list (the names shown in the UI):
+  1. Vehicle Service Contract (Extended Warranty)
+  2. Certified Limited Warranty
+  3. Keyfetch
+  4. GAP
+  5. Tire & Wheel Protection
+  6. Maintenance
+  7. GPS + AI + Vehicle History Plug-in
+  8. ChargeClub (No Capex)
+  9. EV Solutions
+  10. Ceramic Pro   ← NEW
+
+Catalog fields: name, category (optional), short description, active / inactive, "requires inventory top-ups" flag (ON for Keyfetch only by default), date added, added by. NO price fields.
+
+The catalog is OPEN:
+- Owners and managers can add NEW products at any time and deactivate old ones (never delete; history must stay intact).
+- New products immediately appear in the scouting checklist, sign-up selection, upsell options, filters, reports and the Game Rules product bonuses (section 6).
+- Optionally flag a product as "New launch" for a set period, so it's highlighted to reps.
+
+Lifecycle:
+a) SCOUTING / PROSPECT stage (product interest)
+   - The rep ticks which products the dealership is interested in. Use a clean two-column checkbox list of the active catalog, with an optional interest level (Low / Medium / High) per ticked product.
+   - Capture this during visits and on the record. Keep a history of when interest was recorded and by whom.
+b) SIGN-UP (product selection)
+   - At sign-up, the products signed are selected FROM THE SAME LIST, pre-filled with the products they showed interest in, and adjustable.
+   - This tells the system which products this client has, and therefore what to service.
+c) CLIENT (servicing)
+   - Client servicing features only appear once the dealership is a CLIENT.
+   - KEYFETCH INVENTORY TOP-UPS: only if the client has Keyfetch (or another product with the inventory flag).
+     - The rep logs a top-up as a QUANTITY only: date, quantity, handled by, notes.
+     - Show top-up history, average quantity, frequency, and the predicted next top-up date.
+     - Clients WITHOUT Keyfetch show no inventory or top-up features at all.
+     - Remove all restock pricing and dollar totals.
+   - UPSELLS: for a client, the upsell options are any catalog products they DON'T have yet, including newly added products.
+     - Each upsell is a mini-opportunity: Identified → Pitched → Interested → Won / Lost, with owner and next step. No value field.
+     - When an upsell is Won, the product is added to the client's product set (with the date and who won it).
+   - Product summary on every client: Has / Upselling / Not offered yet, for each catalog product.
+   - Follow-ups on the dealership's sales and promotions remain part of servicing.
+
+Update the types, Sheets tabs (Products, Dealership_Products, Upsells, Inventory_Topups), import mapping, filters, AI prompts and seed data to match. Seed realistic product interest, signed products, Keyfetch top-ups (only for Keyfetch clients) and upsells across the catalog, including a few for Ceramic Pro.
+
+---------------------------------------------------------------------
+3. FLOW CHANGE: "HANDOFF" BECOMES "MANAGER ASSIST" (rep keeps ownership)
+---------------------------------------------------------------------
+When a prospect is HOT, the rep does NOT hand the deal over. The rep asks for the manager's HELP: the manager joins calls or meetings to help close. The REP KEEPS OWNERSHIP all the way to closure, unless a manager explicitly transfers it.
+
+- Rename "Handoff" to "Manager Assist" everywhere (UI, nav, types, Sheets, seed data, AI prompts):
+  - Manager nav: "Assist Requests"
+  - Rep nav: "My Assists"
+  - List the final names in your plan.
+- Pipeline: remove the "Handed Off" stage. Manager Assist is a FLAG / badge that can sit on HOT, Negotiation or Contract, so the deal stays in its real stage on the REP's board, planner and client pool.
+- Assist Request (raised by the rep from the deal):
+  - Assist type: join a call / join an in-person visit / join a Google Meet / terms approval / strategy session / contract signing support.
+  - Proposed times, respecting the 10 AM–4 PM dealership-local window for visits.
+  - An AI-drafted briefing (decision maker, objections, products of interest, history; no pricing or money), editable by the rep. No hardcoded placeholder text.
+  - The manager defaults to the rep's actual manager (not a hardcoded default). The rep can pick another manager or owner.
+- Manager response:
+  - Accept / Propose another time / Decline with a note.
+  - On accept, the meeting goes onto BOTH Planners and Google Calendar.
+  - The outcome is logged as ONE joint activity with both participants.
+- Ownership:
+  - assignedRepId stays the rep. Remove the logic that makes the manager the current closer.
+  - Only a manager or owner can TRANSFER OWNERSHIP, via an explicit action with a required reason. It is audited and the rep is notified.
+  - Origin-rep attribution NEVER changes.
+- At Won / Signed, record who closed and who signed: rep, manager, or "closed with assist from…". The client lands in the origin rep's client pool.
+- Reporting:
+  - assist requests per rep and manager
+  - manager response time
+  - assist-to-win conversion
+  - deals closed solo vs with assist
+  - manager assist load
+  - ownership transfers (with reasons)
+- Seed several assists in every state, including one ownership transfer.
+
+---------------------------------------------------------------------
+4. INTRODUCTION INCENTIVES (with or without an assist)
+---------------------------------------------------------------------
+The introduction incentive must NOT depend on a handoff or assist. Many deals are scouted and closed by the rep alone, and finance must still be able to follow the trail and approve the incentive.
+
+- Every prospect has an INTRODUCTION TRAIL built automatically from the audit log, shown as a clear visual timeline:
+  source (Pool / Assigned / Manual Search) → claimed by → visits (dates, good/bad window) → product interest recorded → assist requested / completed (ONLY if it happened) → won / closed by → signed by → products signed → onboarding.
+- Incentive eligibility is created automatically by configurable trigger events (Settings → Incentive Rules), e.g. "introduction qualified", "deal signed", "onboarding complete". It applies whether the deal was solo or assisted, and records whether an assist was involved.
+- Finance controller (Donna Clark) workflow:
+  - A queue of eligible introductions, each showing the full trail, the origin rep, who closed and signed, the assist involvement (if any), and any conflicts (e.g. two reps touched it, or an ownership transfer).
+  - She can Verify / Approve / Reject / Mark disputed (with comments), and mark as Paid outside the system (date and optional external reference only).
+  - Incentive states: Eligible → Pending verification → Verified → Approved → Paid / Rejected / Disputed.
+  - INCENTIVE AMOUNTS: each introduction incentive has a dollar amount. Finance sets and edits it, optionally suggested from the Incentive Rules in Settings (amounts vary per introduction). Paid records store the amount, date and an optional external reference.
+- VISIBILITY OF AMOUNTS (strict exception to the CRM's transparency):
+  - A sales rep sees ONLY their own incentive amounts.
+  - Managers, owners / executives and the finance controller see ALL amounts.
+  - Team leads and other reps never see anyone else's amounts. They still see the introduction's status and trail, but the amount is hidden (no placeholder hinting at it).
+- Enforce this everywhere amounts could appear: screens, record timelines, feeds, notifications, leaderboards, search and command bar results, AI answers and summaries, exports and reports. AI must not reveal an amount to anyone not allowed to see it.
+- Enforce it in the data layer too, not just by hiding it in the UI. The Apps Script API only returns amount fields to permitted users. The CRM_Finance spreadsheet is shared only with finance, managers and owners; reps get their own amounts through the API, never by direct sheet access.
+- Every change to an amount is audited (who, when, old value, new value).
+- Reps see their own introductions and the status of each. Finance can export the approved list with amounts for the period. Managers and owners can also export with amounts. Reps can export only their own statement.
+- Remove the old logic that only created an incentive when a handoff was raised, and remove the hardcoded $300 / "$250 base + $50" rule.
+
+---------------------------------------------------------------------
+5. LIVE GAMIFICATION ENGINE (points visible everywhere, earned from real actions)
+---------------------------------------------------------------------
+Currently, points, levels, ranks and streaks are static seed values on one page, and nothing awards points. Make gamification a LIVE system woven through the whole app.
+
+Borrow these patterns from our other internal prototype ("VibeCRM"), adapted to ApexDrive and field sales:
+- A persistent GAME STRIP in the top bar on every page: level number and title, points with a progress bar to the next level, points TODAY vs today's target (progress ring), streak (flame), team rank (#), and the active multiplier or bonus.
+- Every action button shows what it earns ("Log visit +40", "Request assist +25", "Log Keyfetch top-up +30"), using live values from the Game Rules (section 6).
+- Animated "+40 pts • Logged visit at Smith Motors" toasts. Confetti and a celebration banner for wins, signings, upsell wins, level-ups and badges. Optional sound, off by default.
+- Levels with fun but professional field-sales titles (e.g. Rookie → Road Warrior → Lot Legend → Closer → Territory Boss → Hall of Fame).
+- Badges with progress bars, locked vs unlocked, and categories (Scouting, Visits, Relationships, Closing, Servicing, Upselling, Teamwork). Include product badges, e.g. "Ceramic Pro Pioneer: first 3 Ceramic Pro upsells".
+- A leaderboard with a top-3 podium, weekly / monthly / quarterly / season views, filters by region and role, rank movement arrows, and "Kevin just passed you" nudges.
+- A points ledger per user (action, record, rule version, timestamp). Each dealership shows the points earned on it.
+
+Default earning actions (values are your call; all editable in section 6):
+- claiming a prospect
+- completing a dealership profile
+- recording product interest
+- a completed in-person visit WITH notes and an outcome (bonus inside 10 AM–4 PM, reduced outside it)
+- logged calls, emails and Meet calls (quality-weighted; no points for trivial emails)
+- on-time follow-ups; clearing overdue ones
+- moving a deal forward (no points for stage ping-pong)
+- requesting an assist with a complete brief (rep); accepting and attending one (manager)
+- won, signed and onboarding complete (rep and manager split when assisted)
+- each product signed at sign-up
+- upsell won (per product, with product bonuses)
+- Keyfetch top-up logged
+- client health improved; a re-engaged at-risk client
+- completing manager priorities (section 7)
+- following the day plan (e.g. 80%+ of stops completed)
+- streaks and daily quests
+
+Fair play: points only for verified, quality actions; daily caps; undo reverses points; no points for duplicate or empty logs. Rookie league and personal bests for new reps. Managers and owners earn points too, and leaderboards can show "reps only" or "everyone".
+
+Derive all points, levels, ranks and streaks from the Points_Ledger, generated from the seeded activity history using the default rules, so the numbers are consistent across the app.
+
+---------------------------------------------------------------------
+6. GAME RULES CONSOLE (owners and managers change how points are earned)
+---------------------------------------------------------------------
+Add a "Game Rules" area under Settings.
+- Owners can edit everything.
+- Managers can create product bonuses, quests and challenges for their team or region.
+- Everyone else can view the rules (transparency).
+
+The console contains:
+- POINTS TABLE: every scorable action, with points, enabled/disabled, daily cap, and which roles it applies to.
+- PRODUCT BONUSES: managers can pick ANY catalog product (existing or newly added) and set bonus points or a multiplier, e.g.:
+  - "+150 bonus for every Ceramic Pro upsell won"
+  - "2x on GAP sign-ups this month"
+  - "+50 for recording interest in EV Solutions"
+  Choose which actions it applies to (interest recorded / signed at sign-up / upsell won). Set the start and end dates, and target everyone, a region, a team or specific reps.
+  Active product bonuses are highlighted on the game strip, in the product checkboxes ("🔥 2x"), in upsell suggestions and in the AI plan.
+  When a NEW product is added to the catalog, prompt the manager: "Create a launch bonus?"
+- MULTIPLIERS: good visit window, bad-time visits, new territory, region or team boost.
+- LEVELS, BADGES and STREAK rules (thresholds, titles, criteria, grace days).
+- TARGETS: daily and weekly point targets per role.
+- QUESTS and CHALLENGES: create, schedule and target them; head-to-head and team-vs-team sprints.
+- SEASONS: quarterly resets, with an all-time hall of fame.
+- MANUAL ADJUSTMENTS: add or remove points with a required reason; audited.
+- SIMULATE: preview how the leaderboard would have looked under the changed rules before saving.
+- VERSIONING: rules are versioned with effective dates, and ledger entries store the rule version.
+- Points are NOT money, and no money is linked to them (section 1).
+
+Store all of this in CRM_Gamification sheets: Point_Rules, Product_Bonuses, Multipliers, Levels, Badges, Quests, Challenges, Seasons, Points_Ledger, Rule_Versions.
+
+---------------------------------------------------------------------
+7. AI COACH + MANUAL CONTROL + MANAGER PRIORITIES
+---------------------------------------------------------------------
+The AI suggests; humans stay in control. Business value comes FIRST: the AI must never push points over an important client, deal or communication.
+
+AI coach:
+- "Today's Game Plan":
+  - Ordered good-window stops; calls and emails before 10 AM / after 4 PM; assists; Keyfetch top-ups due; overdue follow-ups; upsells (highlighting active product bonuses); manager priorities.
+  - Each item shows WHY it matters and the points it's worth, plus the day's projected points vs target.
+  - The same for week and month.
+- Daily quests from real data (e.g. "Log notes for yesterday's 2 visits", "Reply to the email promised to Smith Motors on Monday", "Pitch Ceramic Pro to 2 clients: 2x bonus").
+- Live nudges, e.g.:
+  - "2 more good-window visits keeps your streak"
+  - "60 pts from passing Todd Kelly"
+  - "Lone Star Ford is 8 min away and due a Keyfetch top-up"
+  - "Meet notes not logged"
+- Missed-communication radar: commitments found in emails, Meet notes and chats that haven't been actioned; prospects and clients going quiet (ghosting risk); overdue follow-ups. One click to act.
+- Relationship temperature (from VibeCRM's sentiment idea):
+  - A 0–100 score and trend sparkline per dealership, built from synced emails, Meet notes and visit notes.
+  - Highlighted intent / hesitation / urgency / friction phrases.
+  - Ghosting risk.
+  - Feeds lead scoring and the plan.
+- End-of-day, weekly and monthly recaps: points, plan vs actual, wins, what slipped, and the next draft plan.
+
+MANUAL CONTROL (important):
+- Reps can build their day, week or month plan completely by hand, or start from the AI plan and edit it: add, remove, reorder or reschedule stops (drag and drop), add custom tasks and personal blocks (e.g. "office admin 9–10"), change visit durations, and set start and end locations.
+- PIN / LOCK items, so the AI must keep them when regenerating ("Regenerate around my locked items").
+- An AI on/off preference per user. With AI off, the Planner still works fully as a manual planner and calendar.
+- Override any AI suggestion (dismiss with an optional reason); the AI learns from dismissals in future suggestions.
+- Every AI-generated item is labelled as such. Manual items are never overwritten without confirmation.
+
+MANAGER PRIORITIES (managers / owners suggest things of importance):
+- A manager can push a "Priority" to one rep, several reps, a region or the whole team. For example:
+  - "Visit Smith Motors this week: decision maker back from vacation"
+  - "Focus on EV Solutions interest in Dallas"
+  - "Call all Keyfetch clients due for top-up"
+  It includes a reason, a priority level (Normal / High / Urgent), a due date or window, and optional linked dealership(s) and product(s), plus optional bonus points.
+- Priorities appear in the rep's Planner and Today view with a distinct "From Jason Scott" badge. The AI plan MUST include them, scheduled sensibly.
+- The rep can Accept, Schedule, Complete, or Decline / Snooze with a reason. The manager sees the status live.
+- Team-wide FOCUS setting: managers can set a weekly focus (e.g. a product, area or type of client) that the AI weights in everyone's plans.
+- Managers can also view, comment on, and suggest edits to any rep's plan (transparency). The rep sees the suggestions and accepts or declines them.
+- Reporting: priorities sent, accepted, completed on time, declined (with reasons), per rep and manager.
+
+---------------------------------------------------------------------
+8. MORE ENGAGING FOR PEOPLE WORKING IN IT
+---------------------------------------------------------------------
+- A "Today" home for reps (or the Planner's day view):
+  - greeting
+  - today's game plan
+  - points ring and streak
+  - manager priorities
+  - next stop card (one-tap navigate, pre-visit brief, check-in)
+  - quests
+  - nudges
+  - team wins feed
+- A quick-log sheet from anywhere (visit / call / Keyfetch top-up / note / product interest), voice notes, smart defaults. It shows the points before saving and the celebration after.
+- Team activity feed: wins, signings, upsells, badges and level-ups, with reactions (👏 🔥).
+- Micro-interactions: progress animations, satisfying check-offs, skeleton loaders, and empty states with a clear next action.
+- Mobile "Work my day" mode: game strip, next stop, priorities and quick logging up front.
+
+---------------------------------------------------------------------
+9. MORE INTERESTING FOR PEOPLE VIEWING REPORTS (no money; see section 1)
+---------------------------------------------------------------------
+Upgrade the Executive Desk (weekly / monthly / quarterly), manager and finance views into visual storytelling:
+- An AI narrative headline, e.g. "This week: 6 dealerships signed, up 2. Southeast led on visits; West needs attention.", with 3 highlights, 3 concerns and 3 recommended actions.
+- KPI tiles with sparklines, deltas and target progress. All based on counts, quantities and rates.
+- Proper charts (e.g. Recharts), each clickable through to the underlying records:
+  - pipeline funnel and stage conversion
+  - stage velocity / cycle time
+  - win / loss reasons
+  - product interest → sign-up conversion per product
+  - product penetration across clients
+  - upsells won by product
+  - active product bonus impact (before vs during the bonus)
+  - Keyfetch units topped up over time
+  - solo vs assisted closes
+  - good-time vs bad-time visits
+  - introductions by status
+  - manager priorities completion
+- A territory map heatmap: activity, prospects and clients by region, with each rep's radius.
+- Team game panel: leaderboard snapshot, streaks, badges this period, "moments of the week".
+- One-page rep scorecards. Compare mode (period, region, rep). Presentation / TV mode for the weekly sales meeting. PDF / CSV export.
+- Finance view: the introductions queue funnel (Eligible → Paid), verification turnaround, and introductions per rep and region, incentive totals by period, rep and region (visible to finance, managers and owners only).
+
+---------------------------------------------------------------------
+10. FIX WHAT'S HARDCODED / STATIC
+---------------------------------------------------------------------
+- Static gamification values → derive them from the ledger (section 5).
+- Hardcoded assist defaults ("Dealer Principal", "Standard contract terms…", the default manager) → use real data and the AI draft.
+- The hardcoded restock price ($4.25) and product name ("Keyfetch Pro Smart Fobs") → Keyfetch from the catalog, quantity only.
+- The hardcoded incentive amount and rule text → the trigger rules in section 4, with no amounts.
+- Search the codebase for other hardcoded business values, $ figures, demo-only shortcuts, and buttons that do nothing (e.g. a "Celebrate" button that only fires confetti). Wire them to real logic, and list what you fixed.
+
+DESIGN: keep the left nav and the clean ApexDrive look, but make it feel alive: a confident accent color for points, bold tabular numbers, richer cards and subtle motion, plus a dark mode. Fun but professional, suitable for car-dealership sales teams and owners. Mobile-first for reps; data-rich on desktop for managers and executives.
+
+---------------------------------------------------------------------
+11. WHEN DONE
+---------------------------------------------------------------------
+Give me:
+(a) a changelog by section (1–10)
+(b) the final nav labels per role
+(c) the final product catalog
+(d) the default point rules and an example product bonus
+(e) a checklist confirming:
+    - no monetary / financial data is captured, stored or shown anywhere, EXCEPT incentive amounts, which are visible only to the rep they belong to, managers, owners and finance, and are enforced in the data layer as well as the UI
+    - Keyfetch top-ups are quantity-only and appear only for Keyfetch clients
+    - new products can be added and flow through scouting, sign-up, upsell, reports and product bonuses
+    - finance can follow the trail and approve introductions with or without an assist
+    - the rep keeps ownership through assists; only managers can transfer ownership; origin attribution never changes
+    - plans can be fully manual, with locking, and manager priorities appear in rep plans
+    - points are awarded live and are editable in Game Rules
+    - nothing hardcoded from section 10 remains
+    - all previous features still work
+=====================================================================

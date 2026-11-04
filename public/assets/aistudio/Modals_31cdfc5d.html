@@ -1,0 +1,599 @@
+<!-- 1. Location Warning Banner -->
+<div id="location-warning-banner" class="fixed bottom-0 left-0 right-0 bg-red-600 text-white p-4 shadow-[0_-10px_40px_rgba(220,38,38,0.3)] z-[200] transform translate-y-full transition-transform duration-300 hidden">
+    <div class="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-start gap-3">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mt-0.5"></i>
+            <div>
+                <h4 class="font-bold text-lg">Location Access Required</h4>
+                <p class="text-sm text-red-100">We need your live location to find dealerships near you. Please click the <strong>lock icon (🔒)</strong> in your browser's address bar above, change Location to "Allow", and try again.</p>
+            </div>
+        </div>
+        <button type="button" onclick="hideLocationWarning()" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors outline-none">
+            Dismiss
+        </button>
+    </div>
+</div>
+
+<!-- 2. Smart Suggestions Modal -->
+<div id="modal-smart-suggestions" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[80] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-lightbulb text-yellow-500"></i> Select Target to Insert</h3>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="closeModal('modal-smart-suggestions'); openAddProspectModal();" class="text-xs bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-1.5 rounded-lg border border-brand-200 font-medium transition-colors shadow-sm flex items-center gap-1">
+                    <i class="fa-solid fa-plus"></i> Add Prospect
+                </button>
+                <button type="button" onclick="closeModal('modal-smart-suggestions')" class="text-gray-400 hover:text-gray-600 ml-2"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+        </div>
+        <div class="p-4 border-b border-gray-100 flex gap-2">
+            <button type="button" id="tab-suggest-prospects" onclick="setSuggestTab('prospects')" class="flex-1 py-1.5 text-xs font-bold rounded-md bg-white shadow-sm text-gray-800 transition-all border border-gray-200">Prospects</button>
+            <button type="button" id="tab-suggest-clients" onclick="setSuggestTab('clients')" class="flex-1 py-1.5 text-xs font-bold rounded-md text-gray-500 hover:text-gray-800 transition-all border border-transparent hover:bg-gray-100">Clients / Onboarding</button>
+            <button type="button" onclick="toggleGoldenFilter()" id="modal-golden-filter-btn" class="w-8 flex items-center justify-center bg-white border border-gray-200 rounded text-gray-400 hover:text-yellow-500 transition-colors ml-2" title="Toggle Golden Targets (50+ Cars & Franchise)">
+                <i class="fa-solid fa-star"></i>
+            </button>
+        </div>
+        <div id="modal-planner-suggestions" class="p-4 overflow-y-auto flex-grow bg-gray-50 space-y-3">
+            <!-- Populated via JS -->
+        </div>
+        <div class="p-4 border-t border-gray-100 bg-white flex justify-end rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-smart-suggestions')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- 3. Schedule Visit Modal -->
+<div id="modal-schedule" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[90] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm flex flex-col">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg"><i class="fa-regular fa-calendar-plus text-brand-600 mr-2"></i> Schedule Visit</h3>
+            <button type="button" onclick="closeModal('modal-schedule')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="p-6">
+            <form id="form-schedule" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Select Itinerary Date</label>
+                    <input type="date" id="sched-date" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                </div>
+            </form>
+        </div>
+        <div class="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-schedule')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+            <button type="button" onclick="submitSchedule()" class="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition-colors shadow-sm">Add to Planner</button>
+        </div>
+    </div>
+</div>
+
+<!-- 4. Comprehensive Audit Trail Modal -->
+<div id="modal-audit" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[140] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <div>
+                <h3 class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-timeline text-brand-600"></i> Handoff & Incentive Audit Trail</h3>
+                <p class="text-xs text-gray-500 mt-0.5" id="audit-subheading">Review originating touchpoints before authorizing incentive payment</p>
+            </div>
+            <button type="button" onclick="closeModal('modal-audit')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="p-6 overflow-y-auto flex-grow space-y-6" id="audit-modal-body">
+            <!-- Populated via JS -->
+        </div>
+        <div class="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center rounded-b-xl" id="audit-modal-footer">
+            <button type="button" onclick="closeModal('modal-audit')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors text-sm">Close</button>
+            <div id="audit-action-btn-slot"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 5. Finance Authorization Modal -->
+<div id="modal-finance-approve" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[150] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg text-gray-900 flex items-center gap-2">
+                <i class="fa-solid fa-money-bill-wave text-green-600"></i> Authorize Field Bounty
+            </h3>
+            <button type="button" onclick="closeModal('modal-finance-approve')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+            <input type="hidden" id="fa-payout-id">
+            <div>
+                <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Dealership</label>
+                <div id="fa-dealership-name" class="font-bold text-base text-gray-900">Metro Ford</div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Scout (Rep)</label>
+                    <div id="fa-rep-name" class="text-sm font-semibold text-gray-800">Sarah Connor</div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500 mb-1">Closer (Exec)</label>
+                    <div id="fa-closer-name" class="text-sm font-semibold text-gray-800">Miles Dyson</div>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Payout Amount ($ USD) *</label>
+                <div class="relative">
+                    <span class="absolute left-3 top-2.5 text-gray-500 font-bold">$</span>
+                    <input type="number" id="fa-amount" value="250.00" step="10.00" min="0" required class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none font-bold text-gray-900">
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Standard field incentive is $250.00 per qualified handoff.</p>
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Payment Method</label>
+                <select id="fa-method" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white text-sm">
+                    <option value="Payroll Direct Deposit">Payroll Direct Deposit</option>
+                    <option value="Corporate ACH">Corporate ACH</option>
+                    <option value="Accounts Payable Check">Accounts Payable Check</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Finance Audit Notes (Optional)</label>
+                <textarea id="fa-notes" rows="2" placeholder="e.g. Verified DM meeting with GSM on 10/20. Approved." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none resize-none text-sm"></textarea>
+            </div>
+        </div>
+        <div class="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-finance-approve')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors text-sm">Cancel</button>
+            <button type="button" onclick="submitFinanceApproval()" class="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition-colors shadow-sm text-sm">
+                <i class="fa-solid fa-check mr-1"></i> Authorize & Release Funds
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 6. User Profile Modal -->
+<div id="modal-user-profile" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[170] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg"><i class="fa-solid fa-user-pen text-brand-600 mr-2"></i> Edit Profile</h3>
+            <button type="button" onclick="closeModal('modal-user-profile')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="p-6">
+            <form id="form-user-profile" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">First Name</label>
+                        <input type="text" id="up-fname" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Last Name</label>
+                        <input type="text" id="up-lname" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Home Zip Code</label>
+                    <input type="text" id="up-zip" required pattern="[0-9]{5}" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none font-mono">
+                </div>
+            </form>
+        </div>
+        <div class="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-user-profile')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+            <button type="button" onclick="submitUserProfile()" class="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition-colors shadow-sm">Save Profile</button>
+        </div>
+    </div>
+</div>
+
+<!-- 7. Add Prospect Modal -->
+<div id="modal-add-prospect" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[160] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg" id="modal-prospect-title"><i class="fa-solid fa-building-circle-check text-brand-600 mr-2"></i> Add New Prospect</h3>
+            <button type="button" onclick="closeModal('modal-add-prospect')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="p-6 overflow-y-auto flex-grow">
+            <div id="ap-radar-banner" class="mb-5 bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                    <h4 class="font-bold text-blue-900 text-sm">Need a prospect?</h4>
+                    <p class="text-xs text-blue-700 mt-0.5">Use your location to find nearby dealerships on Google Maps.</p>
+                </div>
+                <div class="flex items-center gap-2 w-full md:w-auto">
+                    <select id="radar-location-modal" class="text-xs bg-white border border-blue-200 rounded px-2 py-1.5 text-blue-900 outline-none focus:ring-1 focus:ring-blue-500 w-full md:w-auto">
+                        <option value="home">Home Zip</option>
+                        <option value="current">Current Location</option>
+                    </select>
+                    <button type="button" onclick="launchRadarSearch('modal', this)" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shadow-sm whitespace-nowrap flex items-center gap-2 min-w-[120px] justify-center">
+                        <i class="fa-solid fa-satellite-dish"></i> Open Radar
+                    </button>
+                </div>
+            </div>
+
+            <form id="form-add-prospect" class="space-y-4">
+                <input type="hidden" id="ap-id">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Dealership Name *</label>
+                        <input type="text" id="ap-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Main Phone</label>
+                        <input type="tel" id="ap-phone" placeholder="(555) 555-5555" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Street Address</label>
+                        <input type="text" id="ap-address" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">State</label>
+                        <input type="text" id="ap-state" placeholder="e.g. CA" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Zip Code</label>
+                        <input type="text" id="ap-zip" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Dealership Type</label>
+                        <select id="ap-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+                            <option value="Franchise">Franchise</option>
+                            <option value="Independent">Independent</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Used Cars on Lot</label>
+                        <input type="number" id="ap-cars" placeholder="e.g. 75" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Website Domain</label>
+                        <input type="text" id="ap-website" placeholder="www.dealership.com" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    
+                    <div class="md:col-span-2 border-t border-gray-200 pt-4 mt-2">
+                        <h4 class="text-sm font-bold text-gray-700 mb-2"><i class="fa-solid fa-user-tag text-brand-600 mr-1"></i> Referral Information (Optional)</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">Internal Referral</label>
+                                <select id="ap-internal-referral" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">External Referral</label>
+                                <input type="text" id="ap-external-referral" placeholder="e.g. John Doe (Vendor)" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-2 border-t border-gray-200 pt-4 mt-2">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Structure Type</label>
+                        <select id="ap-structure" onchange="toggleGroupFields(this)" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+                            <option value="Single Rooftop">Single Rooftop</option>
+                            <option value="Dealer Group">Dealer Group</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="group-fields" class="hidden grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Group Name</label>
+                        <input type="text" id="ap-group-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Group Domain</label>
+                        <input type="text" id="ap-group-domain" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-bold text-gray-700 mb-1"># of Rooftops</label>
+                        <input type="number" id="ap-rooftops" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-add-prospect')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+            <button type="button" onclick="submitAddProspect()" class="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition-colors shadow-sm">Save Prospect</button>
+        </div>
+    </div>
+</div>
+
+<!-- 8. Sales Stop Wizard Modal -->
+<div id="modal-sales-stop" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[100] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg"><i class="fa-solid fa-street-view text-brand-600 mr-2"></i> Log Sales Stop</h3>
+            <button type="button" onclick="closeModal('modal-sales-stop')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        
+        <div class="p-6 overflow-y-auto flex-grow relative">
+            <form id="form-sales-stop" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Communication Type</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="comm_type" value="In-Person" class="peer sr-only" checked onchange="toggleInPersonTools()">
+                            <div class="text-center p-3 border border-gray-200 rounded-lg peer-checked:border-brand-500 peer-checked:bg-brand-50 peer-checked:text-brand-700 hover:bg-gray-50 transition-colors">
+                                <i class="fa-solid fa-car mb-1 block text-lg"></i>
+                                <span class="text-xs font-medium">In-Person</span>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="comm_type" value="Phone" class="peer sr-only" onchange="toggleInPersonTools()">
+                            <div class="text-center p-3 border border-gray-200 rounded-lg peer-checked:border-brand-500 peer-checked:bg-brand-50 peer-checked:text-brand-700 hover:bg-gray-50 transition-colors">
+                                <i class="fa-solid fa-phone mb-1 block text-lg"></i>
+                                <span class="text-xs font-medium">Phone</span>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="comm_type" value="Email" class="peer sr-only" onchange="toggleInPersonTools()">
+                            <div class="text-center p-3 border border-gray-200 rounded-lg peer-checked:border-brand-500 peer-checked:bg-brand-50 peer-checked:text-brand-700 hover:bg-gray-50 transition-colors">
+                                <i class="fa-solid fa-envelope mb-1 block text-lg"></i>
+                                <span class="text-xs font-medium">Email</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">2. Visit Purpose</label>
+                        <select id="stop-purpose" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white"></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">3. Contact Met</label>
+                        <select id="stop-contact" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white"></select>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between items-end mb-2">
+                        <label class="block text-sm font-bold text-gray-700">4. Outcome & Notes</label>
+                        <div id="in-person-tools" class="flex gap-2">
+                            <a href="https://meet.google.com/" target="_blank" class="text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1 transition-colors shadow-sm" title="Open Google Meet Homepage">
+                                <i class="fa-solid fa-video"></i> Launch Meet
+                            </a>
+                            <button type="button" onclick="importMockMeetNotes()" class="text-[10px] font-bold bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded hover:bg-green-100 flex items-center gap-1 transition-colors shadow-sm" title="Select Meet Summary from Google Drive">
+                                <i class="fa-brands fa-google-drive"></i> Import from Drive
+                            </button>
+                        </div>
+                    </div>
+                    <textarea id="stop-notes" required rows="4" placeholder="Detail the conversation and customer feedback..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none resize-none"></textarea>
+                </div>
+                <div class="bg-brand-50 p-4 rounded-lg border border-brand-100">
+                    <label class="block text-sm font-bold text-brand-900 mb-2">5. Next Follow-Up Date</label>
+                    <input type="date" id="stop-next-date" class="w-full px-3 py-2 border border-brand-200 rounded bg-white text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                </div>
+            </form>
+        </div>
+        <div class="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-sales-stop')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+            <button type="button" onclick="submitSalesStop()" class="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition-colors shadow-sm">Save Log</button>
+        </div>
+    </div>
+</div>
+
+<!-- 9. Quick Dealership Detail Modal (Popin for Route Planner & Pipeline) -->
+<div id="modal-quick-detail" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[70] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
+        <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg flex items-center gap-2"><i class="fa-solid fa-building text-brand-600"></i> Dealership Quick View</h3>
+            <button type="button" onclick="closeModal('modal-quick-detail')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="p-6 overflow-y-auto flex-grow bg-gray-50">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 relative overflow-hidden mb-6">
+                <div id="qd-decay-banner" class="absolute top-0 left-0 right-0 h-1 bg-red-500 hidden"></div>
+                <div class="flex flex-col md:flex-row justify-between items-start gap-4 mb-6">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span id="qd-type-badge" class="px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-600 uppercase">Franchise</span>
+                            <span id="qd-heat-badge" class="px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-700 uppercase">Warm</span>
+                            <span id="qd-source-badge" class="hidden px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-700 uppercase tracking-wider"></span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <h2 id="qd-name" class="text-2xl font-bold text-gray-900">Name</h2>
+                            <button type="button" onclick="openAddProspectModal(activeDealershipId)" class="text-gray-400 hover:text-brand-600 transition-colors" title="Edit Dealership"><i class="fa-solid fa-pen"></i></button>
+                        </div>
+                        <p id="qd-address" class="text-gray-500 text-sm mt-1">Address</p>
+                        <p id="qd-phone" class="text-gray-500 text-sm mt-1">Phone</p>
+                    </div>
+                    <div class="flex flex-col gap-2 w-full md:w-auto" id="qd-actions-container"></div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-100 pt-6">
+                    <div><p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Distance</p><p id="qd-distance" class="font-semibold">--</p></div>
+                    <div><p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Used Inv.</p><p id="qd-inventory" class="font-semibold">--</p></div>
+                    <div><p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Status</p><p id="qd-status" class="font-semibold">--</p></div>
+                    <div><p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Last Touchpoint</p><p id="qd-last-touch" class="font-semibold">--</p></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <h3 class="font-semibold text-lg">Sales Stop Log</h3>
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 max-h-80 overflow-y-auto hide-scroll">
+                        <div id="qd-activity-list" class="relative border-l border-gray-200 ml-3 space-y-6"></div>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-semibold text-lg">Contacts</h3>
+                        <button type="button" onclick="openAddContactModal()" class="bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-brand-200"><i class="fa-solid fa-user-plus mr-1"></i> Add Contact</button>
+                    </div>
+                    <div id="qd-contacts-list" class="space-y-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 10. Confirm Park Modal -->
+<div id="modal-confirm-park" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[120] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm flex flex-col">
+        <div class="p-5 border-b border-gray-100 flex items-center bg-gray-50 rounded-t-xl gap-3">
+            <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0">
+                <i class="fa-solid fa-ban"></i>
+            </div>
+            <h3 class="font-bold text-lg text-gray-900">Park Account?</h3>
+        </div>
+        <div class="p-6 space-y-4">
+            <p class="text-sm text-gray-600">Are you sure you want to park this account? It will be removed from your active pipeline until you unpark it or touch base again.</p>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Reason for Parking *</label>
+                <textarea id="park-note" rows="3" placeholder="Detail why this account is being parked..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none resize-none"></textarea>
+            </div>
+        </div>
+        <div class="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-confirm-park')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+            <button type="button" onclick="executeParkDealership()" class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors shadow-sm">Yes, Park It</button>
+        </div>
+    </div>
+</div>
+
+<!-- 11. Handoff Selection Modal -->
+<div id="modal-handoff" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[130] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg"><i class="fa-solid fa-handshake text-brand-600 mr-2"></i> Initiate Handoff</h3>
+            <button type="button" onclick="closeModal('modal-handoff')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="p-6">
+            <p class="text-sm text-gray-600 mb-4">Select the Manager or Executive to receive this account. This flags the account for management and pushes it to their pipeline.</p>
+            <form id="form-handoff" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Assign Closer</label>
+                    <select id="handoff-closer" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white">
+                        <!-- Populated via JS -->
+                    </select>
+                </div>
+            </form>
+        </div>
+        <div class="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-handoff')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+            <button type="button" onclick="submitHandoff()" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors shadow-sm">Confirm Handoff</button>
+        </div>
+    </div>
+</div>
+
+<!-- 12. Add Contact Modal -->
+<div id="modal-add-contact" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[110] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg" id="modal-contact-title"><i class="fa-solid fa-address-card text-brand-600 mr-2"></i> Add Contact to Roster</h3>
+            <button type="button" onclick="closeModal('modal-add-contact')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        
+        <div class="p-6 overflow-y-auto flex-grow">
+            <form id="form-add-contact" class="space-y-5">
+                <input type="hidden" id="ac-id">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">First Name *</label>
+                        <input type="text" id="ac-fname" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Last Name *</label>
+                        <input type="text" id="ac-lname" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Job Title *</label>
+                    <select id="ac-title" required onchange="handleJobTitleChange(this)" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white mb-2">
+                        <!-- Populated via JS -->
+                    </select>
+                    <input type="text" id="ac-title-other" placeholder="Please specify title..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none hidden">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Direct Phone</label>
+                        <input type="tel" id="ac-phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Email</label>
+                        <input type="email" id="ac-email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">LinkedIn URL</label>
+                        <input type="url" id="ac-linkedin" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Other Socials</label>
+                        <input type="text" id="ac-socials" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Reason for Interest / Notes</label>
+                    <textarea id="ac-interest" rows="2" placeholder="Why are they a good champion for this deal?" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none resize-none"></textarea>
+                </div>
+                <div class="flex items-center gap-3 mt-4 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                    <input type="checkbox" id="ac-decision-maker" class="w-5 h-5 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer">
+                    <label for="ac-decision-maker" class="text-sm font-bold text-yellow-800 cursor-pointer">Flag as Decision Maker</label>
+                </div>
+            </form>
+        </div>
+        <div class="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-add-contact')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+            <button type="button" onclick="submitAddContact()" class="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition-colors shadow-sm">Save to Hierarchy</button>
+        </div>
+    </div>
+</div>
+
+<!-- 13. Drive Import Modal -->
+<div id="modal-drive-import" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[200] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg text-gray-900"><i class="fa-brands fa-google-drive text-green-600 mr-2"></i> Select Meet Notes</h3>
+            <button type="button" onclick="closeModal('modal-drive-import')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="p-4 overflow-y-auto flex-grow space-y-3">
+            <p class="text-xs text-gray-500 mb-2">Recent In-Person Meet Transcripts:</p>
+            
+            <button type="button" onclick="selectDriveNote('--- Google Meet Summary: Q3 Product Rollout ---\n• Discussed Ceramic Pro collateral.\n• Key Objection: F&I team needs more hands-on training.\n• Action: Schedule virtual walk-through Nov 16.\n• Sentiment: Highly Positive.')" class="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-300 transition-colors shadow-sm bg-white">
+                <div class="font-bold text-sm text-gray-900 flex items-center gap-2"><i class="fa-solid fa-file-lines text-green-600"></i> Meet Summary: Q3 Product Rollout</div>
+                <div class="text-[11px] text-gray-500 mt-1 pl-6">Modified: Today, 10:45 AM</div>
+            </button>
+            
+            <button type="button" onclick="selectDriveNote('--- Google Meet Summary: Reinsurance Audit ---\n• Controller signed off on retroactive pool.\n• Missing GAP addendum from last month.\n• Action: Send via DocuSign ASAP to finalize.')" class="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-300 transition-colors shadow-sm bg-white">
+                <div class="font-bold text-sm text-gray-900 flex items-center gap-2"><i class="fa-solid fa-file-lines text-green-600"></i> Meet Summary: Reinsurance Audit</div>
+                <div class="text-[11px] text-gray-500 mt-1 pl-6">Modified: Yesterday, 4:20 PM</div>
+            </button>
+            
+            <button type="button" onclick="selectDriveNote('--- Google Meet Summary: Initial Discovery ---\n• Met with Dealer Principal.\n• Currently using competitor for VSC.\n• Pain point: Claims payout speed is too slow.\n• Next Step: Pricing comparison next Tuesday.')" class="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-300 transition-colors shadow-sm bg-white">
+                <div class="font-bold text-sm text-gray-900 flex items-center gap-2"><i class="fa-solid fa-file-lines text-green-600"></i> Meet Summary: Initial Discovery</div>
+                <div class="text-[11px] text-gray-500 mt-1 pl-6">Modified: Oct 28, 9:15 AM</div>
+            </button>
+        </div>
+        <div class="p-4 border-t border-gray-100 bg-gray-50 flex justify-end rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-drive-import')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors text-sm">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- 14. Reassign / Start Sign-Up Modal -->
+<div id="modal-reassign" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[180] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg" id="reassign-modal-title"><i class="fa-solid fa-user-gear text-brand-600 mr-2"></i> Reassign Account</h3>
+            <button type="button" onclick="closeModal('modal-reassign')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+            <p id="reassign-modal-desc" class="text-sm text-gray-600 hidden mb-2">Transfer ownership back to a field rep to begin the onboarding and servicing phase.</p>
+            <input type="hidden" id="reassign-is-signup" value="false">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">Assign New Owner</label>
+                <select id="reassign-rep" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-white"></select>
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">Reason / Transfer Notes *</label>
+                <textarea id="reassign-note" required rows="3" placeholder="e.g. Territory shift, deal closed..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none resize-none"></textarea>
+            </div>
+        </div>
+        <div class="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-reassign')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
+            <button type="button" onclick="executeReassign()" id="reassign-confirm-btn" class="px-6 py-2 bg-gray-900 hover:bg-black text-white font-medium rounded-lg transition-colors shadow-sm">Confirm Transfer</button>
+        </div>
+    </div>
+</div>
+
+<!-- 15. Pipeline Move Log Modal -->
+<div id="modal-pipeline-move" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-[190] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col">
+        <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 class="font-bold text-lg" id="pipeline-move-title"><i class="fa-solid fa-truck-fast text-brand-600 mr-2"></i> Update Stage</h3>
+            <button type="button" onclick="closeModal('modal-pipeline-move')" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-times text-xl"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+            <p class="text-sm text-gray-600 mb-2">Moving an account across the pipeline requires a quick log stop to explain the progression.</p>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">Log Note / Action Taken *</label>
+                <textarea id="pipeline-move-note" required rows="3" placeholder="e.g. Completed pitch, awaiting signature..." class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none resize-none"></textarea>
+            </div>
+        </div>
+        <div class="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+            <button type="button" onclick="closeModal('modal-pipeline-move')" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">Cancel Move</button>
+            <button type="button" onclick="executePipelineMove()" class="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition-colors shadow-sm">Save Log & Move</button>
+        </div>
+    </div>
+</div>

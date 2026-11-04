@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GenZ CRM v3.2.37</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a', 950: '#172554' }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- 1. PULL IN CUSTOM CSS -->
+    <?!= include('Styles'); ?>
+</head>
+<body class="text-gray-800 h-screen w-full flex flex-col md:flex-row relative">
+
+    <!-- TOAST CONTAINER -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-[110] flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- MAIN APP WRAPPER -->
+    <div id="app-wrapper" class="h-full w-full flex flex-col md:flex-row">
+        
+        <!-- SIDEBAR -->
+        <aside id="sidebar" class="w-full md:w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0 relative z-30 shadow-sm md:shadow-none transition-all duration-300">
+            <div class="p-4 border-b border-gray-100 flex items-center justify-between relative h-16">
+                <div class="flex items-center gap-2 overflow-hidden brand-logo-container">
+                    <div class="w-8 h-8 bg-brand-600 rounded-md flex items-center justify-center text-white font-bold flex-shrink-0"><i class="fa-solid fa-bolt"></i></div>
+                    <span class="font-bold text-lg tracking-tight sidebar-text whitespace-nowrap">GenZ CRM <span class="text-xs text-brand-600 ml-1">v3.2.37</span></span>
+                </div>
+                <button type="button" class="hidden md:flex absolute -right-3 top-5 w-6 h-6 bg-white border border-gray-200 rounded-full items-center justify-center text-gray-500 hover:text-brand-600 shadow-sm z-50 transition-colors" onclick="toggleSidebar()">
+                    <i id="sidebar-toggle-icon" class="fa-solid fa-chevron-left text-[10px]"></i>
+                </button>
+                <button type="button" class="md:hidden text-gray-500" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+            </div>
+
+            <div id="mobile-menu" class="hidden md:flex flex-col flex-grow overflow-y-auto hide-scroll p-3 space-y-1">
+                <!-- OPERATIONS NAV -->
+                <div class="nav-group-rep nav-group-manager hidden nav-group-label text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-2">Operations</div>
+                
+                <button type="button" id="nav-performance" onclick="nav('performance')" class="nav-group-rep nav-group-manager hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="performance">
+                    <i class="fa-solid fa-chart-line w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">Game Day</span>
+                </button>
+
+                <button type="button" id="nav-dashboard" onclick="nav('dashboard')" class="nav-group-rep nav-group-manager hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="dashboard">
+                    <i class="fa-solid fa-route w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">Route Planner</span>
+                </button>
+                <button type="button" id="nav-pipeline" onclick="nav('pipeline')" class="nav-group-rep nav-group-manager hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="pipeline">
+                    <i class="fa-solid fa-table-columns w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">Pipeline Board</span>
+                </button>
+                <button type="button" id="nav-dealerships" onclick="nav('dealerships')" class="nav-group-rep nav-group-manager hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="dealerships">
+                    <i class="fa-solid fa-building w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">The Bench</span>
+                </button>
+                <button type="button" id="nav-clients" onclick="nav('clients')" class="nav-group-rep nav-group-manager hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="clients">
+                    <i class="fa-solid fa-users-gear w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">Client Portfolio</span>
+                </button>
+                <button type="button" id="nav-pool" onclick="nav('pool')" class="nav-group-rep nav-group-manager hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="pool">
+                    <i class="fa-solid fa-earth-americas w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">Prospect Pool</span>
+                </button>
+
+                <!-- PIPELINE NAV (REPS ONLY) -->
+                <div class="nav-group-rep hidden nav-group-label text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 mt-6 px-2">Pipeline</div>
+                <button type="button" id="nav-payouts" onclick="nav('payouts')" class="nav-group-rep hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="payouts">
+                    <i class="fa-solid fa-money-bill-wave w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">Handoffs & Payouts</span>
+                </button>
+
+                <!-- MANAGER & EXECUTIVE NAV -->
+                <div class="nav-group-manager nav-group-executive hidden nav-group-label text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 mt-6 px-2">Management</div>
+                
+                <button type="button" id="nav-desk" onclick="nav('desk')" class="nav-group-manager nav-group-executive hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="desk">
+                    <i class="fa-solid fa-briefcase w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">Executive Desk</span>
+                </button>
+
+                <button type="button" id="nav-manager" onclick="nav('manager')" class="nav-group-manager hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="manager">
+                    <i class="fa-solid fa-users w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">Team Dashboard</span>
+                </button>
+
+                <!-- EXECUTIVE / CLOSER NAV -->
+                <div class="nav-group-executive nav-group-manager hidden nav-group-label text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-2">Handoff Pipeline</div>
+                <button type="button" id="nav-exec" onclick="nav('exec')" class="nav-group-executive nav-group-manager hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="exec">
+                    <i class="fa-solid fa-handshake-angle w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">Inbound Handoffs</span>
+                </button>
+
+                <!-- FINANCE NAV -->
+                <div class="nav-group-finance hidden nav-group-label text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-2">Finance & Audit</div>
+                <button type="button" id="nav-finance" onclick="nav('finance')" class="nav-group-finance hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="finance">
+                    <i class="fa-solid fa-file-invoice-dollar w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">Payout Approvals</span>
+                </button>
+
+                <!-- ADMIN NAV -->
+                <div class="nav-group-admin hidden nav-group-label text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 mt-2 px-2">System Admin</div>
+                <button type="button" id="nav-admin" onclick="nav('admin')" class="nav-group-admin hidden nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-gray-600 hover:bg-gray-50 hover:text-brand-600 transition-colors" data-target="admin">
+                    <i class="fa-solid fa-user-shield w-5 text-center flex-shrink-0"></i> <span class="sidebar-text whitespace-nowrap">User Management</span>
+                </button>
+            </div>
+
+            <!-- User Profile Block -->
+            <div class="p-4 border-t border-gray-100 hidden md:block cursor-pointer hover:bg-gray-50 transition-colors overflow-hidden" onclick="openUserProfile()">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-brand-100 border border-brand-200 flex items-center justify-center font-bold text-brand-700 flex-shrink-0" id="user-avatar">?</div>
+                    <div class="user-profile-info whitespace-nowrap">
+                        <div class="text-sm font-medium truncate" id="user-name">Loading...</div>
+                        <div class="text-xs text-gray-500 capitalize" id="user-role">Role</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN VIEW PORT -->
+        <main class="flex-grow h-full overflow-hidden flex flex-col relative bg-gray-50">
+            <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 flex-shrink-0 z-10">
+                <h1 id="page-title" class="text-xl font-semibold">Dashboard</h1>
+                
+                <div class="flex items-center gap-3">
+                    <button type="button" id="theme-toggle" onclick="toggleTheme()" class="w-9 h-9 rounded-lg border border-gray-200 bg-gray-50 text-gray-600 flex items-center justify-center hover:bg-gray-100 transition-colors shadow-sm" title="Toggle Light / Dark Mode">
+                        <i id="theme-icon" class="fa-solid fa-moon"></i>
+                    </button>
+
+                    <!-- Role Selector (Dev Mode only) -->
+                    <div class="hidden md:flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                        <label class="text-xs text-gray-500 font-medium uppercase tracking-wider">Demo Persona:</label>
+                        <select id="persona-selector" onchange="switchPersona(this.value)" class="bg-transparent text-gray-900 font-medium text-sm focus:outline-none cursor-pointer">
+                            <option value="u_rep_vet">Veteran Rep</option>
+                            <option value="u_rep_new">New Rep (Blank Slate)</option>
+                            <option value="u_mgr_1">Manager</option>
+                            <option value="u_exec_1">Executive</option>
+                            <option value="u_fin_1">Finance Controller</option>
+                            <option value="u_admin_1">System Admin</option>
+                        </select>
+                    </div>
+                </div>
+            </header>
+
+            <div id="views-container" class="flex-grow overflow-y-auto p-4 md:p-6 hide-scroll relative">
+                
+                <!-- EXECUTIVE DECISION CENTER VIEW -->
+                <div id="view-desk" class="view-panel hidden fade-in space-y-6">
+                    <!-- Header -->
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-gray-200">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-900 tracking-tight">My Desk — Executive Decision Center</h2>
+                            <p class="text-xs sm:text-sm text-gray-500 mt-0.5">Weekly oversight, team bottlenecks, and pending approvals.</p>
+                        </div>
+                        <button type="button" onclick="nav('performance')" class="bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center gap-2 whitespace-nowrap">
+                            <i class="fa-solid fa-chart-line"></i> Open Game Day Scorecard
+                        </button>
+                    </div>
+
+                    <!-- 2-Column Dashboard Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                        
+                        <!-- LEFT COLUMN (2 Cols Wide) -->
+                        <div class="lg:col-span-2 space-y-6">
+                            
+                            <!-- 1. Who Needs My Help -->
+                            <div class="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                                <div class="flex justify-between items-center">
+                                    <h3 class="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                                        <span class="w-2 h-2 rounded-full bg-red-500"></span> WHO NEEDS MY HELP? (ACTIVE BOTTLENECK)
+                                    </h3>
+                                    <span class="text-xs font-medium text-gray-400">2 Escalations</span>
+                                </div>
+
+                                <!-- Bottleneck Item 1 (Red) -->
+                                <div class="bg-red-50/30 border border-red-200/70 rounded-xl p-4 transition-all hover:border-red-300">
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+                                        <div class="font-bold text-sm text-red-900">Michael Ballero — Classic Hyundai of Sherman</div>
+                                        <span class="text-[11px] font-bold text-red-600 font-mono tracking-wide">DOWC Claim #725571</span>
+                                    </div>
+                                    <p class="text-xs text-gray-700 leading-relaxed mb-3">
+                                        Trade-in stalled in showroom over $1,920.57 unpaid claim dating to Aug 17. Finance Director cannot finalize cancel quote without admin clearance.
+                                    </p>
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-red-100">
+                                        <div class="text-xs font-bold text-red-600">Overdue: 5 Days Since Trade Attempt</div>
+                                        <button type="button" onclick="showToast('Initiating connection to DOWC claims liaison...')" class="border border-red-300 bg-white hover:bg-red-50 text-red-700 text-xs font-semibold px-4 py-1.5 rounded-lg shadow-sm transition-colors">
+                                            Call DOWC Liaison
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Bottleneck Item 2 (Amber) -->
+                                <div class="bg-amber-50/30 border border-amber-200/70 rounded-xl p-4 transition-all hover:border-amber-300">
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+                                        <div class="font-bold text-sm text-amber-900">Todd Bilius — Sawmill Auto Sales</div>
+                                        <span class="text-[11px] font-bold text-amber-700">Reinsurance Retrospective Sign-off</span>
+                                    </div>
+                                    <p class="text-xs text-gray-700 leading-relaxed mb-3">
+                                        Controller requesting formal retro trust agreement verification before signing. Todd requesting executive participation on Wednesday.
+                                    </p>
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-amber-100">
+                                        <div class="text-xs font-bold text-amber-700">Meeting: Tomorrow 10:00 AM</div>
+                                        <button type="button" onclick="showToast('Invitation added to your executive calendar.')" class="border border-amber-300 bg-white hover:bg-amber-50 text-amber-800 text-xs font-semibold px-4 py-1.5 rounded-lg shadow-sm transition-colors">
+                                            Join Call with Todd
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 2. Actionable Decisions & Approvals -->
+                            <div class="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                                <div class="flex justify-between items-center">
+                                    <h3 class="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                                        <span class="w-2 h-2 rounded-full bg-blue-600"></span> ACTIONABLE DECISIONS & APPROVALS
+                                    </h3>
+                                    <span class="text-xs font-medium text-gray-400">Human Approval Required</span>
+                                </div>
+
+                                <div id="decision-card-1" class="border border-gray-200 rounded-xl p-4 bg-white hover:border-gray-300 transition-all">
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+                                        <div class="font-bold text-sm text-gray-900">Holman Automotive Group (11 Rooftops NJ/PA)</div>
+                                        <span class="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold px-2 py-0.5 rounded uppercase self-start sm:self-auto">Action Proposal</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mb-2">Trigger: Email from Don Ferguson confirming in-person training dates Nov 17–18</p>
+                                    <p class="text-xs text-gray-800 leading-relaxed bg-gray-50 p-3 rounded-lg border border-gray-100 mb-4">
+                                        <strong>Recommendation:</strong> Ship Ceramic Pro and VSC collateral materials to Mt. Laurel by Friday; lock virtual training sessions for Nov 16 with F&amp;I teams.
+                                    </p>
+                                    <div class="flex items-center justify-end gap-3 pt-2">
+                                        <button type="button" onclick="dismissDecisionCard('decision-card-1')" class="text-xs font-semibold text-gray-500 hover:text-gray-800 transition-colors px-2 py-1">
+                                            Dismiss
+                                        </button>
+                                        <button type="button" onclick="showToast('Opening modify draft window...')" class="border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors">
+                                            Modify
+                                        </button>
+                                        <button type="button" onclick="approveDecisionCard('decision-card-1', 'Holman Automotive Group')" class="bg-gray-900 hover:bg-black text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors">
+                                            Approve &amp; Notify Rep
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 3. What Changed This Week -->
+                            <div class="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                                <h3 class="text-xs font-bold text-gray-900 uppercase tracking-wider">WHAT CHANGED THIS WEEK?</h3>
+                                
+                                <div class="divide-y divide-gray-100 text-sm">
+                                    <div class="py-3 flex justify-between items-center gap-4">
+                                        <div>
+                                            <div class="font-medium text-gray-900 text-xs sm:text-sm">
+                                                Classic Hyundai of Sherman moved to <span class="bg-purple-100 text-purple-700 text-[11px] font-bold px-2 py-0.5 rounded border border-purple-200">Proposal / Review</span>
+                                            </div>
+                                            <div class="text-[11px] text-gray-400 mt-0.5">By Michael Ballero • Oct 27</div>
+                                        </div>
+                                        <div class="text-xs font-mono text-gray-500 whitespace-nowrap">3 Rooftops</div>
+                                    </div>
+
+                                    <div class="py-3 flex justify-between items-center gap-4">
+                                        <div>
+                                            <div class="font-medium text-gray-900 text-xs sm:text-sm">Independent Agency Group onboarded to active contract intake</div>
+                                            <div class="text-[11px] text-gray-400 mt-0.5">By Jason Scott • Oct 23</div>
+                                        </div>
+                                        <span class="text-xs font-bold text-green-600 whitespace-nowrap">Active Billing</span>
+                                    </div>
+
+                                    <div class="py-3 flex justify-between items-center gap-4">
+                                        <div>
+                                            <div class="font-medium text-gray-900 text-xs sm:text-sm">ALM Automotive &amp; First Choice scheduled for on-site visit</div>
+                                            <div class="text-[11px] text-gray-400 mt-0.5">By Kevin Houk • Oct 28</div>
+                                        </div>
+                                        <span class="text-xs font-bold text-blue-600 whitespace-nowrap">In-Store Demo</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT COLUMN (1 Col Wide) -->
+                        <div class="space-y-6">
+                            
+                            <!-- 1. Top 5 Strategic Opportunities -->
+                            <div class="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                                <h3 class="text-xs font-bold text-gray-900 uppercase tracking-wider">TOP 5 STRATEGIC OPPORTUNITIES</h3>
+
+                                <div class="space-y-4 divide-y divide-gray-100 text-xs">
+                                    <!-- Opp 1 -->
+                                    <div class="pt-3 first:pt-0">
+                                        <div class="flex justify-between items-start font-bold text-sm text-gray-900 mb-0.5">
+                                            <span>Holman Automotive Group</span>
+                                            <span class="text-blue-800 font-semibold text-xs whitespace-nowrap">11 Stores</span>
+                                        </div>
+                                        <div class="text-gray-500 text-[11px] mb-1">Products: VSC, Service Training, Ceramic Pro</div>
+                                        <div class="text-green-700 font-semibold text-[11px]">Stage: Launching Nov 16–18</div>
+                                    </div>
+
+                                    <!-- Opp 2 -->
+                                    <div class="pt-3">
+                                        <div class="flex justify-between items-start font-bold text-sm text-gray-900 mb-0.5">
+                                            <span>ALM Automotive Group</span>
+                                            <span class="text-blue-800 font-semibold text-xs whitespace-nowrap">8 Stores</span>
+                                        </div>
+                                        <div class="text-gray-500 text-[11px] mb-1">Products: EV Warranty Bundles, VSC</div>
+                                        <div class="text-blue-600 font-semibold text-[11px]">Stage: In-Store Store Demos (K. Houk)</div>
+                                    </div>
+
+                                    <!-- Opp 3 -->
+                                    <div class="pt-3">
+                                        <div class="flex justify-between items-start font-bold text-sm text-gray-900 mb-0.5">
+                                            <span>Baywatch Tech Dealership Rollout</span>
+                                            <span class="text-blue-800 font-semibold text-xs whitespace-nowrap">Target 600 Roofs</span>
+                                        </div>
+                                        <div class="text-gray-500 text-[11px] mb-1">Partnership: Dealerwing / NADA 2027 Pipeline</div>
+                                        <div class="text-purple-600 font-semibold text-[11px]">Stage: Economics &amp; Pilot Validation</div>
+                                    </div>
+
+                                    <!-- Opp 4 -->
+                                    <div class="pt-3">
+                                        <div class="flex justify-between items-start font-bold text-sm text-gray-900 mb-0.5">
+                                            <span>Holiday Automotive Group</span>
+                                            <span class="text-blue-800 font-semibold text-xs whitespace-nowrap">4 Stores</span>
+                                        </div>
+                                        <div class="text-gray-500 text-[11px] mb-1">Products: DOWC Reinsurance Structuring</div>
+                                        <div class="text-amber-700 font-semibold text-[11px]">Stage: Reinsurance Audit (M. Ballero)</div>
+                                    </div>
+
+                                    <!-- Opp 5 -->
+                                    <div class="pt-3">
+                                        <div class="flex justify-between items-start font-bold text-sm text-gray-900 mb-0.5">
+                                            <span>Sawmill Auto Sales</span>
+                                            <span class="text-blue-800 font-semibold text-xs whitespace-nowrap">1 Independent</span>
+                                        </div>
+                                        <div class="text-gray-500 text-[11px] mb-1">Products: DOWC Retro Pool, GAP</div>
+                                        <div class="text-gray-600 font-semibold text-[11px]">Stage: Controller Signoff (T. Bilius)</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 2. Overdue Follow-ups -->
+                            <div class="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
+                                <div class="flex justify-between items-center">
+                                    <h3 class="text-xs font-bold text-gray-900 uppercase tracking-wider">OVERDUE FOLLOW-UPS</h3>
+                                    <span class="text-[10px] font-bold text-red-600 tracking-wider">REQUIRES AUDIT</span>
+                                </div>
+
+                                <div class="space-y-3">
+                                    <div class="bg-gray-50 border border-gray-200/80 rounded-xl p-3.5 text-xs">
+                                        <div class="font-bold text-gray-900 mb-1">Jose Matos — 5 Stalled Follow-ups</div>
+                                        <p class="text-gray-500 text-[11px] leading-relaxed">
+                                            Last touch recorded 12 days ago. No prospect meetings booked for current reporting week.
+                                        </p>
+                                    </div>
+
+                                    <div class="bg-gray-50 border border-gray-200/80 rounded-xl p-3.5 text-xs">
+                                        <div class="font-bold text-gray-900 mb-1">Ceramic Pro Warranty Verification</div>
+                                        <p class="text-gray-500 text-[11px] leading-relaxed">
+                                            Backdated claim (effective 10/7/26) pending audit clearance with Dan.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PERFORMANCE METRICS VIEW -->
+                <div id="view-performance" class="view-panel hidden fade-in space-y-6">
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-900" id="perf-title">My Performance Metrics</h2>
+                            <p class="text-sm text-gray-500 mt-1" id="perf-subtitle">Activity tracking and verified touches.</p>
+                        </div>
+                        <select id="perf-timeframe" onchange="renderPerformance()" class="bg-white border border-gray-300 text-gray-700 py-1.5 pl-3 pr-8 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none">
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                        </select>
+                    </div>
+
+                    <!-- 5 Metric Cards matching the screenshot -->
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div class="bg-gray-50/50 p-4 rounded-xl border border-gray-100 flex flex-col items-center justify-center text-center shadow-sm">
+                            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Emails Sent</div>
+                            <div class="text-3xl font-bold text-gray-900 mb-1" id="stat-emails">0</div>
+                            <div class="text-[10px] text-gray-400">Self & CRM Verified</div>
+                        </div>
+                        <div class="bg-gray-50/50 p-4 rounded-xl border border-gray-100 flex flex-col items-center justify-center text-center shadow-sm">
+                            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Calls Attempted</div>
+                            <div class="text-3xl font-bold text-gray-900 mb-1" id="stat-calls">0</div>
+                            <div class="text-[10px] text-gray-400">Outbound Attempts</div>
+                        </div>
+                        <div class="bg-gray-50/50 p-4 rounded-xl border border-gray-100 flex flex-col items-center justify-center text-center shadow-sm">
+                            <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Texts Sent</div>
+                            <div class="text-3xl font-bold text-gray-900 mb-1" id="stat-texts">0</div>
+                            <div class="text-[10px] text-gray-400">Cellular / SMS Touches</div>
+                        </div>
+                        <div class="bg-blue-50/30 p-4 rounded-xl border border-blue-200 flex flex-col items-center justify-center text-center shadow-sm">
+                            <div class="text-xs font-bold text-blue-900 uppercase tracking-wider mb-2">Live Prospect Convs</div>
+                            <div class="text-3xl font-bold text-gray-900 mb-1" id="stat-convs">0</div>
+                            <div class="text-[10px] text-blue-600">Actual Dialogues</div>
+                        </div>
+                        <div class="bg-green-50/30 p-4 rounded-xl border border-green-200 flex flex-col items-center justify-center text-center shadow-sm">
+                            <div class="text-xs font-bold text-green-900 uppercase tracking-wider mb-2">DM Appointments</div>
+                            <div class="text-3xl font-bold text-green-700 mb-1" id="stat-appts">0</div>
+                            <div class="text-[10px] text-green-600" id="stat-appts-sub">0 Booked / 0 Held</div>
+                        </div>
+                    </div>
+
+                    <!-- Manager Team Breakdown Table (Hidden for standard reps) -->
+                    <div id="perf-manager-section" class="hidden mt-8 space-y-4">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-gray-200 pb-2 gap-2">
+                            <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wider">Weekly Rep Scorecard (Click any number or note to edit during call)</h3>
+                            <span class="text-xs text-gray-500 font-medium">Preserved from Master Sheet</span>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="bg-gray-50 text-gray-700 text-xs font-bold border-b border-gray-200 whitespace-nowrap">
+                                            <th class="p-4">Rep Name</th>
+                                            <th class="p-3 text-center">Social</th>
+                                            <th class="p-3 text-center">Emails</th>
+                                            <th class="p-3 text-center">Calls</th>
+                                            <th class="p-3 text-center">Texts</th>
+                                            <th class="p-3 text-center text-blue-800">Live<br>Convs</th>
+                                            <th class="p-3 text-center text-green-800">DM<br>Appts</th>
+                                            <th class="p-3 text-center text-gray-600">AI<br>Handoff</th>
+                                            <th class="p-4">Outcome & Deals Won</th>
+                                            <th class="p-4">Next Steps & Support Needed</th>
+                                            <th class="p-4 text-center">Support Owner</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="perf-team-body" class="divide-y divide-gray-100 text-sm">
+                                        <!-- Populated via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ROUTE PLANNER VIEW -->
+                <div id="view-dashboard" class="view-panel hidden fade-in space-y-6">                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <div class="text-sm text-gray-500 mb-1">Active Accounts (Bench)</div>
+                            <div class="text-2xl font-bold" id="stat-bench">0</div>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-red-100 border-l-4 border-l-red-500">
+                            <div class="text-sm text-gray-500 mb-1 flex items-center gap-1"><i class="fa-solid fa-fire text-red-500"></i> Decaying (>30 days)</div>
+                            <div class="text-2xl font-bold text-red-600" id="stat-decay">0</div>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-green-100 border-l-4 border-l-green-500">
+                            <div class="text-sm text-gray-500 mb-1 flex items-center gap-1"><i class="fa-solid fa-calendar-check text-green-500"></i> Active Follow-ups</div>
+                            <div class="text-2xl font-bold text-green-600" id="stat-active">0</div>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-brand-100 border-l-4 border-l-brand-500">
+                            <div class="text-sm text-gray-500 mb-1">Total Handoffs</div>
+                            <div class="text-2xl font-bold text-brand-600" id="stat-payouts">0</div>
+                        </div>
+                    </div>
+
+                    <!-- Single Column Route Planner Engine -->
+                    <div class="w-full">
+                        <div id="itinerary-builder-panel" class="w-full bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[550px] transition-all duration-300">
+                            <div class="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div>
+                                    <div class="flex items-center gap-3">
+                                        <h2 class="text-lg font-semibold flex items-center gap-2"><i class="fa-regular fa-calendar-check text-brand-600"></i> Daily Itinerary Builder</h2>
+                                    </div>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <label class="text-xs font-medium text-gray-500">Date:</label>
+                                        <input type="date" id="planner-date" onchange="renderDashboard()" class="text-sm px-2 py-1 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-brand-500 outline-none">
+                                    </div>
+                                </div>
+                                
+                                <div class="flex-grow max-w-xs w-full">
+                                    <div class="flex justify-between text-xs mb-1.5 items-end">
+                                        <span id="gamification-text" class="font-medium text-gray-500">Target: 2-4 Visits</span>
+                                        <span id="gamification-count" class="font-bold text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-200">0/4</span>
+                                    </div>
+                                    <div class="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                                        <div id="gamification-bar" class="h-full bg-gray-300 w-0 transition-all duration-700 ease-out rounded-full relative">
+                                            <div class="absolute inset-0 bg-white/20 w-full animate-[pulse_2s_ease-in-out_infinite]"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button type="button" onclick="calculateBoomerang()" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm whitespace-nowrap">
+                                    <i class="fa-solid fa-route mr-1"></i> Route Day
+                                </button>
+                            </div>
+                            
+                            <div id="planner-dropzone" class="flex-grow overflow-y-auto p-4 transition-colors relative">
+                                <div id="route-planner-body" class="space-y-2 relative z-10 hidden">
+                                    <!-- Populated via JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BENCH VIEW -->
+                <div id="view-dealerships" class="view-panel hidden fade-in space-y-6">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div class="relative flex-grow max-w-md">
+                            <i class="fa-solid fa-search absolute left-3 top-3 text-gray-400"></i>
+                            <input type="text" id="search-dealerships" oninput="renderDealerships()" placeholder="Search by name, address, or zip..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                        </div>
+                        <div class="flex items-center gap-2 w-full md:w-auto relative">
+                            <button type="button" onclick="document.getElementById('filter-dropdown').classList.toggle('hidden')" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2 relative">
+                                <i class="fa-solid fa-filter"></i> Filters <span id="active-filter-count" class="hidden absolute -top-1 -right-1 bg-brand-600 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">0</span>
+                            </button>
+                            
+                            <!-- Filter Dropdown -->
+                            <div id="filter-dropdown" class="hidden absolute right-0 top-12 w-72 bg-white rounded-xl shadow-xl border border-gray-100 z-50 p-4">
+                                <div class="flex justify-between items-center mb-3">
+                                    <h4 class="font-bold text-gray-800 text-sm">Filter Bench</h4>
+                                    <button type="button" onclick="clearAllFilters()" class="text-xs text-brand-600 hover:underline outline-none">Clear All</button>
+                                </div>
+                                <div class="flex items-center justify-between py-2 border-b border-gray-100">
+                                    <span class="text-sm text-gray-700 font-medium">Hide Confirmed/Handed Off</span>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                      <input type="checkbox" id="filter-hide-confirmed" class="sr-only peer toggle-checkbox" checked onchange="applyFilters()">
+                                      <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all toggle-label"></div>
+                                    </label>
+                                </div>
+                                <div class="py-3 border-b border-gray-100">
+                                    <p class="text-xs font-semibold text-gray-500 uppercase mb-2">Dealership Type</p>
+                                    <div class="space-y-2">
+                                        <label class="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" class="rounded text-brand-600 focus:ring-brand-500 filter-type" value="Franchise" onchange="applyFilters()"> Franchise</label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" class="rounded text-brand-600 focus:ring-brand-500 filter-type" value="Independent" onchange="applyFilters()"> Independent</label>
+                                    </div>
+                                </div>
+                                <div class="py-3">
+                                    <p class="text-xs font-semibold text-gray-500 uppercase mb-2">Status</p>
+                                    <div class="space-y-2">
+                                        <label class="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" class="rounded text-brand-600 focus:ring-brand-500 filter-status" value="Uncontacted" onchange="applyFilters()"> Uncontacted</label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" class="rounded text-brand-600 focus:ring-brand-500 filter-status" value="In Progress" onchange="applyFilters()"> In Progress</label>
+                                        <label class="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" class="rounded text-brand-600 focus:ring-brand-500 filter-status" value="Parked" onchange="applyFilters()"> Parked</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <select id="sort-dealerships" onchange="renderDealerships()" class="bg-white border border-gray-300 text-gray-700 py-2 pl-3 pr-8 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer">
+                                <option value="name-asc">Sort: Name (A-Z)</option>
+                                <option value="distance-asc">Sort: Distance (Closest)</option>
+                                <option value="distance-desc">Sort: Distance (Furthest)</option>
+                                <option value="inventory-desc">Sort: Inventory (High-Low)</option>
+                                <option value="decay-desc">Sort: Needs Attention</option>
+                                <option value="heat-desc">Sort: Heat (Hot-Cold)</option>
+                                <option value="heat-asc">Sort: Heat (Cold-Hot)</option>
+                            </select>
+                            
+                            <button type="button" onclick="openAddProspectModal()" class="w-full md:w-auto bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center justify-center gap-2 whitespace-nowrap">
+                                <i class="fa-solid fa-plus"></i> Add Prospect
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="filter-chips-container" class="flex flex-wrap gap-2 mb-2 empty:hidden"></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="dealerships-grid"></div>
+                </div>
+
+                <!-- CLIENT PORTFOLIO VIEW -->
+                <div id="view-clients" class="view-panel hidden fade-in space-y-6">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="text-lg font-semibold">Client Portfolio & Servicing</h2>
+                            <p class="text-sm text-gray-500">Manage won accounts. <span class="text-purple-600 font-medium">Onboarding</span> clients require immediate attention.</p>
+                        </div>
+                        <div class="relative flex-grow max-w-md">
+                            <i class="fa-solid fa-search absolute left-3 top-3 text-gray-400"></i>
+                            <input type="text" id="search-clients" oninput="renderClients()" placeholder="Search clients by name or address..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="clients-grid"></div>
+                </div>
+
+                <!-- PROSPECT POOL VIEW -->
+                <div id="view-pool" class="view-panel hidden fade-in space-y-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800">Prospect Pool</h2>
+                            <p class="text-sm text-gray-500 mt-1 flex items-center gap-2">
+                                <i class="fa-solid fa-location-dot text-brand-500"></i> Search Radius: <strong>60 Miles Base + 10% Flex Zone</strong> (Max 66 mi)
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="relative flex-grow max-w-md mt-4">
+                        <i class="fa-solid fa-search absolute left-3 top-3 text-gray-400"></i>
+                        <input type="text" id="search-pool" oninput="renderPool()" placeholder="Search pool by name or address..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="pool-grid"></div>
+                </div>
+
+                <!-- PIPELINE BOARD VIEW -->
+                <div id="view-pipeline" class="view-panel hidden fade-in h-full flex flex-col min-h-[600px] space-y-4">
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-3 flex-shrink-0">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 bg-brand-50 text-brand-600 rounded-lg flex items-center justify-center flex-shrink-0 font-bold border border-brand-100">
+                                    <i class="fa-solid fa-table-columns"></i>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h2 class="text-base font-bold text-gray-900 leading-tight">Dealership Pipeline</h2>
+                                        <span id="pipeline-deal-counter" class="bg-brand-50 text-brand-700 text-xs px-2 py-0.5 rounded-full font-semibold border border-brand-200">0 Deals</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500">Track, sort, and prioritize opportunities across sales stages</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end flex-wrap">
+                                <div class="flex items-center gap-2 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                                    <label class="text-[11px] text-gray-500 font-bold uppercase tracking-wider flex items-center gap-1.5 whitespace-nowrap">
+                                        <i class="fa-solid fa-arrow-down-short-wide text-brand-600"></i> Sort:
+                                    </label>
+                                    <select id="sort-pipeline" onchange="renderPipeline()" class="bg-transparent text-gray-800 font-semibold text-xs focus:outline-none cursor-pointer">
+                                        <option value="manual">Manual (Drag & Drop)</option>
+                                        <option value="inventory-desc">Deal Value / Inv (High to Low)</option>
+                                        <option value="decay-asc">Needs Attention (Oldest Touch)</option>
+                                        <option value="heat-desc">Heat (Hot to Cold)</option>
+                                        <option value="name-asc">Alphabetical (A-Z)</option>
+                                    </select>
+                                </div>
+
+                                <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+                                    <span class="text-xs text-gray-700 font-medium whitespace-nowrap">Hide Clients</span>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="pipeline-hide-clients" class="sr-only peer toggle-checkbox" checked onchange="renderPipeline()">
+                                        <div class="w-8 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all toggle-label"></div>
+                                    </label>
+                                </div>
+                                <button type="button" onclick="resetPipelineFilters()" id="btn-reset-pipeline-filters" class="text-xs text-gray-500 hover:text-brand-600 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200">
+                                    <i class="fa-solid fa-rotate-left"></i> Reset All
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- FILTER CONTROLS ROW -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 pt-2 border-t border-gray-100">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1"><i class="fa-solid fa-user-check mr-1"></i> Owner</label>
+                                <select id="filter-pipeline-owner" onchange="renderPipeline()" class="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 font-medium focus:ring-1 focus:ring-brand-500 outline-none cursor-pointer">
+                                    <option value="my">Just My Deals</option>
+                                    <option value="team">My Team's Deals</option>
+                                    <option value="all">All Rep Deals</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1"><i class="fa-solid fa-car-side mr-1"></i> Deal Size</label>
+                                <select id="filter-pipeline-size" onchange="renderPipeline()" class="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 font-medium focus:ring-1 focus:ring-brand-500 outline-none cursor-pointer">
+                                    <option value="all">All Sizes</option>
+                                    <option value="50+">50+ Cars (Priority)</option>
+                                    <option value="<50">&lt; 50 Cars (Phone Calls)</option>
+                                    <option value="100+">100+ Cars (High Value)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1"><i class="fa-solid fa-tags mr-1"></i> Type / Tag</label>
+                                <select id="filter-pipeline-type" onchange="renderPipeline()" class="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 font-medium focus:ring-1 focus:ring-brand-500 outline-none cursor-pointer">
+                                    <option value="all">All Types</option>
+                                    <option value="Franchise">Franchise Only</option>
+                                    <option value="Independent">Independent Only</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1"><i class="fa-solid fa-list-check mr-1"></i> Activity Status</label>
+                                <select id="filter-pipeline-activity" onchange="renderPipeline()" class="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 font-medium focus:ring-1 focus:ring-brand-500 outline-none cursor-pointer">
+                                    <option value="all">All Activity</option>
+                                    <option value="scheduled">Has Scheduled Stop</option>
+                                    <option value="decaying">Needs Attention (&gt;30d)</option>
+                                    <option value="noscheduled">No Tasks Scheduled</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1"><i class="fa-regular fa-clock mr-1"></i> Added Date</label>
+                                <select id="filter-pipeline-date" onchange="renderPipeline()" class="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 font-medium focus:ring-1 focus:ring-brand-500 outline-none cursor-pointer">
+                                    <option value="all">All Time</option>
+                                    <option value="7d">Added This Week (7d)</option>
+                                    <option value="30d">Added This Month (30d)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase text-gray-400 mb-1"><i class="fa-solid fa-fire mr-1"></i> Heat Level</label>
+                                <select id="filter-pipeline-heat" onchange="renderPipeline()" class="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 font-medium focus:ring-1 focus:ring-brand-500 outline-none cursor-pointer">
+                                    <option value="all">All Heat</option>
+                                    <option value="Hot">Hot 🔥</option>
+                                    <option value="Warm">Warm ☀️</option>
+                                    <option value="Cold">Cold ❄️</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- SEARCH BAR -->
+                        <div class="relative w-full pt-1">
+                            <i class="fa-solid fa-search absolute left-3 top-3.5 text-gray-400 text-xs"></i>
+                            <input type="text" id="search-pipeline" oninput="renderPipeline()" placeholder="Search pipeline deals by name or address..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none bg-gray-50">
+                        </div>
+                    </div>
+                    
+                    <div class="flex-grow overflow-x-auto overflow-y-hidden flex gap-4 pb-4 items-start custom-scrollbar pt-1" id="pipeline-board"></div>
+                </div>
+
+                <!-- FULL PAGE VIEW: DEALERSHIP DETAIL -->
+                <div id="view-dealership-detail" class="view-panel hidden fade-in space-y-6 pb-20">
+                    <button type="button" onclick="nav(currentUser.role === 'manager' ? 'dashboard' : 'dealerships')" class="text-gray-500 hover:text-gray-800 text-sm font-medium flex items-center gap-1 mb-2">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Previous View
+                    </button>
+                    
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 relative overflow-hidden">
+                        <div id="detail-decay-banner" class="absolute top-0 left-0 right-0 h-1 bg-red-500 hidden"></div>
+                        
+                        <div class="flex flex-col md:flex-row justify-between items-start gap-4 mb-6">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span id="detail-type-badge" class="px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-600 uppercase">Franchise</span>
+                                    <span id="detail-heat-badge" class="px-2 py-0.5 rounded text-xs font-semibold bg-orange-100 text-orange-700 uppercase"><i class="fa-solid fa-fire mr-1"></i>Warm</span>
+                                    <span id="detail-source-badge" class="hidden px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-700 uppercase tracking-wider"></span>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <h2 id="detail-name" class="text-2xl font-bold text-gray-900">Dealership Name</h2>
+                                    <button type="button" onclick="openAddProspectModal(activeDealershipId)" class="text-gray-400 hover:text-brand-600 transition-colors" title="Edit Dealership"><i class="fa-solid fa-pen"></i></button>
+                                </div>
+                                <p id="detail-address" class="text-gray-500 text-sm mt-1"><i class="fa-solid fa-location-dot mr-1"></i> Address</p>
+                                <p id="detail-phone" class="text-gray-500 text-sm mt-1"><i class="fa-solid fa-phone mr-1"></i> Phone</p>
+                            </div>
+                            <div class="flex flex-col gap-2 w-full md:w-auto" id="dealership-actions-container">
+                                <!-- Populated via JS -->
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-100 pt-6">
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Distance (Home)</p>
+                                <p id="detail-distance" class="font-semibold">-- miles</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Used Inv.</p>
+                                <p id="detail-inventory" class="font-semibold">-- cars</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Status</p>
+                                <p id="detail-status" class="font-semibold">--</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Last Touchpoint</p>
+                                <p id="detail-last-touch" class="font-semibold">--</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="space-y-4">
+                            <h3 class="font-semibold text-lg">Sales Stop Log</h3>
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                                <div id="detail-activity-list" class="relative border-l border-gray-200 ml-3 space-y-6">
+                                    <!-- Populated via JS -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-semibold text-lg">Contacts / Hierarchy</h3>
+                                <button type="button" onclick="openAddContactModal()" class="bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-brand-200"><i class="fa-solid fa-user-plus mr-1"></i> Add Contact</button>
+                            </div>
+                            <div id="detail-contacts-list" class="space-y-3">
+                                <!-- Populated via JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- REP: Payouts Pipeline -->
+                <div id="view-payouts" class="view-panel hidden fade-in space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <h2 class="text-lg font-semibold mb-2">The Money Pipeline</h2>
+                        <p class="text-sm text-gray-500 mb-6">Track accounts you've handed off to closers, and verify completion for your $250 incentive.</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-200">
+                                        <th class="p-4">Dealership</th>
+                                        <th class="p-4">Handoff Date</th>
+                                        <th class="p-4 text-center">Handoff State</th>
+                                        <th class="p-4 text-center">Payout Status</th>
+                                        <th class="p-4 text-right">Audit Trail</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="payouts-table-body" class="divide-y divide-gray-100 text-sm"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MANAGER: Team Dashboard -->
+                <div id="view-manager" class="view-panel hidden fade-in space-y-6">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-lg font-semibold">Team Performance & Roster</h2>
+                    </div>
+                    <div id="manager-team-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                    
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mt-6">
+                        <h2 class="text-lg font-semibold mb-4">Team Handoff History</h2>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-200">
+                                        <th class="p-4">Dealership</th>
+                                        <th class="p-4">Rep</th>
+                                        <th class="p-4">Closer</th>
+                                        <th class="p-4 text-center">Status</th>
+                                        <th class="p-4 text-right">Audit Trail</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="manager-history-body" class="divide-y divide-gray-100 text-sm"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- EXECUTIVE: Inbound Handoffs -->
+                <div id="view-exec" class="view-panel hidden fade-in space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <h2 class="text-lg font-semibold mb-2">Inbound Handoff Pipeline</h2>
+                        <p class="text-sm text-gray-500 mb-6">Warm deals handed off by Field Reps. Complete the meeting to trigger their payout.</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-200">
+                                        <th class="p-4">Dealership</th>
+                                        <th class="p-4">Originating Rep</th>
+                                        <th class="p-4">Handoff Date</th>
+                                        <th class="p-4 text-right">Action Required</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="exec-handoffs-body" class="divide-y divide-gray-100 text-sm"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mt-6">
+                        <h2 class="text-lg font-semibold mb-4">Completed Handoffs & Approvals</h2>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-200">
+                                        <th class="p-4">Dealership</th>
+                                        <th class="p-4">Originating Rep</th>
+                                        <th class="p-4 text-center">Finance Status</th>
+                                        <th class="p-4 text-right">Audit Trail</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="exec-history-body" class="divide-y divide-gray-100 text-sm"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FINANCE: Payout Approvals -->
+                <div id="view-finance" class="view-panel hidden fade-in space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <h2 class="text-lg font-semibold mb-2">Finance & Payout Approvals</h2>
+                        <p class="text-sm text-gray-500 mb-6">Review completed handoffs. Audit the origination trail and authorize the field incentive.</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-200">
+                                        <th class="p-4">Dealership</th>
+                                        <th class="p-4">Scout (Rep)</th>
+                                        <th class="p-4">Closer</th>
+                                        <th class="p-4 text-center">Status</th>
+                                        <th class="p-4 text-right">Audit & Approve</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="finance-payouts-body" class="divide-y divide-gray-100 text-sm"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mt-6">
+                        <h2 class="text-lg font-semibold mb-4">Approved Payout History</h2>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-200">
+                                        <th class="p-4">Dealership</th>
+                                        <th class="p-4">Scout (Rep)</th>
+                                        <th class="p-4">Closer</th>
+                                        <th class="p-4 text-center">Amount Paid</th>
+                                        <th class="p-4 text-right">Audit Trail</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="finance-history-body" class="divide-y divide-gray-100 text-sm"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ADMIN VIEW -->
+                <div id="view-admin" class="view-panel hidden fade-in space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <h2 class="text-lg font-semibold mb-4">System Roster</h2>
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-200">
+                                    <th class="p-4">Name & Email</th>
+                                    <th class="p-4">Role</th>
+                                    <th class="p-4">Home Zip</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-users-body" class="divide-y divide-gray-100 text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- PULL IN EXTERNAL GAS FILES -->
+    <?!= include('Modals'); ?>
+    <?!= include('ServerBridge'); ?>
+    <?!= include('AppUI'); ?>
+
+</body>
+</html>

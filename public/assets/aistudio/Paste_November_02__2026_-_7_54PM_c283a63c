@@ -1,0 +1,288 @@
+=====================================================================
+MASTER PROMPT: NEXT-GENERATION FIELD SALES CRM (US car dealerships)
+=====================================================================
+
+ROLE
+You are a senior product designer, CRM architect and full-stack engineer. You have built field-sales CRMs for small B2B companies in the United States. You care deeply about UX, clean modern UI, and building software that a brand-new sales rep can use on day one without training, while veterans, managers and executives find it powerful.
+
+---------------------------------------------------------------------
+0. HOW TO USE THE ATTACHED FILES (READ THIS FIRST)
+---------------------------------------------------------------------
+The attached files are a rough, home-made CRM demo plus chat histories that explain the thinking behind it. They are REFERENCE MATERIAL ONLY.
+
+- Use them to understand WHAT the CRM needs to do: features, data, workflows, roles and intent.
+- Do NOT copy their layout, screen structure, navigation, naming, styling or interaction patterns. Do NOT replicate the original app.
+- Treat every original feature as a REQUIREMENT ("the user needs to be able to…"), then design the best, simplest, most modern way to meet it.
+- Some original features are broken, unfinished or placeholders. Keep every one of them as a requirement, and deliver it fully working in the new design.
+- Fill in the gaps: wherever the original has a missing step, a dead end, too many clicks, or makes the user remember something the system could know, design the missing piece.
+- Rename things around what the user is doing, in plain words a new rep understands instantly. (Example: the original "route planner" is really a day/week/month Planner and calendar. See section 6.)
+- Go well beyond the original with AI features and add-ons, surfaced proactively where they're useful, not hidden on a separate "AI" page.
+
+---------------------------------------------------------------------
+1. COMPANY CONTEXT
+---------------------------------------------------------------------
+- We are a small US company selling products and services to car dealerships, including key fobs / keychains that some dealerships restock regularly, plus other products we upsell over time.
+- We are small, so anyone from a sales rep up to the owners may work prospects and clients directly.
+- The CRM is FULLY TRANSPARENT: every user can see everyone else's prospects, clients, activity and results. Actions are role-gated (see section 5).
+- The company runs on Google Workspace.
+
+US localization everywhere (no UK assumptions):
+- ZIP codes (5-digit, optional ZIP+4); US addresses (street, city, state dropdown, ZIP); miles.
+- US dollars, formatted like $1,234.56. Dates MM/DD/YYYY. 12-hour time with AM/PM. Phone numbers like (555) 123-4567. US English spelling.
+- Multiple US time zones: store a time zone on each dealership (derived from its ZIP). Show all visit times in the dealership's local time.
+
+---------------------------------------------------------------------
+2. DELIVERABLE ORDER (do the thinking before the code)
+---------------------------------------------------------------------
+STEP A: AUDIT (written, before any code)
+  A1. Requirements inventory from the files: Requirement | Where found | Original status (Working / Broken / Unfinished / Placeholder) | Problem with the original | How the new design meets it.
+  A2. Executive Desk analysis: every metric and view the original implies for WEEKLY, MONTHLY and QUARTERLY review, plus what's obviously missing.
+  A3. Planner analysis: the daily/weekly/monthly planning ideas from the files and chat histories.
+  A4. Gaps and assumptions: anything unclear or contradictory. State the assumption you'll make for each and keep going; don't stop to ask.
+
+STEP B: REDESIGN CONCEPT
+  B1. Design principles and visual direction, and how the new experience differs from the original.
+  B2. Navigation / information architecture per role, built around each role's daily jobs, not around database tables.
+  B3. Naming map: Original name → New name → Why.
+  B4. Gap list: what was missing or broken in the original experience and how the new design fixes it.
+  B5. AI add-ons: each one with where it appears, what triggers it, and what the user gets.
+
+STEP C: BUILD the complete working app.
+
+STEP D: FINAL CHECKLIST mapping every original requirement and every requirement in this prompt to where it lives in the new app, marked Done / Partial. Finish anything Partial before stopping. Also confirm there are no UK references anywhere.
+
+If you run out of space, stop at a clean point, say exactly what's left, and continue when I say "continue".
+
+---------------------------------------------------------------------
+3. BUSINESS LOGIC TO MODEL EXACTLY
+---------------------------------------------------------------------
+3.1 Prospect sourcing (three routes; always record the source)
+- POOL: management uploads prospect lists (CSV import or a Google Sheet, with column mapping, validation and duplicate detection). Reps browse the pool and CLAIM prospects in their region.
+- ASSIGNED: a manager or team lead assigns prospects to a rep.
+- MANUAL SEARCH: a rep finds dealerships with Google Maps / Places search and adds them. Check for duplicates against existing prospects and clients first.
+- TERRITORY RULE: each rep has a home ZIP code. By default, prospects should be within a 60-mile radius of it. Show the distance on every prospect. Flag anything outside the radius, and require a reason or manager approval to claim it. Show the pool on a map with the radius circle.
+- CLAIM RULES: show who claimed what and when, auto-release stale claims after a configurable number of days with no activity (with warnings first), and keep a full claim history.
+
+3.2 Visiting
+- In-person visits are strongly encouraged. GOOD visit window: 10:00 AM–4:00 PM in the dealership's local time. Visits before 10 AM or after 4 PM are "bad time" visits: allowed, but clearly flagged and tracked in stats.
+- Each visit logs check-in (time, optional location), outcome, contact met, notes (voice-to-text supported), products discussed and interest level, next action and follow-up date.
+
+3.3 Pipeline lifecycle (Kanban board + list view, drag and drop, stage-entry rules)
+Pool → Claimed/Assigned → Visit Planned → Visited → Follow-up → HOT → Handed off to Manager → Negotiation → Won (verbal yes) → Sign-up / Contract → Signed → Onboarding → CLIENT
+Plus: Lost (reason required), Not Now / Nurture (re-contact date), Disqualified.
+
+3.4 Handoff, closing, signing, ownership (critical)
+- HOT prospects are usually handed off to a manager to close. The handoff captures the summary, decision maker, objections, products of interest, pricing discussed and an AI-generated briefing.
+- Reps can also close deals themselves.
+- Once the dealership agrees, sign-up usually goes back to the ORIGIN REP; sometimes the manager completes the signing. Record who signed.
+- Whoever looks after the account runs onboarding (a checklist with tasks, owners, due dates and status).
+- Once signed, the prospect becomes a CLIENT in the ORIGIN REP's client pool. Origin-rep attribution NEVER changes, even if a manager closed or signed the deal.
+- Every record keeps a complete, timestamped audit trail: who scouted, claimed, visited, handed off, closed, signed and onboarded.
+
+3.5 Finance controller
+- Reviews the trail for scouting and completed handoffs, and confirms or rejects it (with comments).
+- Sets and approves the incentive for each handoff. Amounts VARY per handoff, so it's an editable amount, optionally suggested from configurable rules (rules may vary by product signed or dealership size).
+- Incentive states: Pending verification → Verified → Approved → Paid (date + reference) / Rejected / Disputed.
+- Reps see their own incentive statement (pending, approved and paid). Finance gets a payout ledger, reports and CSV export by period.
+
+3.6 Client servicing (in the origin rep's client pool)
+- Key-fob / keychain restocking (only for clients that use them).
+- Upselling new products.
+- Following up with the dealership on their sales and promotions.
+- A client health score (last contact, order and restock frequency, upsell coverage, issues), with at-risk alerts.
+
+---------------------------------------------------------------------
+4. DEALERSHIP PROFILE, DEALER GROUPS AND PRODUCTS
+---------------------------------------------------------------------
+4.1 Dealership profile fields (captured during scouting and visits, editable on the record, included in import)
+- Dealership type: Standalone OR Part of a Dealer Group.
+- Number of rooftops.
+- Number of used cars (used vehicle inventory count), with an optional monthly used vehicle sales figure. Keep a history so changes over time are visible.
+- F&I system in use: dropdown from an editable list managed by owners in Settings, plus "Other" (free text). Record the date captured and the source (asked at visit, researched, etc.).
+- Optional: franchise brand(s), or Independent.
+- Time zone (auto from ZIP).
+
+4.2 Dealer groups
+- A Dealer Group entity (name, HQ address, main decision maker, notes). Each dealership (rooftop) links to its group. The group page shows all rooftops, their stages, products and owners.
+- Origin-rep attribution stays PER ROOFTOP.
+- When one rooftop signs, flag its sister rooftops as warm opportunities and alert the relevant reps and managers.
+- If one group's rooftops span several reps' territories, a manager can set a group-level account owner without changing rooftop attribution or incentives.
+
+4.3 Products (one catalog drives everything)
+- Product catalog in Settings: name, category, description, price or pricing model, whether it's restockable (e.g. key fobs / keychains), unit and unit price, and an active/inactive status.
+- Track products per dealership across the lifecycle:
+  1. INTERESTED at scout time: which products, with interest level (Low / Medium / High).
+  2. SIGNED UP for: products in the contract, with sign-up date, price/plan and who signed.
+  3. UPSELL: each upsell is its own mini-opportunity (Identified → Pitched → Interested → Won / Lost) with owner, value and next step, and its own Kanban board.
+  4. RESTOCK: for restockable products, log every restock (date, quantity, unit price, total $, handled by). Show history, average quantity, frequency, predicted next restock date and total restock revenue.
+- Product summary on each record (Interested / Signed / Upselling / Not offered yet), so the gaps are visible at a glance.
+- Everything above is filterable and searchable: type, group, rooftops, used inventory size, F&I system, product status and restock status.
+
+---------------------------------------------------------------------
+5. ROLES, VIEWS AND PERMISSIONS
+---------------------------------------------------------------------
+Include a role switcher / login screen so I can preview each view. Everyone can VIEW everything (transparency); actions are role-gated. Every role can also work prospects and clients.
+
+1. NEW SALES REP: guided onboarding tour, a simple "Today" view, coaching tips, a "what to do next" prompt on every record, templates and talk tracks, low clutter, and a rookie league / personal-best tracking.
+2. VETERAN SALES REP: speed and power: keyboard shortcuts, command bar, bulk actions, saved filters, a dense view toggle, and management of a large client book.
+3. TEAM LEAD: team activity feed, coaching queue, reps who are stuck or slipping, joint-visit planning, and assigning and reassigning prospects.
+4. MANAGER: handoff inbox (hot deals waiting), a closing workspace for each deal, team pipeline, rep performance and coaching insights, and approvals (out-of-radius claims, reassignments, group owners).
+5. FINANCE CONTROLLER: handoff verification queue, incentive approvals, payout ledger and reports.
+6. EXECUTIVES / C-LEVEL: an Executive Desk with WEEKLY, MONTHLY and QUARTERLY views, each compared to the previous period:
+   - pipeline value and velocity; conversion by stage; wins and losses with reasons; forecast
+   - new clients; client retention and health
+   - product interest → sign-up conversion per product; product penetration across clients
+   - upsell pipeline and won upsell revenue; restock volume and revenue, with trend
+   - activity volume; good-time vs bad-time visits
+   - incentive spend and ROI
+   - territory coverage maps; dealer group coverage (rooftops signed vs total)
+   - breakdowns by region, rep, F&I system, standalone vs group, rooftop count and used inventory band
+   - plus everything the original Executive Desk implies (from audit A2)
+7. OWNERS: everything above, plus company targets, settings (territory radius, visit window, stale-claim days, incentive rules, gamification point weights, product catalog, F&I list), user management, data import, export and backup.
+
+---------------------------------------------------------------------
+6. THE PLANNER (the rep's home base: replaces the original "route planner")
+---------------------------------------------------------------------
+One "Planner" for planning AND reviewing work:
+- Day, Week and Month views, plus an agenda/list view. Switching between them is instant, and the user can jump to any date.
+- It's a full CALENDAR:
+  - PAST days show visits completed, outcomes, notes, synced emails / Meet calls / chats, deals moved and restocks done.
+  - FUTURE days show planned visits, follow-ups due, restocks due, upsell next steps, tasks and Google Calendar events.
+- Plan vs actual for any past day, week or month, with a short AI summary.
+- The 10 AM–4 PM good window (dealership local time) is visually shaded. Bookings outside it are clearly flagged.
+- "Plan my day / week / month with AI": builds the plan from claimed prospects, hot deals, follow-ups, restocks due, upsell opportunities, home ZIP, the 60-mile radius, drive times and time zones. It balances new prospecting with client servicing and clusters areas by day. The user can accept, tweak or regenerate it.
+- Drag and drop to reschedule, with warnings for conflicts and impossible drive times.
+- The map and driving route are a PART of the day view (a side panel or toggle): stops in order, drive times, and a one-tap "navigate" link.
+- "Work my day" mobile mode: the next stop, a pre-visit brief, check in, log the outcome by voice or quick tap, then on to the next stop.
+- Two-way sync with Google Calendar.
+- Managers and team leads can view any rep's Planner, see a combined team calendar, and plan joint visits. Owners and executives can view everyone, filtered by region or rep.
+
+---------------------------------------------------------------------
+7. AI FEATURES (Gemini API, with sensible fallbacks when AI is unavailable)
+---------------------------------------------------------------------
+- AI planner (section 6).
+- Pre-visit brief: one tap gives a dealership summary, history, last notes, profile (group, size, F&I system), products of interest, talking points and likely objections.
+- Post-visit assistant: turns rough or voice notes into a structured visit log, suggests the next step and follow-up date, captures product interest, and judges whether the prospect is HOT.
+- Lead scoring: ranks prospects using dealership size, used inventory, group membership, F&I system, product interest and engagement, and explains why ("Top 5 to visit today").
+- Handoff briefing auto-drafted for the manager from the full record history.
+- Upsell and restock AI: predicts restock dates and quantities, and suggests upsells by comparing a client to similar dealerships (same size, same F&I system, same group) and what those bought. Warns of churn risk.
+- Group expansion AI: when one rooftop signs, suggests a plan for the sister rooftops.
+- Manager AI dashboard: deals most likely to close, deals at risk, reps who need help and why, and suggested coaching actions.
+- Executive AI summary: a plain-English weekly, monthly and quarterly narrative with highlights, concerns and recommendations.
+- Action extraction: pulls commitments and next steps out of emails, Meet notes and in-person notes, and suggests them as tasks for the user to approve.
+- Natural-language search and commands, e.g. "hot prospects within 20 miles of Dallas not visited in 2 weeks".
+- Propose any other AI add-ons that would clearly help any role, and build the best ones.
+
+---------------------------------------------------------------------
+8. GAMIFICATION (healthy, transparent competition)
+---------------------------------------------------------------------
+- Leaderboards (weekly, monthly, quarterly; by region and team) for visits, good-time visits, claims converted, handoffs, wins, signings, upsells, restocks, client health and complete dealership profiles.
+- Points (configurable weights), streaks (e.g. consecutive days of good-time visits), badges, achievements and levels. Include badges for upsell wins, restock orders, complete profiles and signing a full dealer group.
+- Manager-created team challenges and head-to-head sprints, with progress bars.
+- A win celebration (feed post + confetti) and a "Deal of the Week" spotlight.
+- Fair play: points only for verified, quality actions (e.g. visits with notes and outcomes). No points for spam activity or trivial emails.
+- Motivate, don't shame: a rookie league and personal bests for newer reps.
+
+---------------------------------------------------------------------
+9. GOOGLE WORKSPACE INTEGRATION (weekly data pull)
+---------------------------------------------------------------------
+Pull activity data on a scheduled WEEKLY sync, plus an on-demand "Sync now". Link it to the right prospects, clients and users. One connector per app, each switchable in Settings:
+- Gmail: emails with prospect and client contacts, matched by contact email and dealership domain. Store metadata (date, from/to, subject, thread link) plus a short AI summary; full bodies only if a setting allows it.
+- Google Calendar: meetings and visits, reconciled with CRM visits, flagging bookings outside the good window. Two-way sync with the Planner.
+- Google Meet: calls with attendees and duration. Link transcripts or Gemini "Take notes for me" notes where they exist, with an AI summary and next actions.
+- Google Chat: internal conversations that mention a prospect or client, shown on the record timeline.
+- In-person meeting notes (Google Docs, Keep, or Gemini notes in Drive): link them to a record, or match automatically, and pull them into the visit log with an AI summary.
+- Drive / Docs / Sheets: contracts, proposals, onboarding documents and price sheets attached to records. A signed contract can trigger the Signed stage, with confirmation.
+- Optional: Contacts / People API sync; Admin SDK Reports API for company-wide totals (owners only).
+- Build the connector layer so more Google apps can be added later.
+
+Usage: a unified activity timeline on every record; auto-logging into activity stats, health scores, gamification (quality-weighted) and the Executive Desk; a weekly AI digest per user, team and executive (quiet deals, clients not contacted in X weeks, follow-ups that were promised but not done); and a review queue for unmatched items (link / create / ignore).
+
+Auth and privacy: Google sign-in (OAuth 2.0) with minimal read-only scopes; domain-wide or per-user connection. Only business items linked to prospects or clients are imported, never personal or unrelated items. Each user sees what's synced from their account and can pause it. Keep a sync log, handle rate limits and retry failures.
+
+Demo mode: real OAuth needs a Google Cloud project, so build a clean connector interface with realistic MOCK data for every source (featuring the demo users and dealerships). Add a Settings → Integrations screen with per-app status, last sync, scopes, a Connect button and setup instructions.
+
+---------------------------------------------------------------------
+10. DATA LAYER: GOOGLE SHEETS AS THE DATABASE
+---------------------------------------------------------------------
+- Build a data-access layer (repository pattern) with one interface and three adapters:
+  (1) LocalStorage: demo/offline mode with seed data and a "Reset demo data" button
+  (2) Google Sheets: the primary storage for real use
+  (3) a stub for a future proper database (e.g. Firestore / Cloud SQL)
+  Select the adapter in Settings → Data Storage, which shows the active mode.
+- Recommended connection: a Google Apps Script web app bound to the spreadsheets as a JSON API, using LockService for safe concurrent writes. Write the full Apps Script code and the deployment steps. Also document the direct Sheets API + OAuth alternative.
+- Spreadsheets (one per domain, one tab per entity):
+  - CRM_Core: Prospects, Clients, Contacts, Dealer_Groups, Products (catalog), Dealership_Products, F&I_Systems
+  - CRM_Activity: Visits, Calls, Notes, Tasks, Workspace_Activity
+  - CRM_Pipeline: Stage_History, Claims, Handoffs, Signups, Onboarding_Checklists, Upsells, Restocks
+  - CRM_Finance: Incentives, Payouts, Finance_Reviews (shared only with finance + owners)
+  - CRM_Gamification: Points_Ledger, Badges, Challenges, Leaderboard_Snapshots
+  - CRM_Admin: Users, Roles, Regions, Settings, Audit_Log, Sync_Log
+  - CRM_Archive_[YEAR]: old activity moved here yearly
+  - CRM_Reporting: read-only summary tables refreshed weekly for the Executive Desk (Looker Studio-ready)
+- Data rules:
+  - A fixed header row per tab matching a documented schema. Output the schema as a table: tab | column | type | required | example.
+  - Every row has a UUID, created_at/by, updated_at/by and a version number. Relationships use IDs, never names.
+  - Soft deletes only. Audit_Log is append-only.
+  - Optimistic concurrency, with a friendly "someone else updated this" prompt.
+  - Batch reads and writes, in-app caching, and an offline write queue for reps with poor signal.
+  - Respect quotas (back off and retry); show sync status and errors in the UI.
+  - Validate in the app, and add data validation and protected ranges in the sheets.
+- A one-click Apps Script setup that creates all spreadsheets, tabs, headers, validation, protection and sharing in a chosen Shared Drive folder. Plus: a connection test, demo seed import, CSV export, and a weekly backup to a dated folder.
+- Document the practical limits of Sheets (cell limits, quotas, concurrency, no transactions), roughly when to move to a real database, and how the adapter makes that move easy.
+
+---------------------------------------------------------------------
+11. UX / UI QUALITY BAR
+---------------------------------------------------------------------
+- A modern, premium SaaS feel, not a spreadsheet with buttons. Clean, calm, generous whitespace, strong hierarchy, one consistent design system, light and dark mode.
+- Mobile-first for reps in the field (big tap targets, one-handed use, works in a dealership parking lot). Rich, data-dense desktop layouts for managers, finance and executives.
+- Fewer clicks everywhere: smart defaults, inline editing, quick-add from anywhere, a command bar, keyboard shortcuts, global search, a notifications center and an activity feed.
+- Maps throughout (prospects, clients, the day's route, territory radius).
+- Clear status chips (stages, HOT, bad-time visit, out-of-radius, restock due).
+- No dead ends; every empty state says what to do next; loading and error states; undo on destructive actions.
+- Accessible: good contrast, keyboard navigable, readable type.
+
+---------------------------------------------------------------------
+12. TECHNICAL
+---------------------------------------------------------------------
+- React + TypeScript + Tailwind (or the best equivalent in this environment), with a clean component structure.
+- Storage via the data layer in section 10.
+- Maps: Google Maps if an API key is configured; otherwise Leaflet / OpenStreetMap with US ZIP-to-coordinate lookup and straight-line distance, so the demo always works. The default view is the continental US.
+
+---------------------------------------------------------------------
+13. DEMO DATA
+---------------------------------------------------------------------
+Users: use EXACTLY these people and no other staff. Use placeholder emails like firstname.lastname@example.com.
+
+SALES REPS (each in a different region, with a realistic home ZIP inside that region):
+- Kelley Koliopulos: Northeast
+- Kevin Houk: Midwest
+- Todd Bilius: Southeast
+- Todd Kelly: West
+- Carlos Martinez: Texas / South Central
+
+MANAGERS:
+- Jason Scott: Northeast + Midwest (Kelley Koliopulos, Kevin Houk)
+- Jose Matos: Southeast + Texas / South Central (Todd Bilius, Carlos Martinez)
+- Michael Ballero: West (Todd Kelly)
+
+OWNERS (also the C-level / executive users): John C, Cris S
+
+FINANCE CONTROLLER: Donna Clark
+
+TEAM LEAD: no one is assigned. Keep the role and its views, previewable via the role switcher.
+
+Data:
+- About 150 fictional US car dealerships across the 5 regions, each within about 60 miles of the region rep's home ZIP, plus a few out-of-radius and unclaimed pool entries.
+- A mix of standalone dealers and dealer groups (some groups spanning regions), varied rooftop counts, used inventory sizes and F&I systems (use placeholder names like "F&I System A" in an editable list).
+- Records in every pipeline stage; about 25 clients (some with key-fob restocking history); upsells in every status; handoffs in every incentive state, with Donna Clark as reviewer.
+- Two quarters of history, so the weekly, monthly and quarterly views, the Planner's past days and the leaderboards are meaningful.
+- Each rep gets a different demo performance profile: one strong closer, one heavy scout with low conversion, one strong on client servicing / restocks, one with many bad-time visits, and one newer rep still ramping up.
+- Managers own some accounts and have closed or signed some handed-off deals. Owners have worked a few accounts personally.
+- Mock Google Workspace activity (emails, Meet calls, chats, notes, Calendar events) between these users and dealership contacts.
+- The same seed data available for the LocalStorage adapter and for import into the Sheets.
+- Output a table: Name | Role | Region | Manager | Home ZIP | # prospects | # clients.
+
+=====================================================================
+END OF PROMPT
+=====================================================================

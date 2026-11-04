@@ -1,0 +1,10 @@
+{
+  "name": "ApexDrive CRM - Next-Gen US Dealership Field Sales",
+  "description": "Next-generation field sales CRM for US car dealership supplier teams with intelligent route planning, role-gated pipeline, Google Workspace integration, and executive intelligence.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

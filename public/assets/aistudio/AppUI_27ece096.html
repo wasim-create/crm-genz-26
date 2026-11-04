@@ -1,0 +1,2479 @@
+<script>
+    // --- GLOBAL APP STATE ---
+    // Maps base URL is built from pieces on purpose: Apps Script's HTML delivery
+    // can choke on double slashes inside template literals.
+    const MAPS_SEARCH_BASE = 'https:' + '/' + '/www.google.com/maps/search/';
+
+    let currentUser = null;
+    let currentView = '';
+    let activeDealershipId = null;
+    let draggedDealershipId = null;
+
+    // Route Planner Specific State
+    let goldenFilterActive = false;
+    let suggestTab = 'prospects';
+    let currentInsertIndex = -1;
+    let draggedActId = null;
+
+    const filters = { hideConfirmed: true, types: [], statuses: [] };
+
+    // --- UTILITY FUNCTIONS ---
+    const generateId = (prefix) => prefix + Math.random().toString(36).substr(2, 9);
+    const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Never';
+    const daysBetween = (d1, d2) => Math.floor((new Date(d2) - new Date(d1)) / (1000 * 60 * 60 * 24));
+
+    function closeModal(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    }
+
+    function getRealStatus(d) {
+        const today = new Date();
+        if ((d.status === 'Uncontacted' || d.status === 'In Progress') && d.lastTouchpointDate) {
+            if (daysBetween(d.lastTouchpointDate, today) > 60) return 'Auto-Parked';
+        }
+        return d.status;
+    }
+
+    function getStageForDeal(d) {
+        const realStatus = getRealStatus(d);
+        if (realStatus === 'Parked' || realStatus === 'Auto-Parked') return 'Parked';
+        return realStatus;
+    }
+
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        const bgColor = type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800';
+        const icon = type === 'success' ? '<i class="fa-solid fa-check-circle text-green-500"></i>' : '<i class="fa-solid fa-circle-exclamation text-red-500"></i>';
+
+        toast.className = `flex items-center gap-3 p-4 rounded-lg border shadow-lg ${bgColor} pointer-events-auto toast-enter bg-white z-[110]`;
+        toast.innerHTML = `${icon} <span class="font-medium text-sm">${message}</span>`;
+        
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.replace('toast-enter', 'toast-exit');
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+
+    // --- INITIALIZATION ---
+    window.onload = () => {
+        try { initTheme(); } catch (e) { console.warn('Theme init failed', e); }
+        switchPersona('u_rep_vet');
+        applyFilters();
+    };
+
+    // --- THEME MANAGEMENT ---
+    function safeStorageGet(key) {
+        try { return localStorage.getItem(key); } catch (e) { return null; }
+    }
+    function safeStorageSet(key, val) {
+        try { localStorage.setItem(key, val); } catch (e) { /* storage blocked in Apps Script sandbox */ }
+    }
+
+    function initTheme() {
+        const savedTheme = safeStorageGet('theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setDarkMode(savedTheme === 'dark' || (!savedTheme && prefersDark));
+    }
+
+    function toggleTheme() {
+        const isDark = document.documentElement.classList.contains('dark');
+        setDarkMode(!isDark);
+    }
+
+    function setDarkMode(enableDark) {
+        const icon = document.getElementById('theme-icon');
+        document.documentElement.classList.toggle('dark', enableDark);
+        safeStorageSet('theme', enableDark ? 'dark' : 'light');
+        if (icon) {
+            icon.classList.toggle('fa-sun', enableDark);
+            icon.classList.toggle('fa-moon', !enableDark);
+        }
+    }
+
+    function toggleSidebar() {
+        const sb = document.getElementById('sidebar');
+        const icon = document.getElementById('sidebar-toggle-icon');
+        sb.classList.toggle('sidebar-contracted');
+        if (sb.classList.contains('sidebar-contracted')) {
+            icon.classList.remove('fa-chevron-left');
+            icon.classList.add('fa-chevron-right');
+        } else {
+            icon.classList.remove('fa-chevron-right');
+            icon.classList.add('fa-chevron-left');
+        }
+    }
+
+    // --- NAVIGATION & PERSONA ---
+    function switchPersona(userId) {
+        currentUser = db.users.find(u => u.id === userId);
+        
+        document.getElementById('user-name').innerText = `${currentUser.firstName} ${currentUser.lastName}`;
+        document.getElementById('user-avatar').innerText = currentUser.firstName.charAt(0);
+        document.getElementById('user-role').innerText = currentUser.role;
+
+        document.querySelectorAll('[class*="nav-group-"]').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll(`.nav-group-${currentUser.role}`).forEach(el => el.classList.remove('hidden'));
+
+        if(currentUser.role === 'rep') nav('dashboard');
+        else if(currentUser.role === 'manager' || currentUser.role === 'executive') nav('desk');
+        else if(currentUser.role === 'finance') nav('finance');
+        else if(currentUser.role === 'admin') nav('admin');
+        else nav('dashboard');
+
+        const personaSelect = document.getElementById('persona-selector');
+        if (personaSelect) personaSelect.value = userId;
+    }
+
+    function nav(target) {
+        currentView = target;
+        
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            if (btn.dataset.target === target) {
+                btn.classList.add('bg-brand-50', 'text-brand-600');
+                btn.classList.remove('text-gray-600', 'hover:bg-gray-50');
+            } else {
+                btn.classList.remove('bg-brand-50', 'text-brand-600');
+                btn.classList.add('text-gray-600', 'hover:bg-gray-50');
+            }
+        });
+
+        document.querySelectorAll('.view-panel').forEach(el => el.classList.add('hidden'));
+        document.getElementById(`view-${target}`).classList.remove('hidden');
+        document.getElementById('mobile-menu').classList.add('hidden');
+
+        if (target === 'desk') {
+            if (currentUser.role !== 'manager' && currentUser.role !== 'executive') {
+                showToast("Access restricted to Managers and Executives only.", "error");
+                return nav(currentUser.role === 'admin' ? 'admin' : 'dashboard');
+            }
+            document.getElementById('page-title').innerText = "Executive Decision Center";
+        } else if (target === 'performance') {
+            document.getElementById('page-title').innerText = "Game Day";
+            renderPerformance();
+        } else if (target === 'dashboard') {
+            document.getElementById('page-title').innerText = "Dashboard & Route Planner";
+            renderDashboard();
+        } else if (target === 'pipeline') {
+            document.getElementById('page-title').innerText = "Pipeline Board";
+            renderPipeline();
+        } else if (target === 'dealerships') {
+            document.getElementById('page-title').innerText = "The Bench (Prospects)";
+            renderDealerships();
+        } else if (target === 'clients') {
+            document.getElementById('page-title').innerText = "Client Portfolio";
+            renderClients();
+        } else if (target === 'pool') {
+            document.getElementById('page-title').innerText = "Prospect Pool";
+            renderPool();
+        } else if (target === 'payouts') {
+            document.getElementById('page-title').innerText = "Payouts Pipeline";
+            renderPayouts();
+        } else if (target === 'manager') {
+            document.getElementById('page-title').innerText = "Team Dashboard";
+            renderManager();
+        } else if (target === 'exec') {
+            document.getElementById('page-title').innerText = "Inbound Handoffs";
+            renderExecutive();
+        } else if (target === 'finance') {
+            document.getElementById('page-title').innerText = "Finance Approvals";
+            renderFinance();
+        } else if (target === 'admin') {
+            document.getElementById('page-title').innerText = "System Administration";
+            renderAdmin();
+        }
+    }
+
+    // --- ROUTE PLANNER ---
+    function setSuggestTab(tab) {
+        suggestTab = tab;
+        document.getElementById('tab-suggest-prospects').className = tab === 'prospects' ? "flex-1 py-1.5 text-xs font-bold rounded-md bg-white shadow-sm text-gray-800 transition-all border border-gray-200" : "flex-1 py-1.5 text-xs font-bold rounded-md text-gray-500 hover:text-gray-800 transition-all border border-transparent hover:bg-gray-100 cursor-pointer";
+        document.getElementById('tab-suggest-clients').className = tab === 'clients' ? "flex-1 py-1.5 text-xs font-bold rounded-md bg-white shadow-sm text-gray-800 transition-all border border-gray-200" : "flex-1 py-1.5 text-xs font-bold rounded-md text-gray-500 hover:text-gray-800 transition-all border border-transparent hover:bg-gray-100 cursor-pointer";
+        renderDashboard();
+    }
+
+    function toggleGoldenFilter() {
+        goldenFilterActive = !goldenFilterActive;
+        const btn = document.getElementById('modal-golden-filter-btn');
+        if (btn) {
+            if (goldenFilterActive) {
+                btn.classList.add('bg-yellow-50', 'text-yellow-600', 'border-yellow-200');
+                btn.classList.remove('bg-white', 'text-gray-400', 'border-gray-200');
+                showToast("Golden Targets filter ON (50+ Cars & Franchise)");
+            } else {
+                btn.classList.remove('bg-yellow-50', 'text-yellow-600', 'border-yellow-200');
+                btn.classList.add('bg-white', 'text-gray-400', 'border-gray-200');
+            }
+        }
+        renderDashboard();
+    }
+
+    function renderDashboard() {
+        const myDeals = db.dealerships.filter(d => d.ownerId === currentUser.id);
+        document.getElementById('stat-bench').innerText = myDeals.length;
+        
+        let decayCount = 0, activeCount = 0;
+        const today = new Date();
+
+        myDeals.forEach(d => {
+            if (!d.lastTouchpointDate || daysBetween(d.lastTouchpointDate, today) > 30) decayCount++;
+            else activeCount++;
+        });
+
+        document.getElementById('stat-decay').innerText = decayCount;
+        document.getElementById('stat-active').innerText = activeCount;
+
+        const myPayouts = db.payouts.filter(p => p.repId === currentUser.id);
+        document.getElementById('stat-payouts').innerText = myPayouts.length;
+
+        const dateInput = document.getElementById('planner-date');
+        if (!dateInput.value) {
+            const d = new Date();
+            dateInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+        const selectedDateStr = dateInput.value;
+
+const scheduledActs = db.activities.filter(a => {
+            if (a.repId !== currentUser.id || a.plannedDate !== selectedDateStr || a.status !== 'pending') return false;
+            const deal = myDeals.find(d => d.id === a.dealershipId);
+            if (!deal || deal.status === 'Handed Off') return false;
+            return true;
+        });
+        const scheduledDealershipIds = scheduledActs.map(a => a.dealershipId);
+        const scheduledDeals = scheduledActs.map(act => myDeals.find(d => d.id === act.dealershipId)).filter(Boolean);
+        
+        let suggestedDeals = myDeals.filter(d => !scheduledDealershipIds.includes(d.id));
+
+        if (suggestTab === 'prospects') {
+            suggestedDeals = suggestedDeals.filter(d => d.status !== 'Client' && d.status !== 'Onboarding' && d.status !== 'Handed Off');
+            if (goldenFilterActive) {
+                suggestedDeals = suggestedDeals.filter(d => {
+                    const isDecaying = !d.lastTouchpointDate || daysBetween(d.lastTouchpointDate, today) > 30;
+                    return d.usedCarsOnLot >= 50 && d.dealershipType === 'Franchise' && (isDecaying || d.status === 'Uncontacted');
+                });
+            }
+        } else {
+            suggestedDeals = suggestedDeals.filter(d => d.status === 'Client' || d.status === 'Onboarding');
+            suggestedDeals.sort((a, b) => {
+                if (a.status === 'Onboarding' && b.status !== 'Onboarding') return -1;
+                if (b.status === 'Onboarding' && a.status !== 'Onboarding') return 1;
+                const aAge = a.lastTouchpointDate ? daysBetween(a.lastTouchpointDate, today) : 9999;
+                const bAge = b.lastTouchpointDate ? daysBetween(b.lastTouchpointDate, today) : 9999;
+                return bAge - aAge; 
+            });
+        }
+
+        renderSuggestions(suggestedDeals);
+        renderRoutePlanner(scheduledDeals, scheduledActs);
+    }
+
+    function renderSuggestions(deals) {
+        const container = document.getElementById('modal-planner-suggestions');
+        if (!container) return;
+        container.innerHTML = '';
+        
+        if (deals.length === 0) {
+            container.innerHTML = '<div class="text-center p-6 text-gray-400 text-sm">No targets available for this view. Try adjusting tabs or adding a new prospect.</div>';
+            return;
+        }
+
+        const today = new Date();
+        deals.forEach(d => {
+            const isDecaying = !d.lastTouchpointDate || daysBetween(d.lastTouchpointDate, today) > 30;
+            let heatColorClass = d.heatLevel === 'Hot' ? 'bg-red-100 text-red-700' : (d.heatLevel === 'Warm' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-700');
+            
+            let statusBadge = '';
+            if (d.status === 'Onboarding') {
+                statusBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-100 text-purple-700 border border-purple-200 ml-1">Onboarding</span>`;
+            } else if (d.status === 'Client') {
+                statusBadge = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-green-100 text-green-700 ml-1">Client</span>`;
+            }
+
+            container.innerHTML += `
+                <div onclick="selectSuggestionForItinerary('${d.id}')"
+                     class="bg-white p-3 rounded-lg border ${d.status === 'Onboarding' ? 'border-purple-300' : (isDecaying ? 'border-red-200' : 'border-gray-200')} shadow-sm cursor-pointer hover:shadow-md hover:border-brand-400 transition-all relative overflow-hidden group">
+                    ${isDecaying && d.status !== 'Onboarding' ? '<div class="absolute left-0 top-0 bottom-0 w-1 bg-red-500"></div>' : ''}
+                    ${d.status === 'Onboarding' ? '<div class="absolute left-0 top-0 bottom-0 w-1 bg-purple-500"></div>' : ''}
+                    <div class="flex justify-between items-start pl-2">
+                        <div>
+                            <h3 class="font-bold text-sm text-gray-800 group-hover:text-brand-600 transition-colors">${d.dealershipName} ${statusBadge}</h3>
+                            <p class="text-xs text-gray-500 truncate max-w-[250px]">${d.address}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-1 rounded-md text-xs font-bold bg-brand-50 text-brand-600 opacity-0 group-hover:opacity-100 transition-opacity">Insert</span>
+                            <div class="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${d.distanceFromHome} mi</div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center mt-2 pl-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-medium ${d.usedCarsOnLot < 50 ? 'text-red-500' : 'text-gray-600'}"><i class="fa-solid fa-car-side mr-1"></i>${d.usedCarsOnLot}</span>
+                        </div>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${heatColorClass}">${d.heatLevel}</span>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function openSmartSuggestions(index) {
+        currentInsertIndex = index;
+        document.getElementById('modal-smart-suggestions').classList.remove('hidden');
+        renderDashboard();
+    }
+
+    function selectSuggestionForItinerary(dealershipId) {
+        const dateStr = document.getElementById('planner-date').value;
+        if(!dateStr) return showToast("Please select a date first.", "error");
+
+        const scheduledActs = db.activities.filter(a => a.repId === currentUser.id && a.plannedDate === dateStr && a.status === 'pending');
+        scheduledActs.sort((a,b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+        
+        for(let i = currentInsertIndex; i < scheduledActs.length; i++) {
+            scheduledActs[i].orderIndex = i + 1;
+        }
+        
+        db.activities.push({
+            id: generateId('a'), repId: currentUser.id, dealershipId: dealershipId, contactId: null,
+            activityType: 'Planned Visit', communicationType: 'In-Person', status: 'pending',
+            completedAt: null, notes: '', 
+            nextActionDate: formatDate(dateStr),
+            plannedDate: dateStr,
+            orderIndex: currentInsertIndex
+        });
+
+        closeModal('modal-smart-suggestions');
+        renderDashboard();
+        showToast("Stop added to itinerary.");
+    }
+
+    // --- ITINERARY DRAG & DROP ---
+    function itineraryDragStart(event, actId) {
+        draggedActId = actId;
+        event.dataTransfer.effectAllowed = 'move';
+        event.target.classList.add('opacity-50', 'scale-[0.98]');
+    }
+
+    function itineraryDragEnd(event) {
+        event.target.classList.remove('opacity-50', 'scale-[0.98]');
+        document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        draggedActId = null;
+    }
+
+    function itineraryDragOver(event) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        event.currentTarget.classList.add('drag-over');
+    }
+
+    function itineraryDragLeave(event) {
+        event.currentTarget.classList.remove('drag-over');
+    }
+
+    function itineraryDropSlot(event, insertIndex) {
+        event.preventDefault();
+        event.currentTarget.classList.remove('drag-over');
+        if (!draggedActId) return;
+
+        const dateStr = document.getElementById('planner-date').value;
+        const scheduledActs = db.activities.filter(a => a.repId === currentUser.id && a.plannedDate === dateStr && a.status === 'pending');
+        scheduledActs.sort((a,b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+        const draggedAct = scheduledActs.find(a => a.id === draggedActId);
+        if (!draggedAct) return;
+
+        const oldIndex = scheduledActs.indexOf(draggedAct);
+        scheduledActs.splice(oldIndex, 1);
+        
+        let actualInsertIndex = insertIndex;
+        if (oldIndex < insertIndex) actualInsertIndex--; 
+        
+        scheduledActs.splice(actualInsertIndex, 0, draggedAct);
+        scheduledActs.forEach((a, i) => a.orderIndex = i);
+
+        renderDashboard();
+        showToast("Stop reordered successfully.");
+    }
+
+    function renderRoutePlanner(scheduledDeals, scheduledActs) {
+        const body = document.getElementById('route-planner-body');
+        body.innerHTML = '';
+        body.classList.remove('hidden');
+        
+        const count = scheduledDeals.length;
+        const gText = document.getElementById('gamification-text');
+        const gCount = document.getElementById('gamification-count');
+        const gBar = document.getElementById('gamification-bar');
+        
+        gCount.innerText = `${count}/4`;
+        let percentage = Math.min((count / 4) * 100, 100);
+        gBar.style.width = `${percentage}%`;
+        
+        if (count === 0) {
+            gText.innerText = "Target: 2-4 Visits";
+            gText.className = "font-medium text-gray-500";
+            gBar.className = "h-full bg-gray-300 w-0 transition-all duration-700 ease-out rounded-full relative";
+        } else if (count === 1) {
+            gText.innerText = "Getting started...";
+            gText.className = "font-medium text-red-600";
+            gBar.className = "h-full bg-red-500 transition-all duration-700 ease-out rounded-full relative";
+        } else if (count === 2) {
+            gText.innerText = "Minimum Reached! 🚀";
+            gText.className = "font-bold text-yellow-600";
+            gBar.className = "h-full bg-yellow-500 transition-all duration-700 ease-out rounded-full relative";
+        } else if (count === 3) {
+            gText.innerText = "Great Day Planned! 🔥";
+            gText.className = "font-bold text-green-600";
+            gBar.className = "h-full bg-green-500 transition-all duration-700 ease-out rounded-full relative";
+        } else if (count >= 4) {
+            gText.innerText = "Maximized Route! 🏆";
+            gText.className = "font-bold text-brand-600";
+            gBar.className = "h-full bg-brand-500 transition-all duration-700 ease-out rounded-full relative";
+        }
+
+        scheduledActs.sort((a,b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+        
+        const renderSlot = (index) => `
+            <div ondragover="itineraryDragOver(event)" ondragleave="itineraryDragLeave(event)" ondrop="itineraryDropSlot(event, ${index})" onclick="openSmartSuggestions(${index})" class="border-2 border-dashed border-gray-200 rounded-lg p-2 text-center text-gray-400 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 cursor-pointer transition-all flex items-center justify-center gap-2 group mx-2 md:mx-10 my-2">
+                <div class="w-6 h-6 rounded-full bg-gray-100 group-hover:bg-brand-200 flex items-center justify-center transition-colors"><i class="fa-solid fa-plus text-xs"></i></div>
+                <span class="text-xs font-semibold uppercase tracking-wider">Add Stop Here</span>
+            </div>
+        `;
+        
+        body.innerHTML += renderSlot(0);
+
+        scheduledActs.forEach((act, index) => {
+            const d = db.dealerships.find(x => x.id === act.dealershipId);
+            if (!d) return;
+
+            let heatColorClass = d.heatLevel === 'Hot' ? 'bg-red-100 text-red-700' : (d.heatLevel === 'Warm' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-700');
+            
+            let statusBadge = '';
+            if (d.status === 'Onboarding') statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-100 text-purple-700 border border-purple-200">Onboarding</span>';
+            else if (d.status === 'Client') statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-green-100 text-green-700">Client</span>';
+            else statusBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-100 text-gray-600">Prospect</span>';
+
+            body.innerHTML += `
+                <div draggable="true" ondragstart="itineraryDragStart(event, '${act.id}')" ondragend="itineraryDragEnd(event)" class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between group hover:border-brand-400 transition-all duration-200 cursor-pointer relative" onclick="openQuickDealershipDetail('${d.id}')">
+                    <div class="flex items-center gap-3">
+                        <div class="w-6 h-6 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center font-bold text-xs flex-shrink-0 cursor-grab active:cursor-grabbing hover:bg-brand-100 hover:text-brand-600 transition-colors" title="Drag to reorder"><i class="fa-solid fa-grip-vertical"></i></div>
+                        <div>
+                            <div class="flex items-center gap-2 mb-0.5">
+                                <div class="w-5 h-5 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center font-bold text-[10px]">${index + 1}</div>
+                                <h3 class="font-bold text-gray-900 group-hover:text-brand-600 transition-colors text-sm">${d.dealershipName}</h3>
+                                ${statusBadge}
+                            </div>
+                            <p class="text-xs text-gray-500"><i class="fa-solid fa-map-pin mr-1 text-gray-400"></i>${d.address}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="text-right hidden sm:block">
+                            <span class="px-2 py-1 rounded text-[10px] font-bold uppercase ${heatColorClass}">${d.heatLevel}</span>
+                            <div class="text-xs font-mono mt-1 text-gray-500">${d.distanceFromHome} mi</div>
+                        </div>
+                        <div class="flex flex-col gap-1 hidden md:flex">
+                            <button onclick="event.stopPropagation(); moveItineraryStop('${act.id}', -1)" class="w-6 h-6 rounded bg-gray-50 text-gray-400 hover:bg-brand-50 hover:text-brand-600 transition-colors flex items-center justify-center border border-gray-100"><i class="fa-solid fa-chevron-up text-[10px]"></i></button>
+                            <button onclick="event.stopPropagation(); moveItineraryStop('${act.id}', 1)" class="w-6 h-6 rounded bg-gray-50 text-gray-400 hover:bg-brand-50 hover:text-brand-600 transition-colors flex items-center justify-center border border-gray-100"><i class="fa-solid fa-chevron-down text-[10px]"></i></button>
+                        </div>
+                        <button onclick="event.stopPropagation(); removeFromItinerary('${act.id}')" class="w-8 h-8 rounded-full bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-colors flex items-center justify-center shadow-sm border border-red-100 ml-1" title="Remove">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            body.innerHTML += renderSlot(index + 1);
+        });
+    }
+
+    function moveItineraryStop(actId, direction) {
+        const dateStr = document.getElementById('planner-date').value;
+        const scheduledActs = db.activities.filter(a => a.repId === currentUser.id && a.plannedDate === dateStr && a.status === 'pending');
+        scheduledActs.sort((a,b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+        
+        const index = scheduledActs.findIndex(a => a.id === actId);
+        if (index < 0) return;
+        
+        const newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= scheduledActs.length) return;
+        
+        const temp = scheduledActs[index].orderIndex;
+        scheduledActs[index].orderIndex = scheduledActs[newIndex].orderIndex;
+        scheduledActs[newIndex].orderIndex = temp;
+        
+        renderDashboard();
+    }
+
+    function removeFromItinerary(activityId) {
+        db.activities = db.activities.filter(a => a.id !== activityId);
+        
+        const dateStr = document.getElementById('planner-date').value;
+        const scheduledActs = db.activities.filter(a => a.repId === currentUser.id && a.plannedDate === dateStr && a.status === 'pending');
+        scheduledActs.sort((a,b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+        scheduledActs.forEach((a, i) => a.orderIndex = i);
+
+        renderDashboard();
+        showToast("Stop removed from itinerary.");
+    }
+
+    function calculateBoomerang() {
+        const dateStr = document.getElementById('planner-date').value;
+        const scheduledActs = db.activities.filter(a => a.repId === currentUser.id && a.plannedDate === dateStr && a.status === 'pending');
+        
+        if (scheduledActs.length < 2) {
+            return showToast("Add at least 2 stops to calculate a Boomerang Route.", "error");
+        }
+
+        scheduledActs.sort((a, b) => {
+            const dealA = db.dealerships.find(d => d.id === a.dealershipId);
+            const dealB = db.dealerships.find(d => d.id === b.dealershipId);
+            return (dealB?.distanceFromHome || 0) - (dealA?.distanceFromHome || 0);
+        });
+        
+        scheduledActs.forEach((a, i) => a.orderIndex = i);
+
+        renderDashboard();
+        showToast("🚀 Boomerang Route Optimized!");
+    }
+
+    // --- PIPELINE LOGIC ---
+    function renderPipeline() {
+        const board = document.getElementById('pipeline-board');
+        if(!board) return;
+        board.innerHTML = '';
+        
+        let deals = [...db.dealerships];
+        const today = new Date();
+
+        const ownerFilter = document.getElementById('filter-pipeline-owner')?.value || 'my';
+        if (ownerFilter === 'my') {
+            deals = deals.filter(d => d.ownerId === currentUser.id || d.scoutId === currentUser.id);
+        } else if (ownerFilter === 'team') {
+            if (currentUser.role === 'manager') {
+                const teamUserIds = db.users.filter(u => u.managerId === currentUser.id || u.id === currentUser.id).map(u => u.id);
+                deals = deals.filter(d => teamUserIds.includes(d.ownerId));
+            } else {
+                deals = deals.filter(d => d.ownerId);
+            }
+        } else if (ownerFilter !== 'all') {
+            deals = deals.filter(d => d.ownerId === ownerFilter);
+        }
+
+        const sizeFilter = document.getElementById('filter-pipeline-size')?.value || 'all';
+        if (sizeFilter === '50+') deals = deals.filter(d => (d.usedCarsOnLot || 0) >= 50);
+        else if (sizeFilter === '<50') deals = deals.filter(d => (d.usedCarsOnLot || 0) < 50);
+        else if (sizeFilter === '100+') deals = deals.filter(d => (d.usedCarsOnLot || 0) >= 100);
+
+        const typeFilter = document.getElementById('filter-pipeline-type')?.value || 'all';
+        if (typeFilter !== 'all') deals = deals.filter(d => d.dealershipType === typeFilter);
+
+        const activityFilter = document.getElementById('filter-pipeline-activity')?.value || 'all';
+        const scheduledDealIds = db.activities.filter(a => a.status === 'pending').map(a => a.dealershipId);
+
+        if (activityFilter === 'scheduled') deals = deals.filter(d => scheduledDealIds.includes(d.id));
+        else if (activityFilter === 'decaying') deals = deals.filter(d => !d.lastTouchpointDate || daysBetween(d.lastTouchpointDate, today) > 30);
+        else if (activityFilter === 'noscheduled') deals = deals.filter(d => !scheduledDealIds.includes(d.id));
+
+        const dateFilter = document.getElementById('filter-pipeline-date')?.value || 'all';
+        if (dateFilter === '7d') deals = deals.filter(d => d.createdAt && daysBetween(d.createdAt, today) <= 7);
+        else if (dateFilter === '30d') deals = deals.filter(d => d.createdAt && daysBetween(d.createdAt, today) <= 30);
+
+        const heatFilter = document.getElementById('filter-pipeline-heat')?.value || 'all';
+        if (heatFilter !== 'all') deals = deals.filter(d => d.heatLevel === heatFilter);
+
+        const searchTerm = document.getElementById('search-pipeline')?.value?.toLowerCase().trim();
+        if (searchTerm) deals = deals.filter(d => d.dealershipName.toLowerCase().includes(searchTerm) || d.address.toLowerCase().includes(searchTerm));
+
+        const counter = document.getElementById('pipeline-deal-counter');
+        if (counter) counter.innerText = `${deals.length} Deal${deals.length === 1 ? '' : 's'}`;
+
+        const hideClients = document.getElementById('pipeline-hide-clients')?.checked ?? true;
+        const allStages = [
+            { id: 'Uncontacted', label: 'Uncontacted', badgeColor: 'bg-gray-100 text-gray-700', border: 'border-gray-200' },
+            { id: 'In Progress', label: 'In Progress', badgeColor: 'bg-blue-100 text-blue-700', border: 'border-blue-200' },
+            { id: 'Handoff Pending', label: 'Handoff Pending', badgeColor: 'bg-yellow-100 text-yellow-800', border: 'border-yellow-200' },
+            { id: 'Closing', label: 'Closing (Exec)', badgeColor: 'bg-orange-100 text-orange-800', border: 'border-orange-200' },
+            { id: 'Onboarding', label: 'Onboarding', badgeColor: 'bg-purple-100 text-purple-700', border: 'border-purple-200' },
+            { id: 'Client', label: 'Client (Won)', badgeColor: 'bg-green-100 text-green-700', border: 'border-green-200' },
+            { id: 'Parked', label: 'Parked', badgeColor: 'bg-red-100 text-red-700', border: 'border-red-200' }
+        ];
+
+        const stages = hideClients ? allStages.filter(s => s.id !== 'Client') : allStages;
+        const sortOption = document.getElementById('sort-pipeline')?.value || 'manual';
+
+        stages.forEach(stage => {
+            let dealsInStage = deals.filter(d => {
+                const realStatus = getRealStatus(d);
+                if (stage.id === 'Handed Off') return realStatus.includes('Handoff') || d.status === 'Handed Off';
+                if (stage.id === 'Parked') return realStatus === 'Parked' || realStatus === 'Auto-Parked';
+                return realStatus === stage.id;
+            });
+
+            if (sortOption === 'inventory-desc') dealsInStage.sort((a, b) => (b.usedCarsOnLot || 0) - (a.usedCarsOnLot || 0));
+            else if (sortOption === 'decay-asc') dealsInStage.sort((a, b) => {
+                const timeA = a.lastTouchpointDate ? new Date(a.lastTouchpointDate).getTime() : 0;
+                const timeB = b.lastTouchpointDate ? new Date(b.lastTouchpointDate).getTime() : 0;
+                return timeA - timeB;
+            });
+            else if (sortOption === 'heat-desc') {
+                const heatRank = { 'Hot': 3, 'Warm': 2, 'Cold': 1 };
+                dealsInStage.sort((a, b) => (heatRank[b.heatLevel] || 0) - (heatRank[a.heatLevel] || 0));
+            } else if (sortOption === 'name-asc') dealsInStage.sort((a, b) => a.dealershipName.localeCompare(b.dealershipName));
+            else dealsInStage.sort((a, b) => (a.manualOrder ?? 999) - (b.manualOrder ?? 999));
+
+            let colHtml = `
+                <div class="w-80 flex-shrink-0 flex flex-col bg-gray-100/50 rounded-xl border ${stage.border} h-full max-h-full overflow-hidden shadow-sm">
+                    <div class="p-3 border-b border-gray-200 bg-white flex justify-between items-center rounded-t-xl flex-shrink-0">
+                        <h3 class="font-bold text-gray-800 text-xs uppercase tracking-wider">${stage.label}</h3>
+                        <span class="${stage.badgeColor} text-xs font-bold px-2 py-0.5 rounded-full">${dealsInStage.length}</span>
+                    </div>
+                    <div class="p-3 overflow-y-auto flex-grow space-y-3 custom-scrollbar pipeline-col-body transition-colors rounded-b-xl"
+                         ondragover="handlePipelineColDragOver(event)"
+                         ondragleave="handlePipelineColDragLeave(event)"
+                         ondrop="handlePipelineColDrop(event, '${stage.id}')">
+            `;
+
+            if (dealsInStage.length === 0) {
+                colHtml += `<div class="p-6 text-center text-xs text-gray-400 border border-dashed border-gray-300 rounded-lg pointer-events-none">Drop deals here</div>`;
+            } else {
+                dealsInStage.forEach(d => {
+                    const isDecaying = !d.lastTouchpointDate || daysBetween(d.lastTouchpointDate, today) > 30;
+                    const hasScheduled = scheduledDealIds.includes(d.id);
+                    const ownerUser = db.users.find(u => u.id === d.ownerId);
+                    let heatColor = d.heatLevel === 'Hot' ? 'bg-red-100 text-red-700' : (d.heatLevel === 'Warm' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-700');
+
+                    // Check if it's a read-only view for the rep
+                    const isManagerOwned = (currentUser.role === 'rep' && d.ownerId !== currentUser.id && d.scoutId === currentUser.id);
+
+                    colHtml += `
+                        <div id="pipeline-card-${d.id}"
+                             ${isManagerOwned ? '' : `draggable="true" ondragstart="handlePipelineCardDragStart(event, '${d.id}')" ondragend="handlePipelineCardDragEnd(event, '${d.id}')"`}
+                             ondragover="handlePipelineCardDragOver(event)"
+                             ondragleave="handlePipelineCardDragLeave(event)"
+                             ondrop="handlePipelineCardDrop(event, '${d.id}', '${stage.id}')"
+                             onclick="if(window.isDraggingPipelineCard) return; openQuickDealershipDetail('${d.id}')" 
+                             class="pipeline-card-item ${isManagerOwned ? '' : 'pipeline-card-draggable'} bg-white p-3.5 rounded-xl shadow-sm border border-gray-200 hover:border-brand-500 hover:shadow-md transition-all group relative ${isManagerOwned ? 'opacity-90' : ''}">
+                            
+                            <div class="flex justify-between items-start gap-2 mb-1.5">
+                                <div class="flex items-center gap-1.5 min-w-0">
+                                    ${isManagerOwned 
+                                        ? `<i class="fa-solid fa-lock text-amber-500 text-[10px] flex-shrink-0" title="Locked: Manager Review"></i>` 
+                                        : `<i class="fa-solid fa-grip-vertical text-gray-300 group-hover:text-gray-400 text-xs flex-shrink-0 cursor-grab" title="Drag to reorder"></i>`}
+                                    <h4 class="font-bold text-sm text-gray-900 group-hover:text-brand-600 transition-colors leading-tight truncate">${d.dealershipName}</h4>
+                                </div>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded uppercase ${heatColor} flex-shrink-0">${d.heatLevel}</span>
+                            </div>
+                            
+                            <p class="text-xs text-gray-500 mb-2 truncate"><i class="fa-solid fa-location-dot mr-1 text-gray-400"></i>${d.address}</p>
+
+                            <div class="flex items-center gap-1.5 flex-wrap mb-2.5">
+                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded ${d.dealershipType === 'Franchise' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'}">${d.dealershipType}</span>
+                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-gray-50 text-gray-700 border border-gray-200"><i class="fa-solid fa-car text-gray-400 mr-1"></i>${d.usedCarsOnLot} cars</span>
+                                ${ownerUser ? `<span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200"><i class="fa-solid fa-user-circle mr-1"></i>${ownerUser.firstName}</span>` : ''}
+                                ${isManagerOwned ? `<span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">Manager Review</span>` : ''}
+                            </div>
+
+                            <div class="flex justify-between items-center text-[11px] pt-2 border-t border-gray-100">
+                                ${hasScheduled 
+                                    ? `<span class="text-green-600 font-medium flex items-center gap-1"><i class="fa-solid fa-calendar-check"></i> Stop planned</span>` 
+                                    : (isDecaying 
+                                        ? `<span class="text-red-500 font-semibold flex items-center gap-1"><i class="fa-solid fa-fire"></i> Attention (${d.lastTouchpointDate ? daysBetween(d.lastTouchpointDate, today) + 'd' : 'Cold'})</span>` 
+                                        : `<span class="text-gray-400">Active</span>`)
+                                }
+                                <span class="font-mono text-gray-500">${d.distanceFromHome} mi</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            colHtml += `</div></div>`;
+            board.innerHTML += colHtml;
+        });
+    }
+
+    function handlePipelineCardDragStart(e, id) {
+        window.isDraggingPipelineCard = true;
+        draggedDealershipId = id;
+        e.dataTransfer.setData('text/plain', id);
+        e.dataTransfer.effectAllowed = 'move';
+        setTimeout(() => {
+            const el = document.getElementById('pipeline-card-' + id);
+            if (el) el.classList.add('drag-card-ghost');
+        }, 0);
+    }
+
+    function handlePipelineCardDragEnd(e, id) {
+        setTimeout(() => window.isDraggingPipelineCard = false, 100);
+        const el = document.getElementById('pipeline-card-' + id);
+        if (el) el.classList.remove('drag-card-ghost');
+        document.querySelectorAll('.pipeline-card-item').forEach(c => c.classList.remove('drag-target-hover', 'ring-2', 'ring-brand-500'));
+        document.querySelectorAll('.pipeline-col-body').forEach(c => c.classList.remove('drag-target-hover'));
+        draggedDealershipId = null;
+    }
+
+    function handlePipelineCardDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('drag-target-hover', 'ring-2', 'ring-brand-500');
+    }
+
+    function handlePipelineCardDragLeave(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-target-hover', 'ring-2', 'ring-brand-500');
+    }
+
+    function handlePipelineCardDrop(e, targetCardId, targetStageId) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.classList.remove('drag-target-hover', 'ring-2', 'ring-brand-500');
+
+        const draggedId = draggedDealershipId || e.dataTransfer.getData('text/plain');
+        if (!draggedId || draggedId === targetCardId) return;
+
+        const draggedDeal = db.dealerships.find(d => d.id === draggedId);
+        const targetDeal = db.dealerships.find(d => d.id === targetCardId);
+        if (!draggedDeal) return;
+
+        const sortSelect = document.getElementById('sort-pipeline');
+        if (sortSelect && sortSelect.value !== 'manual') {
+            sortSelect.value = 'manual';
+            showToast("Switched sorting to Manual Order mode");
+        }
+
+        const currentStageOfDragged = getStageForDeal(draggedDeal);
+        if (currentStageOfDragged !== targetStageId) {
+            moveDealToStage(draggedDeal, targetStageId, targetDeal);
+        } else {
+            reorderDealsInStage(targetStageId, draggedDeal, targetDeal);
+            renderPipeline();
+            showToast(`Reordered "${draggedDeal.dealershipName}"`);
+        }
+        draggedDealershipId = null;
+    }
+
+    function handlePipelineColDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('drag-target-hover');
+    }
+
+    function handlePipelineColDragLeave(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-target-hover');
+    }
+
+    function handlePipelineColDrop(e, targetStageId) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-target-hover');
+        const draggedId = draggedDealershipId || e.dataTransfer.getData('text/plain');
+        if (!draggedId) return;
+
+        const draggedDeal = db.dealerships.find(d => d.id === draggedId);
+        if (!draggedDeal) return;
+
+        const currentStageOfDragged = getStageForDeal(draggedDeal);
+        if (currentStageOfDragged !== targetStageId) {
+            const sortSelect = document.getElementById('sort-pipeline');
+            if (sortSelect && sortSelect.value !== 'manual') sortSelect.value = 'manual';
+            moveDealToStage(draggedDeal, targetStageId, null);
+        }
+        draggedDealershipId = null;
+    }
+
+    function reorderDealsInStage(stageId, draggedDeal, targetDeal) {
+        let stageDeals = db.dealerships.filter(d => getStageForDeal(d) === stageId);
+        stageDeals.sort((a, b) => (a.manualOrder ?? 999) - (b.manualOrder ?? 999));
+        stageDeals = stageDeals.filter(d => d.id !== draggedDeal.id);
+
+        if (targetDeal) {
+            const targetIdx = stageDeals.findIndex(d => d.id === targetDeal.id);
+            if (targetIdx !== -1) stageDeals.splice(targetIdx, 0, draggedDeal);
+            else stageDeals.push(draggedDeal);
+        } else {
+            stageDeals.push(draggedDeal);
+        }
+
+        stageDeals.forEach((deal, idx) => {
+            deal.manualOrder = idx;
+        });
+    }
+
+    let pendingPipelineMove = null;
+
+    function moveDealToStage(draggedDeal, targetStageId, targetDeal) {
+        const oldStatus = getRealStatus(draggedDeal);
+
+        // 1. Rep Restrictions for Handoff Pending
+        if (oldStatus === 'Handoff Pending' && currentUser.role === 'rep') {
+            if (targetStageId !== 'In Progress') {
+                return showToast("As a rep, you can only drag this back to 'In Progress' to cancel the handoff.", "error");
+            }
+            // Dragging back to In Progress cancels the handoff
+            cancelHandoff(draggedDeal.id);
+            return;
+        }
+
+        // 2. Specific UI Triggers based on target stage
+        if (targetStageId === 'Handoff Pending') {
+            if (oldStatus === 'Uncontacted') return showToast("Cannot hand off an Uncontacted account.", "error");
+            activeDealershipId = draggedDeal.id;
+            initiateHandoff();
+            return; 
+        }
+
+        if (targetStageId === 'Parked') {
+            promptParkDealership(draggedDeal.id);
+            return;
+        }
+
+        // 3. Catch-all for generic moves (Requires a Log Stop)
+        pendingPipelineMove = { deal: draggedDeal, targetStageId: targetStageId, targetDeal: targetDeal };
+        
+        document.getElementById('pipeline-move-title').innerHTML = `<i class="fa-solid fa-truck-fast text-brand-600 mr-2"></i> Move to ${targetStageId}`;
+        document.getElementById('pipeline-move-note').value = '';
+        document.getElementById('modal-pipeline-move').classList.remove('hidden');
+    }
+
+    function executePipelineMove() {
+        if (!pendingPipelineMove) return;
+        const note = document.getElementById('pipeline-move-note')?.value.trim();
+        if (!note) return showToast("You must provide a log note to move stages.", "error");
+
+        const { deal, targetStageId, targetDeal } = pendingPipelineMove;
+        const oldStatus = deal.status;
+        
+        deal.status = targetStageId;
+        deal.lastTouchpointDate = new Date().toISOString();
+
+        // If moving straight to Onboarding, trigger the payout completion
+        if (targetStageId === 'Onboarding') {
+            const p = db.payouts.find(x => x.dealershipId === deal.id && !x.meetingCompleted);
+            if (p) p.meetingCompleted = true;
+        }
+        
+        db.activities.push({
+            id: generateId('a'), repId: currentUser.id, dealershipId: deal.id, contactId: null,
+            activityType: 'Pipeline Stage Change', communicationType: 'System', status: 'completed',
+            completedAt: new Date().toISOString(), notes: `Moved from ${oldStatus} to ${targetStageId} via Drag & Drop. Log: ${note}`, nextActionDate: null
+        });
+
+        reorderDealsInStage(targetStageId, deal, targetDeal);
+        closeModal('modal-pipeline-move');
+        renderPipeline();
+        showToast(`Moved successfully to ${targetStageId}`);
+        pendingPipelineMove = null;
+    }
+
+    function resetPipelineFilters() {
+        if (document.getElementById('sort-pipeline')) document.getElementById('sort-pipeline').value = 'manual';
+        if (document.getElementById('filter-pipeline-owner')) document.getElementById('filter-pipeline-owner').value = 'my';
+        if (document.getElementById('filter-pipeline-size')) document.getElementById('filter-pipeline-size').value = 'all';
+        if (document.getElementById('filter-pipeline-type')) document.getElementById('filter-pipeline-type').value = 'all';
+        if (document.getElementById('filter-pipeline-activity')) document.getElementById('filter-pipeline-activity').value = 'all';
+        if (document.getElementById('filter-pipeline-date')) document.getElementById('filter-pipeline-date').value = 'all';
+        if (document.getElementById('filter-pipeline-heat')) document.getElementById('filter-pipeline-heat').value = 'all';
+        if (document.getElementById('search-pipeline')) document.getElementById('search-pipeline').value = '';
+        if (document.getElementById('pipeline-hide-clients')) document.getElementById('pipeline-hide-clients').checked = true;
+        renderPipeline();
+        showToast("Pipeline filters reset to defaults.");
+    }
+
+    // --- LIST VIEWS (BENCH, CLIENTS, POOL) ---
+    function renderDealerships() {
+        const grid = document.getElementById('dealerships-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        
+        // Update: Now includes deals where the user is either the Owner OR the Scout
+        let myDeals = db.dealerships.filter(d => (d.ownerId === currentUser.id || d.scoutId === currentUser.id) && d.status !== 'Client' && d.status !== 'Onboarding');
+        
+        const searchTerm = document.getElementById('search-dealerships')?.value.toLowerCase().trim() || '';
+        if (searchTerm) {
+            myDeals = myDeals.filter(d => 
+                d.dealershipName.toLowerCase().includes(searchTerm) || 
+                d.address.toLowerCase().includes(searchTerm)
+            );
+        }
+
+        if (filters.hideConfirmed) {
+            myDeals = myDeals.filter(d => {
+                const realStatus = getRealStatus(d);
+                return realStatus !== 'Handoff Confirmed' && realStatus !== 'Handoff In Process' && realStatus !== 'Handed Off';
+            });
+        }
+
+        if (filters.types.length > 0) {
+            myDeals = myDeals.filter(d => filters.types.includes(d.dealershipType));
+        }
+
+        if (filters.statuses.length > 0) {
+            myDeals = myDeals.filter(d => filters.statuses.includes(getRealStatus(d)) || filters.statuses.includes(d.status));
+        }
+
+        const sortValue = document.getElementById('sort-dealerships')?.value || 'name-asc';
+        myDeals.sort((a, b) => {
+            const today = new Date();
+            const aDecay = !a.lastTouchpointDate ? 9999 : daysBetween(a.lastTouchpointDate, today);
+            const bDecay = !b.lastTouchpointDate ? 9999 : daysBetween(b.lastTouchpointDate, today);
+            const heatRank = { 'Hot': 3, 'Warm': 2, 'Cold': 1 };
+
+            if (sortValue === 'name-asc') return a.dealershipName.localeCompare(b.dealershipName);
+            if (sortValue === 'distance-asc') return (a.distanceFromHome || 0) - (b.distanceFromHome || 0);
+            if (sortValue === 'distance-desc') return (b.distanceFromHome || 0) - (a.distanceFromHome || 0);
+            if (sortValue === 'inventory-desc') return (b.usedCarsOnLot || 0) - (a.usedCarsOnLot || 0);
+            if (sortValue === 'decay-desc') return bDecay - aDecay;
+            if (sortValue === 'heat-desc') return (heatRank[b.heatLevel] || 0) - (heatRank[a.heatLevel] || 0);
+            if (sortValue === 'heat-asc') return (heatRank[a.heatLevel] || 0) - (heatRank[b.heatLevel] || 0);
+            return 0;
+        });
+
+        if (myDeals.length === 0) {
+            grid.innerHTML = `<div class="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-gray-100"><i class="fa-solid fa-building text-4xl mb-3 text-gray-300"></i><p>No prospects found matching your active filters.</p></div>`;
+            return;
+        }
+
+        const today = new Date();
+        myDeals.forEach(d => {
+            const isDecaying = !d.lastTouchpointDate || daysBetween(d.lastTouchpointDate, today) > 30;
+            let displayStatus = getRealStatus(d);
+            let heatColor = d.heatLevel === 'Hot' ? 'bg-red-100 text-red-700' : (d.heatLevel === 'Warm' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-700');
+
+            // Visual lock check to inform rep if deal is with a manager
+            const isManagerOwned = (d.ownerId !== currentUser.id && d.scoutId === currentUser.id);
+
+            const card = document.createElement('div');
+            card.className = `bg-white rounded-xl shadow-sm border ${isDecaying ? 'border-red-200' : 'border-gray-200'} p-5 cursor-pointer hover:shadow-xl transition-all duration-300 relative group`;
+            card.onclick = () => openDealershipDetail(d.id);
+            
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <div class="flex items-center gap-1.5 mb-1">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${d.dealershipType === 'Franchise' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'} uppercase">${d.dealershipType}</span>
+                            ${isManagerOwned ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 uppercase"><i class="fa-solid fa-lock mr-1"></i>Manager</span>` : ''}
+                        </div>
+                        <h3 class="font-bold text-gray-900 group-hover:text-brand-600 transition-colors">${d.dealershipName}</h3>
+                    </div>
+                    <span class="text-xs font-mono px-2 py-1 rounded border bg-gray-50">${d.distanceFromHome} mi</span>
+                </div>
+                <div class="text-sm text-gray-500 mb-4 line-clamp-1"><i class="fa-solid fa-map-pin mr-1"></i> ${d.address}</div>
+                <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+                    <span class="text-xs text-gray-500">${displayStatus}</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${heatColor} uppercase">${d.heatLevel}</span>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    function renderClients() {
+        const grid = document.getElementById('clients-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        
+        const clientDeals = db.dealerships.filter(d => (d.status === 'Client' || d.status === 'Onboarding') && (d.ownerId === currentUser.id || currentUser.role === 'manager'));
+        if (!clientDeals.length) {
+            grid.innerHTML = `<div class="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-gray-100">No client portfolio accounts found.</div>`;
+            return;
+        }
+
+        clientDeals.forEach(d => {
+            const card = document.createElement('div');
+            card.className = `bg-white rounded-xl shadow-sm border border-gray-200 p-5 cursor-pointer hover:shadow-xl transition-all duration-300 relative group`;
+            card.onclick = () => openQuickDealershipDetail(d.id);
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${d.status === 'Onboarding' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'} uppercase">${d.status}</span>
+                    <span class="text-xs font-mono text-gray-500">${d.distanceFromHome} mi</span>
+                </div>
+                <h3 class="font-bold text-gray-900 group-hover:text-brand-600 transition-colors">${d.dealershipName}</h3>
+                <p class="text-xs text-gray-500 mb-3">${d.address}</p>
+                <div class="pt-2 border-t border-gray-100 flex justify-between items-center text-xs text-gray-600">
+                    <span>Used: ${d.usedCarsOnLot} cars</span>
+                    <span>Last: ${formatDate(d.lastTouchpointDate)}</span>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    function renderPool() {
+        const grid = document.getElementById('pool-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        
+        const poolDeals = db.dealerships.filter(d => d.ownerId === null);
+        if (!poolDeals.length) {
+            grid.innerHTML = `<div class="col-span-full p-8 text-center text-gray-500 bg-white rounded-xl border border-gray-100">No unclaimed prospects in pool.</div>`;
+            return;
+        }
+
+        poolDeals.forEach(d => {
+            const card = document.createElement('div');
+            card.className = "bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col justify-between";
+            card.innerHTML = `
+                <div>
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 uppercase">${d.dealershipType}</span>
+                        <span class="text-xs font-mono text-gray-500">${d.distanceFromHome} mi</span>
+                    </div>
+                    <h3 class="font-bold text-gray-900">${d.dealershipName}</h3>
+                    <p class="text-xs text-gray-500 mb-3">${d.address}</p>
+                </div>
+                <button onclick="claimPoolDeal('${d.id}')" class="w-full bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium py-2 rounded-lg transition-colors shadow-sm mt-3">
+                    Claim Dealership
+                </button>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+
+    // --- DETAIL MODALS (FULL & QUICK) ---
+    function openDealershipDetail(id) {
+        activeDealershipId = id;
+        const d = db.dealerships.find(x => x.id === id);
+        if (!d) return;
+
+        document.getElementById('page-title').innerText = "Dealership Profile";
+        document.querySelectorAll('.view-panel').forEach(el => el.classList.add('hidden'));
+        document.getElementById('view-dealership-detail').classList.remove('hidden');
+
+        const today = new Date();
+        const isDecaying = !d.lastTouchpointDate || daysBetween(d.lastTouchpointDate, today) > 30;
+        
+        let heatColorClass = d.heatLevel === 'Hot' ? 'bg-red-100 text-red-700' : (d.heatLevel === 'Warm' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-700');
+        let heatIcon = d.heatLevel === 'Hot' ? 'fa-fire' : (d.heatLevel === 'Warm' ? 'fa-temperature-half' : 'fa-snowflake');
+        
+        document.getElementById('detail-decay-banner').style.display = isDecaying ? 'block' : 'none';
+        document.getElementById('detail-name').innerText = d.dealershipName;
+        document.getElementById('detail-address').innerHTML = `<i class="fa-solid fa-location-dot mr-1 text-gray-400"></i> ${d.address}`;
+        
+        const phoneEl = document.getElementById('detail-phone');
+        if (d.phone) {
+            phoneEl.innerHTML = `<i class="fa-solid fa-phone mr-1 text-gray-400"></i> ${d.phone}`;
+            phoneEl.classList.remove('hidden');
+        } else {
+            phoneEl.classList.add('hidden');
+        }
+        
+        document.getElementById('detail-type-badge').innerText = d.dealershipType;
+        
+        const heatBadge = document.getElementById('detail-heat-badge');
+        heatBadge.className = `px-2 py-0.5 rounded text-xs font-semibold uppercase ${heatColorClass}`;
+        heatBadge.innerHTML = `<i class="fa-solid ${heatIcon} mr-1"></i>${d.heatLevel}`;
+
+        const sourceBadge = document.getElementById('detail-source-badge');
+        if (sourceBadge) {
+            if (d.leadSource || d.internalReferral || d.externalReferral) {
+                let srcText = d.leadSource || 'Prospect Pool';
+                let refText = [];
+                if (d.internalReferral) { 
+                    const refU = db.users.find(x => x.id === d.internalReferral); 
+                    if (refU) refText.push(refU.firstName + ' ' + refU.lastName); 
+                }
+                if (d.externalReferral) refText.push(d.externalReferral);
+                if (refText.length > 0) srcText += ` (Ref: ${refText.join(' & ')})`;
+                
+                sourceBadge.innerHTML = `<i class="fa-solid fa-bullseye mr-1"></i>${srcText}`;
+                sourceBadge.classList.remove('hidden');
+            } else {
+                sourceBadge.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('detail-inventory').innerText = `${d.usedCarsOnLot} cars`;
+        document.getElementById('detail-inventory').className = `font-semibold ${d.usedCarsOnLot < 50 ? 'text-red-600' : ''}`;
+        
+        const isStretch = d.distanceFromHome > 60 && d.distanceFromHome <= 66;
+        const isOut = d.distanceFromHome > 66;
+        let distLabel = isOut ? '<span class="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded uppercase font-bold tracking-wider"><i class="fa-solid fa-plane-departure mr-1"></i> Out of Territory</span>' : 
+                        (isStretch ? '<span class="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] rounded uppercase font-bold tracking-wider">Stretch</span>' : 
+                                     '<span class="ml-2 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded uppercase font-bold tracking-wider">Home</span>');
+
+        document.getElementById('detail-distance').innerHTML = `${d.distanceFromHome} miles ${distLabel}`;
+        
+        let displayStatus = getRealStatus(d);
+        document.getElementById('detail-status').innerText = displayStatus;
+        document.getElementById('detail-last-touch').innerText = d.lastTouchpointDate ? formatDate(d.lastTouchpointDate) : 'Never';
+
+        const actionsContainer = document.getElementById('dealership-actions-container');
+        actionsContainer.innerHTML = '';
+        
+        if (d.ownerId === null) {
+            actionsContainer.innerHTML += `<button type="button" onclick="claimDealership('${d.id}')" class="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-thumbtack"></i> Claim Dealership</button>`;
+        } else if (currentUser.role === 'rep') {
+            if (d.ownerId !== currentUser.id) {
+                actionsContainer.innerHTML += `<div class="bg-amber-50 text-amber-800 px-4 py-2 rounded-lg text-sm font-semibold border border-amber-200 mr-2"><i class="fa-solid fa-lock mr-1"></i> Under Manager Review</div>`;
+                actionsContainer.innerHTML += `<button type="button" onclick="openAuditTrail('${id}')" class="bg-gray-800 hover:bg-gray-900 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-timeline"></i> View Audit Trail</button>`;
+                if (d.status === 'Handoff Pending') {
+                    actionsContainer.innerHTML += `<button type="button" onclick="cancelHandoff('${d.id}')" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-xmark"></i> Cancel Handoff</button>`;
+                }
+            } else {
+                const pendingAct = db.activities.find(a => a.dealershipId === d.id && a.status === 'pending');
+                actionsContainer.innerHTML += `<button type="button" onclick="openScheduleModal()" class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-regular ${pendingAct ? 'fa-calendar-check' : 'fa-calendar-plus'}"></i> ${pendingAct ? 'Change Schedule' : 'Schedule Visit'}</button>`;
+                actionsContainer.innerHTML += `<button type="button" onclick="openSalesStopWizard()" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-street-view"></i> Log Stop</button>`;
+
+                if (d.status === 'In Progress') actionsContainer.innerHTML += `<button type="button" onclick="initiateHandoff()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-handshake"></i> Handoff</button>`;
+                if (d.status === 'Onboarding') actionsContainer.innerHTML += `<button type="button" onclick="progressDeal('${d.id}', 'Client')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-check-double"></i> Finalize Onboarding</button>`;
+                if (d.status === 'Client') actionsContainer.innerHTML += `<button type="button" onclick="quickRestock('${d.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-key"></i> Quick Restock</button>`;
+                if (d.status === 'In Progress' || d.status === 'Uncontacted') actionsContainer.innerHTML += `<button type="button" onclick="promptParkDealership('${d.id}')" class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-ban"></i> Park Account</button>`;
+            }
+        } else if (currentUser.role === 'finance' || currentUser.role === 'manager' || currentUser.role === 'executive') {
+            actionsContainer.innerHTML += `<button type="button" onclick="openAuditTrail('${id}')" class="bg-gray-800 hover:bg-gray-900 text-white px-6 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-timeline"></i> View Audit Trail</button>`;
+            if (currentUser.role === 'manager' || currentUser.role === 'executive') {
+                if (d.ownerId === currentUser.id) {
+                    actionsContainer.innerHTML += `<button type="button" onclick="openSalesStopWizard()" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-street-view"></i> Log Stop</button>`;
+                    if (d.status === 'Handoff Pending') {
+                        const p = db.payouts.find(x => x.dealershipId === d.id && !x.meetingCompleted);
+                        if (p) actionsContainer.innerHTML += `<button type="button" onclick="completeHandoffMeeting('${p.id}')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-handshake-simple"></i> Accept Hand-off</button>`;
+                    } else if (d.status === 'Closing') {
+                        actionsContainer.innerHTML += `<button type="button" onclick="promptReassign('${d.id}', true)" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-file-signature"></i> Start Sign-Up</button>`;
+                    }
+                    actionsContainer.innerHTML += `<button type="button" onclick="promptReassign('${id}')" class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-user-gear"></i> Reassign</button>`;
+                }
+            }
+        }
+
+        renderContacts(id, 'detail-contacts-list');
+        renderActivities(id, 'detail-activity-list');
+    }
+
+    function openQuickDealershipDetail(id) {
+        activeDealershipId = id;
+        const d = db.dealerships.find(x => x.id === id);
+        if (!d) return;
+
+        const today = new Date();
+        const isDecaying = !d.lastTouchpointDate || daysBetween(d.lastTouchpointDate, today) > 30;
+        
+        let heatColorClass = d.heatLevel === 'Hot' ? 'bg-red-100 text-red-700' : (d.heatLevel === 'Warm' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-700');
+        let heatIcon = d.heatLevel === 'Hot' ? 'fa-fire' : (d.heatLevel === 'Warm' ? 'fa-temperature-half' : 'fa-snowflake');
+        
+        document.getElementById('qd-decay-banner').style.display = isDecaying ? 'block' : 'none';
+        document.getElementById('qd-name').innerText = d.dealershipName;
+        document.getElementById('qd-address').innerHTML = `<i class="fa-solid fa-location-dot mr-1 text-gray-400"></i> ${d.address}`;
+        
+        const qdPhone = document.getElementById('qd-phone');
+        if (d.phone) {
+            qdPhone.innerHTML = `<i class="fa-solid fa-phone mr-1 text-gray-400"></i> ${d.phone}`;
+            qdPhone.classList.remove('hidden');
+        } else {
+            qdPhone.classList.add('hidden');
+        }
+        
+        document.getElementById('qd-type-badge').innerText = d.dealershipType;
+        
+        const heatBadge = document.getElementById('qd-heat-badge');
+        heatBadge.className = `px-2 py-0.5 rounded text-xs font-semibold uppercase ${heatColorClass}`;
+        heatBadge.innerHTML = `<i class="fa-solid ${heatIcon} mr-1"></i>${d.heatLevel}`;
+
+        const qdSourceBadge = document.getElementById('qd-source-badge');
+        if (qdSourceBadge) {
+            if (d.leadSource || d.internalReferral || d.externalReferral) {
+                let srcText = d.leadSource || 'Prospect Pool';
+                let refText = [];
+                if (d.internalReferral) { 
+                    const refU = db.users.find(x => x.id === d.internalReferral); 
+                    if (refU) refText.push(refU.firstName + ' ' + refU.lastName); 
+                }
+                if (d.externalReferral) refText.push(d.externalReferral);
+                if (refText.length > 0) srcText += ` (Ref: ${refText.join(' & ')})`;
+                
+                qdSourceBadge.innerHTML = `<i class="fa-solid fa-bullseye mr-1"></i>${srcText}`;
+                qdSourceBadge.classList.remove('hidden');
+            } else {
+                qdSourceBadge.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('qd-inventory').innerText = `${d.usedCarsOnLot} cars`;
+        document.getElementById('qd-inventory').className = `font-semibold ${d.usedCarsOnLot < 50 ? 'text-red-600' : ''}`;
+        
+        const isStretch = d.distanceFromHome > 60 && d.distanceFromHome <= 66;
+        const isOut = d.distanceFromHome > 66;
+        let distLabel = isOut ? '<span class="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded uppercase font-bold tracking-wider"><i class="fa-solid fa-plane-departure mr-1"></i> Out of Territory</span>' : 
+                        (isStretch ? '<span class="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] rounded uppercase font-bold tracking-wider">Stretch</span>' : 
+                                     '<span class="ml-2 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded uppercase font-bold tracking-wider">Home</span>');
+
+        document.getElementById('qd-distance').innerHTML = `${d.distanceFromHome} miles ${distLabel}`;
+        document.getElementById('qd-status').innerText = getRealStatus(d);
+        document.getElementById('qd-last-touch').innerText = d.lastTouchpointDate ? formatDate(d.lastTouchpointDate) : 'Never';
+
+        const actionsContainer = document.getElementById('qd-actions-container');
+        actionsContainer.innerHTML = '';
+        
+        const isSuggesting = !document.getElementById('modal-smart-suggestions').classList.contains('hidden');
+
+        if (isSuggesting && currentView === 'dashboard') {
+            actionsContainer.innerHTML += `<button type="button" onclick="selectSuggestionForItinerary('${d.id}'); closeModal('modal-quick-detail');" class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2 rounded-lg font-medium text-sm transition-colors shadow-sm flex items-center justify-center gap-2"><i class="fa-solid fa-plus"></i> Insert into Planner</button>`;
+        } else if (d.ownerId === null) {
+            actionsContainer.innerHTML += `<button type="button" onclick="claimDealership('${d.id}'); closeModal('modal-quick-detail');" class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2 rounded-lg font-medium text-sm transition-colors shadow-sm flex items-center justify-center gap-2"><i class="fa-solid fa-thumbtack"></i> Claim Dealership</button>`;
+        } else if (currentUser.role === 'rep') {
+            if (d.ownerId !== currentUser.id) {
+                actionsContainer.innerHTML += `<div class="bg-amber-50 text-amber-800 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-200"><i class="fa-solid fa-lock mr-1"></i> Manager Review</div>`;
+                if (d.status === 'Handoff Pending') {
+                    actionsContainer.innerHTML += `<button type="button" onclick="cancelHandoff('${d.id}')" class="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg font-medium text-xs flex items-center gap-1.5 transition-colors"><i class="fa-solid fa-xmark"></i> Cancel</button>`;
+                }
+            } else {
+                const pendingAct = db.activities.find(a => a.dealershipId === d.id && a.status === 'pending');
+                let btns = `<div class="flex items-center gap-2 flex-wrap">`;
+                btns += `<button type="button" onclick="openScheduleModal()" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg font-medium text-xs shadow-sm flex items-center gap-1.5 whitespace-nowrap"><i class="fa-regular ${pendingAct ? 'fa-calendar-check' : 'fa-calendar-plus'} text-brand-600"></i> ${pendingAct ? 'Change Schedule' : 'Schedule Visit'}</button>`;
+                btns += `<button type="button" onclick="openSalesStopWizard()" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg font-medium text-xs transition-colors shadow-sm flex items-center justify-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-street-view"></i> Log Stop</button>`;
+                if (d.status === 'In Progress') btns += `<button type="button" onclick="initiateHandoff()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium text-xs transition-colors shadow-sm flex items-center justify-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-handshake"></i> Handoff</button>`;
+                if (d.status === 'Onboarding') btns += `<button type="button" onclick="progressDeal('${d.id}', 'Client')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium text-xs transition-colors shadow-sm flex items-center justify-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-check-double"></i> Finalize Onboard</button>`;
+                if (d.status === 'Client') btns += `<button type="button" onclick="quickRestock('${d.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-xs transition-colors shadow-sm flex items-center justify-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-key"></i> Quick Restock</button>`;
+                if (d.status === 'In Progress' || d.status === 'Uncontacted') btns += `<button type="button" onclick="promptParkDealership('${d.id}')" class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"><i class="fa-solid fa-ban"></i> Park</button>`;
+                btns += `</div>`;
+                actionsContainer.innerHTML += btns;
+            }
+        } else if (currentUser.role === 'manager' || currentUser.role === 'executive' || currentUser.role === 'finance') {
+            let btns = `<div class="flex items-center gap-2 flex-wrap">`;
+            btns += `<button type="button" onclick="openAuditTrail('${id}')" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors flex items-center justify-center gap-2"><i class="fa-solid fa-timeline"></i> View Audit Trail</button>`;
+            if (currentUser.role === 'manager' || currentUser.role === 'executive') {
+                if (d.ownerId === currentUser.id) {
+                    btns += `<button type="button" onclick="openSalesStopWizard()" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-street-view"></i> Log Stop</button>`;
+                    if (d.status === 'Handoff Pending') {
+                        const p = db.payouts.find(x => x.dealershipId === d.id && !x.meetingCompleted);
+                        if (p) btns += `<button type="button" onclick="completeHandoffMeeting('${p.id}')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-handshake-simple"></i> Accept</button>`;
+                    } else if (d.status === 'Closing') {
+                        btns += `<button type="button" onclick="promptReassign('${d.id}', true)" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-file-signature"></i> Sign-Up</button>`;
+                    }
+                    btns += `<button type="button" onclick="promptReassign('${id}')" class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors flex items-center justify-center gap-2 whitespace-nowrap"><i class="fa-solid fa-user-gear"></i> Reassign</button>`;
+                }
+            }
+            btns += `</div>`;
+            actionsContainer.innerHTML += btns;
+        }
+
+        renderContacts(id, 'qd-contacts-list');
+        renderActivities(id, 'qd-activity-list');
+        
+        document.getElementById('modal-quick-detail').classList.remove('hidden');
+    }
+
+    function renderContacts(dealershipId, containerId = 'qd-contacts-list') {
+        const contacts = db.contacts.filter(c => c.dealershipId === dealershipId);
+        const listEl = document.getElementById(containerId);
+        if (!listEl) return;
+        listEl.innerHTML = contacts.length ? contacts.map(c => `
+            <div class="bg-gray-50 border border-gray-200 p-3 rounded-lg flex justify-between items-center">
+                <div>
+                    <div class="flex items-center gap-1.5">
+                        <h4 class="font-bold text-sm text-gray-900">${c.firstName} ${c.lastName}</h4>
+                        ${c.isDecisionMaker ? '<span class="text-[10px] font-bold uppercase px-1.5 py-0.2 rounded bg-yellow-100 text-yellow-800 border border-yellow-200">DM</span>' : ''}
+                    </div>
+                    <p class="text-xs text-gray-500">${c.jobTitle || 'No Title'}</p>
+                </div>
+                <a href="tel:${c.phone}" class="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-brand-600"><i class="fa-solid fa-phone text-xs"></i></a>
+            </div>
+        `).join('') : '<p class="text-xs text-gray-400 italic">No contacts added yet.</p>';
+    }
+
+    function renderActivities(dealershipId, containerId = 'qd-activity-list') {
+        const acts = db.activities.filter(a => a.dealershipId === dealershipId && a.status === 'completed');
+        const listEl = document.getElementById(containerId);
+        if (!listEl) return;
+        listEl.innerHTML = acts.length ? acts.map(a => `
+            <div class="relative mb-4 pl-3">
+                <h4 class="font-bold text-xs text-gray-900">${a.activityType} (${a.communicationType})</h4>
+                <p class="text-[10px] text-gray-500 mb-1">${formatDate(a.completedAt)}</p>
+                <div class="bg-gray-50 border border-gray-200 p-2.5 rounded text-xs text-gray-700">${a.notes}</div>
+            </div>
+        `).join('') : '<p class="text-xs text-gray-400 italic">No completed activity logged yet.</p>';
+    }
+
+    // --- FORM HANDLING (PROSPECTS & CONTACTS) ---
+    function openScheduleModal() {
+        const dateInput = document.getElementById('sched-date');
+        const today = new Date();
+        dateInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        
+        const pendingAct = db.activities.find(a => a.dealershipId === activeDealershipId && a.status === 'pending');
+        if (pendingAct) dateInput.value = pendingAct.plannedDate;
+
+        document.getElementById('modal-schedule').classList.remove('hidden');
+    }
+
+    function submitSchedule() {
+        const dateStr = document.getElementById('sched-date').value;
+        if(!dateStr) return showToast("Please select a date.", "error");
+
+        db.activities = db.activities.filter(a => !(a.dealershipId === activeDealershipId && a.status === 'pending'));
+
+        db.activities.push({
+            id: generateId('a'), repId: currentUser.id, dealershipId: activeDealershipId, contactId: null,
+            activityType: 'Planned Visit', communicationType: 'In-Person', status: 'pending',
+            completedAt: null, notes: '', nextActionDate: formatDate(dateStr),
+            plannedDate: dateStr, orderIndex: 99
+        });
+
+        const d = db.dealerships.find(x => x.id === activeDealershipId);
+        if (d && (d.status === 'Parked' || d.status === 'Uncontacted')) {
+            d.status = 'In Progress';
+            d.lastTouchpointDate = new Date().toISOString();
+        }
+
+        closeModal('modal-schedule');
+        
+        if (!document.getElementById('modal-quick-detail').classList.contains('hidden')) {
+            openQuickDealershipDetail(activeDealershipId);
+        } else if (!document.getElementById('view-dealership-detail').classList.contains('hidden')) {
+            openDealershipDetail(activeDealershipId);
+        }
+
+        showToast(`Target scheduled for ${formatDate(dateStr)}`);
+        
+        if (currentView === 'dashboard') renderDashboard();
+        if (currentView === 'pipeline') renderPipeline();
+        if (currentView === 'dealerships') renderDealerships();
+    }
+
+    function openSalesStopWizard() {
+        const d = db.dealerships.find(x => x.id === activeDealershipId);
+        if (!d) return;
+
+        const contactSelect = document.getElementById('stop-contact');
+        if(contactSelect) {
+            contactSelect.innerHTML = '<option value="">-- Select Contact --</option>';
+            db.contacts.filter(c => c.dealershipId === activeDealershipId).forEach(c => {
+                contactSelect.innerHTML += `<option value="${c.id}">${c.firstName} ${c.lastName} (${c.jobTitle})</option>`;
+            });
+        }
+
+        const purposeSelect = document.getElementById('stop-purpose');
+        if (purposeSelect) {
+            purposeSelect.innerHTML = '';
+            if (d.status === 'Onboarding') {
+                purposeSelect.innerHTML += `<option value="Contract Signing">Contract Signing</option>
+                                            <option value="System Setup & Install">System Setup & Install</option>
+                                            <option value="Staff Training">Staff Training</option>
+                                            <option value="Support / Issue Resolution">Support / Issue Resolution</option>`;
+            } else if (d.status === 'Client') {
+                purposeSelect.innerHTML += `<option value="Account Review / QBR">Account Review / QBR</option>
+                                            <option value="New Product Pitch (Upsell)">New Product Pitch (Upsell)</option>
+                                            <option value="Keyfetch Inventory Restock">Keyfetch Inventory Restock</option>
+                                            <option value="Support / Issue Resolution">Support / Issue Resolution</option>`;
+            } else if (d.status === 'Closing' || d.status === 'Handoff Pending') {
+                purposeSelect.innerHTML += `<option value="Executive Intro / Review">Executive Intro / Review</option>
+                                            <option value="Negotiation & Deal Structuring">Negotiation & Deal Structuring</option>
+                                            <option value="Final Pitch">Final Pitch</option>
+                                            <option value="Contract Review">Contract Review</option>`;
+            } else {
+                purposeSelect.innerHTML += `<option value="Initial Discovery Pitch">Initial Discovery Pitch</option>
+                                            <option value="Follow-up Pitch">Follow-up Pitch</option>
+                                            <option value="System Demo">System Demo</option>
+                                            <option value="Closing Meeting">Closing Meeting</option>`;
+            }
+        }
+        document.getElementById('form-sales-stop').reset();
+        
+        let nextWorkDay = new Date();
+        nextWorkDay.setDate(nextWorkDay.getDate() + 1);
+        if (nextWorkDay.getDay() === 6) { // If Saturday, add 2 days
+            nextWorkDay.setDate(nextWorkDay.getDate() + 2);
+        } else if (nextWorkDay.getDay() === 0) { // If Sunday, add 1 day
+            nextWorkDay.setDate(nextWorkDay.getDate() + 1);
+        }
+        
+        document.getElementById('stop-next-date').value = `${nextWorkDay.getFullYear()}-${String(nextWorkDay.getMonth() + 1).padStart(2, '0')}-${String(nextWorkDay.getDate()).padStart(2, '0')}`;
+        
+        toggleInPersonTools();
+
+        document.getElementById('modal-sales-stop').classList.remove('hidden');
+    }
+
+    function submitSalesStop() {
+        const commType = document.querySelector('input[name="comm_type"]:checked')?.value || 'In-Person';
+        const contactId = document.getElementById('stop-contact').value;
+        const purpose = document.getElementById('stop-purpose')?.value || 'Sales Stop';
+        const notes = document.getElementById('stop-notes').value.trim();
+        const nextDate = document.getElementById('stop-next-date').value;
+
+        if (!notes) return showToast("Please provide notes for this stop.", "error");
+
+        db.activities.push({
+            id: generateId('a'), repId: currentUser.id, dealershipId: activeDealershipId, contactId: contactId || null,
+            activityType: purpose, communicationType: commType, status: 'completed',
+            completedAt: new Date().toISOString(), notes: notes, nextActionDate: nextDate || null
+        });
+
+        const d = db.dealerships.find(x => x.id === activeDealershipId);
+        if (d) {
+            d.lastTouchpointDate = new Date().toISOString();
+            if (d.status === 'Uncontacted' || d.status === 'Parked') d.status = 'In Progress';
+            if (purpose === 'New Product Pitch (Upsell)') {
+                d.heatLevel = 'Hot';
+                showToast("Heat Level bumped to Hot for Upsell!", "success");
+            }
+        }
+
+        closeModal('modal-sales-stop');
+        openQuickDealershipDetail(activeDealershipId);
+        if (currentView === 'pipeline') renderPipeline();
+        if (currentView === 'dashboard') renderDashboard();
+        showToast("Sales stop successfully recorded!");
+    }
+
+    function openAddContactModal() {
+        document.getElementById('form-add-contact').reset();
+        document.getElementById('ac-id').value = '';
+        
+        const select = document.getElementById('ac-title');
+        if (select) {
+            select.innerHTML = '<option value="">-- Select Job Title --</option>';
+            db.jobTitles.forEach(jt => {
+                select.innerHTML += `<option value="${jt.title}">${jt.title}</option>`;
+            });
+        }
+        document.getElementById('ac-title-other')?.classList.add('hidden');
+        document.getElementById('modal-add-contact')?.classList.remove('hidden');
+    }
+
+    function handleJobTitleChange(selectElement) {
+        const otherInput = document.getElementById('ac-title-other');
+        const dmCheckbox = document.getElementById('ac-decision-maker');
+        if(!otherInput) return;
+        
+        if (selectElement.value === 'Other') {
+            otherInput.classList.remove('hidden');
+            otherInput.required = true;
+        } else {
+            otherInput.classList.add('hidden');
+            otherInput.required = false;
+            otherInput.value = '';
+        }
+    }
+
+    function submitAddContact() {
+        const fname = document.getElementById('ac-fname').value.trim();
+        const lname = document.getElementById('ac-lname').value.trim();
+        let title = document.getElementById('ac-title').value;
+        if (title === 'Other') title = document.getElementById('ac-title-other').value.trim();
+        
+        const phone = document.getElementById('ac-phone').value.trim();
+        const email = document.getElementById('ac-email').value.trim();
+
+        if (!fname || !lname) return showToast("First and last names are required.", "error");
+
+        db.contacts.push({
+            id: generateId('c'), dealershipId: activeDealershipId,
+            firstName: fname, lastName: lname, jobTitle: title,
+            phone: phone, email: email
+        });
+
+        closeModal('modal-add-contact');
+        if(!document.getElementById('modal-quick-detail').classList.contains('hidden')) {
+            renderContacts(activeDealershipId, 'qd-contacts-list');
+        } else {
+            renderContacts(activeDealershipId, 'detail-contacts-list');
+        }
+        showToast("Contact added to roster.");
+    }
+
+    function openAddProspectModal(dealershipId = null) {
+        const form = document.getElementById('form-add-prospect');
+        if (form) form.reset();
+        
+        const intRefSelect = document.getElementById('ap-internal-referral');
+        if (intRefSelect) {
+            intRefSelect.innerHTML = '<option value="">-- None --</option>';
+            db.users.forEach(u => {
+                intRefSelect.innerHTML += `<option value="${u.id}">${u.firstName} ${u.lastName}</option>`;
+            });
+        }
+
+        const gf = document.getElementById('group-fields');
+        if (gf) {
+            gf.classList.add('hidden');
+            gf.classList.remove('grid');
+        }
+        
+        if (dealershipId && typeof dealershipId === 'string') {
+            const d = db.dealerships.find(x => x.id === dealershipId);
+            if (d) {
+                document.getElementById('modal-prospect-title').innerHTML = '<i class="fa-solid fa-pen-to-square text-brand-600 mr-2"></i> Edit Dealership';
+                document.getElementById('ap-radar-banner')?.classList.add('hidden');
+                document.getElementById('ap-id').value = d.id;
+                document.getElementById('ap-name').value = d.dealershipName;
+                document.getElementById('ap-phone').value = d.phone || '';
+                document.getElementById('ap-address').value = d.address || '';
+                document.getElementById('ap-type').value = d.dealershipType;
+                document.getElementById('ap-cars').value = d.usedCarsOnLot || '';
+                document.getElementById('ap-internal-referral').value = d.internalReferral || '';
+                document.getElementById('ap-external-referral').value = d.externalReferral || '';
+            }
+        } else {
+            document.getElementById('modal-prospect-title').innerHTML = '<i class="fa-solid fa-building-circle-check text-brand-600 mr-2"></i> Add New Prospect';
+            document.getElementById('ap-radar-banner')?.classList.remove('hidden');
+            document.getElementById('ap-id').value = '';
+            document.getElementById('ap-internal-referral').value = '';
+            document.getElementById('ap-external-referral').value = '';
+        }
+        
+        document.getElementById('modal-add-prospect').classList.remove('hidden');
+    }
+    
+
+    function toggleGroupFields(select) {
+        const groupFields = document.getElementById('group-fields');
+        if (!groupFields) return;
+        if (select.value === 'Dealer Group') {
+            groupFields.classList.remove('hidden');
+            groupFields.classList.add('grid');
+        } else {
+            groupFields.classList.add('hidden');
+            groupFields.classList.remove('grid');
+        }
+    }
+
+    function submitAddProspect() {
+        const id = document.getElementById('ap-id').value;
+        const name = document.getElementById('ap-name').value.trim();
+        const internalRef = document.getElementById('ap-internal-referral').value;
+        const externalRef = document.getElementById('ap-external-referral').value.trim();
+
+        if (!name) return showToast("Dealership Name is required.", "error");
+
+        if (id) {
+            const index = db.dealerships.findIndex(d => d.id === id);
+            if (index > -1) {
+                db.dealerships[index].dealershipName = name;
+                db.dealerships[index].phone = document.getElementById('ap-phone').value.trim();
+                db.dealerships[index].address = document.getElementById('ap-address').value.trim();
+                db.dealerships[index].dealershipType = document.getElementById('ap-type').value;
+                db.dealerships[index].usedCarsOnLot = parseInt(document.getElementById('ap-cars').value) || 0;
+                db.dealerships[index].internalReferral = internalRef;
+                db.dealerships[index].externalReferral = externalRef;
+
+                showToast("Dealership updated successfully.");
+                closeModal('modal-add-prospect');
+                
+                if (!document.getElementById('modal-quick-detail').classList.contains('hidden')) {
+                    openQuickDealershipDetail(id);
+                } else {
+                    openDealershipDetail(id);
+                }
+                
+                if (currentView === 'dealerships') renderDealerships();
+                if (currentView === 'clients') renderClients();
+                if (currentView === 'pipeline') renderPipeline();
+            }
+        } else {
+            const newDeal = {
+                id: generateId('d'), dealershipName: name,
+                phone: document.getElementById('ap-phone').value.trim(),
+                address: document.getElementById('ap-address').value.trim() || 'Address TBD',
+                dealershipType: document.getElementById('ap-type').value,
+                usedCarsOnLot: parseInt(document.getElementById('ap-cars').value) || 50,
+                status: 'Uncontacted', heatLevel: 'Cold', ownerId: currentUser.id, scoutId: currentUser.id,
+                distanceFromHome: Math.floor(Math.random() * 45) + 5,
+                lastTouchpointDate: null, createdAt: new Date().toISOString(), manualOrder: 99,
+                leadSource: 'Manual Search', internalReferral: internalRef, externalReferral: externalRef
+            };
+
+            db.dealerships.push(newDeal);
+            
+            db.activities.push({
+                id: generateId('a'), repId: currentUser.id, dealershipId: newDeal.id, contactId: null,
+                activityType: 'System Log', communicationType: 'System', status: 'completed',
+                completedAt: new Date().toISOString(), 
+                notes: `Prospect originated via Manual Search.`, 
+                nextActionDate: null
+            });
+
+            closeModal('modal-add-prospect');
+            if (currentView === 'dealerships') renderDealerships();
+            if (currentView === 'pipeline') renderPipeline();
+            showToast("New prospect added to pipeline.");
+        }
+    }
+
+    function promptParkDealership(id) {
+        dealershipToPark = id;
+        const parkNote = document.getElementById('park-note');
+        if (parkNote) parkNote.value = '';
+        document.getElementById('modal-confirm-park').classList.remove('hidden');
+    }
+
+    function executeParkDealership() {
+        if(!dealershipToPark) return;
+        
+        const note = document.getElementById('park-note')?.value.trim();
+        if (!note) {
+            return showToast("Please provide a reason for parking the account.", "error");
+        }
+
+        const pendingActIndex = db.activities.findIndex(a => a.dealershipId === dealershipToPark && a.status === 'pending');
+        if (pendingActIndex > -1) {
+            const pendingAct = db.activities[pendingActIndex];
+            db.activities.push({
+                id: generateId('a'), repId: currentUser.id, dealershipId: dealershipToPark, contactId: null,
+                activityType: 'System Log', communicationType: 'System', status: 'completed',
+                completedAt: new Date().toISOString(), notes: `Schedule Cancelled (Account Parked). Originally planned for: ${formatDate(pendingAct.plannedDate)}`, nextActionDate: null
+            });
+            db.activities.splice(pendingActIndex, 1);
+        }
+        
+        db.activities.push({
+            id: generateId('a'), repId: currentUser.id, dealershipId: dealershipToPark, contactId: null,
+            activityType: 'System Log', communicationType: 'System', status: 'completed',
+            completedAt: new Date().toISOString(), notes: `Account Parked: ${note}`, nextActionDate: null
+        });
+
+        toggleParkDealership(dealershipToPark, true);
+        closeModal('modal-confirm-park');
+        dealershipToPark = null;
+        if (currentView === 'dashboard') renderDashboard();
+    }
+
+    // --- DASHBOARD / OTHER VIEWS (Payouts, Manager, Exec, Finance, Admin) ---
+    function initiateHandoff() {
+        const select = document.getElementById('handoff-closer');
+        if (select) {
+            select.innerHTML = '<option value="">-- Select Closer --</option>';
+            db.users.filter(u => u.role === 'manager' || u.role === 'executive').forEach(u => {
+                select.innerHTML += `<option value="${u.id}">${u.firstName} ${u.lastName} (${u.role})</option>`;
+            });
+        }
+        document.getElementById('modal-handoff').classList.remove('hidden');
+    }
+
+    function submitHandoff() {
+        const closerId = document.getElementById('handoff-closer').value;
+        if(!closerId) return showToast("Please select a closer.", "error");
+
+        const d = db.dealerships.find(x => x.id === activeDealershipId);
+        d.status = 'Handoff Pending';
+        d.scoutId = d.ownerId; // Remember who found it
+        d.ownerId = closerId;  // Transfer ownership to manager
+        
+        db.payouts.push({
+            id: generateId('p'), dealershipId: d.id, dealershipName: d.dealershipName,
+            repId: currentUser.id, closerId: closerId,
+            handoffDate: new Date().toISOString(), meetingCompleted: false, payoutApproved: false
+        });
+
+        db.activities.push({
+            id: generateId('a'), repId: currentUser.id, dealershipId: d.id, contactId: null,
+            activityType: 'System Log', communicationType: 'System', status: 'completed',
+            completedAt: new Date().toISOString(), notes: `Handoff initiated to executive.`, nextActionDate: null
+        });
+
+        closeModal('modal-handoff');
+        if(!document.getElementById('modal-quick-detail').classList.contains('hidden')) openQuickDealershipDetail(d.id);
+        else openDealershipDetail(d.id);
+        
+        if(currentView === 'pipeline') renderPipeline();
+        if(currentView === 'dealerships') renderDealerships();
+        if(currentView === 'dashboard') renderDashboard();
+        showToast("Account handed off successfully!", "success");
+    }
+
+    function cancelHandoff(id) {
+        const d = db.dealerships.find(x => x.id === id);
+        if (!d) return;
+
+        db.payouts = db.payouts.filter(p => !(p.dealershipId === id && !p.meetingCompleted));
+        d.status = 'In Progress';
+        d.ownerId = d.scoutId; // Return ownership to the rep
+        d.lastTouchpointDate = new Date().toISOString(); 
+        
+        showToast("Handoff cancelled. Account is back in progress.");
+        
+        if (currentView === 'pipeline') renderPipeline();
+        if (currentView === 'dealerships') renderDealerships();
+        if (currentView === 'dashboard') renderDashboard();
+        
+        if (!document.getElementById('modal-quick-detail').classList.contains('hidden')) openQuickDealershipDetail(id);
+        else if (!document.getElementById('view-dealership-detail').classList.contains('hidden')) openDealershipDetail(id);
+    }
+
+    function completeHandoffMeeting(payoutId) {
+        const p = db.payouts.find(x => x.id === payoutId);
+        if (p) {
+            p.meetingCompleted = true;
+            const d = db.dealerships.find(x => x.id === p.dealershipId);
+            if (d) {
+                d.status = 'Closing'; // Move to active manager negotiation
+                d.lastTouchpointDate = new Date().toISOString();
+            }
+            showToast("Hand-off accepted. Deal moved to Closing phase!");
+            if (currentView === 'exec') renderExecutive();
+            if (currentView === 'pipeline') renderPipeline();
+            if (!document.getElementById('modal-quick-detail').classList.contains('hidden')) openQuickDealershipDetail(d.id);
+            else if (!document.getElementById('view-dealership-detail').classList.contains('hidden')) openDealershipDetail(d.id);
+        }
+    }
+
+    function renderPayouts() {
+        const tbody = document.getElementById('payouts-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const myPayouts = db.payouts.filter(p => p.repId === currentUser.id);
+        if (!myPayouts.length) {
+            tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-gray-400">No handoffs logged yet.</td></tr>`;
+            return;
+        }
+        myPayouts.forEach(p => {
+            tbody.innerHTML += `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="p-4 font-bold text-gray-900 cursor-pointer hover:text-brand-600" onclick="openQuickDealershipDetail('${p.dealershipId}')">${p.dealershipName}</td>
+                    <td class="p-4 text-gray-500">${formatDate(p.handoffDate)}</td>
+                    <td class="p-4 text-center"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ${p.meetingCompleted ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-800'}">${p.meetingCompleted ? 'Meeting Held' : 'Awaiting Meeting'}</span></td>
+                    <td class="p-4 text-center"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ${p.payoutApproved ? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-600'}">${p.payoutApproved ? `$${p.payoutAmount || '250.00'} Released` : 'Pending Approval'}</span></td>
+                    <td class="p-4 text-right"><button type="button" onclick="openAuditTrail('${p.dealershipId}')" class="text-brand-600 hover:text-brand-800 text-xs font-medium flex items-center justify-end gap-1 ml-auto"><i class="fa-solid fa-list-check"></i> Audit Trail</button></td>
+                </tr>
+            `;
+        });
+    }
+
+    function renderManager() {
+        const teamMembers = db.users.filter(u => u.managerId === currentUser.id);
+        const teamIds = teamMembers.map(u => u.id);
+        const grid = document.getElementById('manager-team-grid');
+        if (grid) {
+            grid.innerHTML = '';
+            teamMembers.forEach(m => {
+                const activeCount = db.dealerships.filter(d => d.ownerId === m.id && d.status !== 'Client').length;
+                const handoffCount = db.payouts.filter(p => p.repId === m.id && p.payoutApproved).length;
+                grid.innerHTML += `
+                    <div class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-lg">${m.firstName.charAt(0)}</div>
+                        <div><h3 class="font-bold text-gray-900">${m.firstName} ${m.lastName}</h3><p class="text-xs text-gray-500 capitalize">${m.role} • ${activeCount} Active Deals • ${handoffCount} Paid</p></div>
+                    </div>`;
+            });
+        }
+        const tbody = document.getElementById('manager-history-body');
+        if (tbody) {
+            tbody.innerHTML = '';
+            const teamPayouts = db.payouts.filter(p => teamIds.includes(p.repId));
+            if (!teamPayouts.length) return tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">No team handoffs recorded.</td></tr>`;
+            teamPayouts.forEach(p => {
+                const rep = db.users.find(u => u.id === p.repId);
+                const closer = db.users.find(u => u.id === p.closerId);
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="p-4 font-bold text-gray-900 cursor-pointer hover:text-brand-600" onclick="openQuickDealershipDetail('${p.dealershipId}')">${p.dealershipName}</td>
+                        <td class="p-4 text-gray-600">${rep ? rep.firstName + ' ' + rep.lastName : 'Unknown'}</td>
+                        <td class="p-4 text-gray-600">${closer ? closer.firstName + ' ' + closer.lastName : 'Unknown'}</td>
+                        <td class="p-4 text-center"><span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${p.payoutApproved ? 'bg-brand-100 text-brand-700' : (p.meetingCompleted ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-800')}">${p.payoutApproved ? 'Paid Out' : (p.meetingCompleted ? 'Meeting Held' : 'Pending Meeting')}</span></td>
+                        <td class="p-4 text-right"><button type="button" onclick="openAuditTrail('${p.dealershipId}')" class="text-gray-500 hover:text-brand-600 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"><i class="fa-solid fa-list-check mr-1"></i> Audit Trail</button></td>
+                    </tr>`;
+            });
+        }
+    }
+
+    function renderExecutive() {
+        const handoffsBody = document.getElementById('exec-handoffs-body');
+        if (handoffsBody) {
+            handoffsBody.innerHTML = '';
+            const pending = db.payouts.filter(p => p.closerId === currentUser.id && !p.meetingCompleted);
+            if (!pending.length) handoffsBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-400">No pending handoffs.</td></tr>`;
+            else {
+                pending.forEach(p => {
+                    const rep = db.users.find(u => u.id === p.repId);
+                    handoffsBody.innerHTML += `
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="p-4 font-bold text-gray-900 cursor-pointer hover:text-brand-600" onclick="openQuickDealershipDetail('${p.dealershipId}')">${p.dealershipName}</td>
+                            <td class="p-4 text-gray-600">${rep ? rep.firstName + ' ' + rep.lastName : 'Unknown'}</td>
+                            <td class="p-4 text-gray-500">${formatDate(p.handoffDate)}</td>
+                            <td class="p-4 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <button type="button" onclick="openAuditTrail('${p.dealershipId}')" class="text-gray-500 hover:text-brand-600 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"><i class="fa-solid fa-timeline mr-1"></i> Audit</button>
+                                    <button type="button" onclick="completeHandoffMeeting('${p.id}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shadow-sm"><i class="fa-solid fa-handshake-simple mr-1"></i> Accept Hand-off</button>
+                                </div>
+                            </td>
+                        </tr>`;
+                });
+            }
+        }
+        const historyBody = document.getElementById('exec-history-body');
+        if (historyBody) {
+            historyBody.innerHTML = '';
+            const completed = db.payouts.filter(p => p.closerId === currentUser.id && p.meetingCompleted);
+            if (!completed.length) historyBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-400">No completed handoffs yet.</td></tr>`;
+            else {
+                completed.forEach(p => {
+                    const rep = db.users.find(u => u.id === p.repId);
+                    historyBody.innerHTML += `
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="p-4 font-bold text-gray-900 cursor-pointer hover:text-brand-600" onclick="openQuickDealershipDetail('${p.dealershipId}')">${p.dealershipName}</td>
+                            <td class="p-4 text-gray-600">${rep ? rep.firstName + ' ' + rep.lastName : 'Unknown'}</td>
+                            <td class="p-4 text-center"><span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${p.payoutApproved ? 'bg-brand-100 text-brand-700' : 'bg-yellow-100 text-yellow-800'}">${p.payoutApproved ? 'Payout Approved' : 'Awaiting Finance'}</span></td>
+                            <td class="p-4 text-right"><button type="button" onclick="openAuditTrail('${p.dealershipId}')" class="text-gray-500 hover:text-brand-600 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"><i class="fa-solid fa-timeline mr-1"></i> Audit Trail</button></td>
+                        </tr>`;
+                });
+            }
+        }
+    }
+
+   
+    function renderFinance() {
+        const payoutsBody = document.getElementById('finance-payouts-body');
+        if (payoutsBody) {
+            payoutsBody.innerHTML = '';
+            const pending = db.payouts.filter(p => p.meetingCompleted && !p.payoutApproved);
+            if (!pending.length) payoutsBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">No pending payouts awaiting authorization.</td></tr>`;
+            else {
+                pending.forEach(p => {
+                    const rep = db.users.find(u => u.id === p.repId);
+                    const closer = db.users.find(u => u.id === p.closerId);
+                    payoutsBody.innerHTML += `
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="p-4 font-bold text-gray-900 cursor-pointer hover:text-brand-600" onclick="openQuickDealershipDetail('${p.dealershipId}')">${p.dealershipName}</td>
+                            <td class="p-4 text-gray-600">${rep ? rep.firstName + ' ' + rep.lastName : 'Unknown'}</td>
+                            <td class="p-4 text-gray-600">${closer ? closer.firstName + ' ' + closer.lastName : 'Unknown'}</td>
+                            <td class="p-4 text-center"><span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-yellow-100 text-yellow-800">Pending Review</span></td>
+                            <td class="p-4 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <button type="button" onclick="openAuditTrail('${p.dealershipId}')" class="text-gray-500 hover:text-brand-600 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"><i class="fa-solid fa-timeline mr-1"></i> Audit</button>
+                                    <button type="button" onclick="openFinanceApproveModal('${p.id}')" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shadow-sm"><i class="fa-solid fa-money-bill-wave mr-1"></i> Approve</button>
+                                </div>
+                            </td>
+                        </tr>`;
+                });
+            }
+        }
+        const historyBody = document.getElementById('finance-history-body');
+        if (historyBody) {
+            historyBody.innerHTML = '';
+            const approved = db.payouts.filter(p => p.payoutApproved);
+            if (!approved.length) historyBody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-400">No approved payouts yet.</td></tr>`;
+            else {
+                approved.forEach(p => {
+                    const rep = db.users.find(u => u.id === p.repId);
+                    const closer = db.users.find(u => u.id === p.closerId);
+                    historyBody.innerHTML += `
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="p-4 font-bold text-gray-900 cursor-pointer hover:text-brand-600" onclick="openQuickDealershipDetail('${p.dealershipId}')">${p.dealershipName}</td>
+                            <td class="p-4 text-gray-600">${rep ? rep.firstName + ' ' + rep.lastName : 'Unknown'}</td>
+                            <td class="p-4 text-gray-600">${closer ? closer.firstName + ' ' + closer.lastName : 'Unknown'}</td>
+                            <td class="p-4 text-center"><span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-brand-100 text-brand-700 font-mono">$${(p.payoutAmount || 250).toFixed(2)}</span></td>
+                            <td class="p-4 text-right"><button type="button" onclick="openAuditTrail('${p.dealershipId}')" class="text-gray-500 hover:text-brand-600 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"><i class="fa-solid fa-timeline mr-1"></i> Audit Trail</button></td>
+                        </tr>`;
+                });
+            }
+        }
+    }
+
+    function openFinanceApproveModal(payoutId) {
+        const p = db.payouts.find(x => x.id === payoutId);
+        if (!p) return;
+        const rep = db.users.find(u => u.id === p.repId);
+        const closer = db.users.find(u => u.id === p.closerId);
+
+        document.getElementById('fa-payout-id').value = p.id;
+        document.getElementById('fa-dealership-name').innerText = p.dealershipName;
+        document.getElementById('fa-rep-name').innerText = rep ? `${rep.firstName} ${rep.lastName}` : 'Unknown';
+        document.getElementById('fa-closer-name').innerText = closer ? `${closer.firstName} ${closer.lastName}` : 'Executive';
+        document.getElementById('fa-amount').value = '250.00';
+        document.getElementById('fa-notes').value = '';
+
+        document.getElementById('modal-finance-approve').classList.remove('hidden');
+    }
+
+    function submitFinanceApproval() {
+        const payoutId = document.getElementById('fa-payout-id').value;
+        const amount = parseFloat(document.getElementById('fa-amount').value) || 250.00;
+        const method = document.getElementById('fa-method').value;
+        const notes = document.getElementById('fa-notes').value.trim();
+
+        const p = db.payouts.find(x => x.id === payoutId);
+        if (p) {
+            p.payoutApproved = true;
+            p.payoutAmount = amount;
+            p.payoutMethod = method;
+            p.auditNotes = notes;
+            p.payoutDate = new Date().toISOString();
+
+            closeModal('modal-finance-approve');
+            showToast(`Payout of $${amount.toFixed(2)} approved!`);
+            if (currentView === 'finance') renderFinance();
+            if (!document.getElementById('modal-audit').classList.contains('hidden')) {
+                openAuditTrail(p.dealershipId);
+            }
+        }
+    }
+
+    function openAuditTrail(dealershipId) {
+        const d = db.dealerships.find(x => x.id === dealershipId);
+        if (!d) return;
+
+        const p = db.payouts.find(x => x.dealershipId === dealershipId);
+        const acts = db.activities.filter(a => a.dealershipId === dealershipId && a.status === 'completed');
+        const scout = db.users.find(u => u.id === (p?.repId || d.ownerId));
+        const closer = db.users.find(u => u.id === p?.closerId);
+
+        const dmContact = db.contacts.find(c => c.dealershipId === dealershipId && c.isDecisionMaker);
+        const body = document.getElementById('audit-modal-body');
+
+        body.innerHTML = `
+            <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <div class="text-[10px] font-bold uppercase text-gray-400">Dealership</div>
+                    <div class="font-bold text-gray-900">${d.dealershipName}</div>
+                    <div class="text-xs text-gray-500">${d.dealershipType} • ${d.usedCarsOnLot} Cars</div>
+                </div>
+                <div>
+                    <div class="text-[10px] font-bold uppercase text-gray-400">Originated By</div>
+                    <div class="font-bold text-gray-900">${scout ? scout.firstName + ' ' + scout.lastName : 'Unassigned'}</div>
+                    <div class="text-xs text-gray-500">${scout?.role ? scout.role.toUpperCase() : ''}</div>
+                </div>
+                <div>
+                    <div class="text-[10px] font-bold uppercase text-gray-400">Assigned Closer</div>
+                    <div class="font-bold text-gray-900">${closer ? closer.firstName + ' ' + closer.lastName : 'None Assigned'}</div>
+                    <div class="text-xs text-gray-500">${p?.handoffDate ? formatDate(p.handoffDate) : 'Not Handed Off'}</div>
+                </div>
+            </div>
+
+            <div class="p-3 rounded-lg border ${dmContact ? 'bg-green-50/50 border-green-200 text-green-900' : 'bg-yellow-50/50 border-yellow-200 text-yellow-900'} flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid ${dmContact ? 'fa-check-circle text-green-600' : 'fa-triangle-exclamation text-yellow-600'}"></i>
+                    <span class="text-xs font-semibold">Key Decision Maker Verification:</span>
+                    <span class="text-xs">${dmContact ? `${dmContact.firstName} ${dmContact.lastName} (${dmContact.jobTitle})` : 'No verified DM contact identified'}</span>
+                </div>
+                <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${dmContact ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                    ${dmContact ? 'Compliant' : 'Warning'}
+                </span>
+            </div>
+
+            <div class="border border-gray-100 rounded-xl p-4 bg-white shadow-sm">
+                <div class="text-xs font-bold uppercase text-gray-400 mb-3">Verification Pipeline Stages</div>
+                <div class="grid grid-cols-4 gap-2 text-center text-xs">
+                    <div class="p-2.5 rounded-lg bg-green-50 border border-green-200">
+                        <i class="fa-solid fa-check text-green-600 block mb-1"></i>
+                        <span class="font-bold text-green-900">1. Discovery</span>
+                    </div>
+                    <div class="p-2.5 rounded-lg ${p ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200 text-gray-400'}">
+                        <i class="fa-solid ${p ? 'fa-check text-green-600' : 'fa-hourglass text-gray-400'} block mb-1"></i>
+                        <span class="font-bold ${p ? 'text-green-900' : ''}">2. Handoff</span>
+                    </div>
+                    <div class="p-2.5 rounded-lg ${p?.meetingCompleted ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200 text-gray-400'}">
+                        <i class="fa-solid ${p?.meetingCompleted ? 'fa-check text-green-600' : 'fa-hourglass text-gray-400'} block mb-1"></i>
+                        <span class="font-bold ${p?.meetingCompleted ? 'text-green-900' : ''}">3. Closer Met</span>
+                    </div>
+                    <div class="p-2.5 rounded-lg ${p?.payoutApproved ? 'bg-brand-50 border-brand-200 text-brand-900' : 'bg-gray-50 border-gray-200 text-gray-400'}">
+                        <i class="fa-solid ${p?.payoutApproved ? 'fa-money-bill-wave text-brand-600' : 'fa-hourglass text-gray-400'} block mb-1"></i>
+                        <span class="font-bold ${p?.payoutApproved ? 'text-brand-900' : ''}">4. Payout</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <div class="text-xs font-bold uppercase text-gray-400 mb-3">Origination Activity Trail</div>
+                <div class="space-y-3 relative border-l border-gray-200 ml-3 pl-4">
+                    ${acts.length ? acts.map(a => {
+                        const c = db.contacts.find(x => x.id === a.contactId);
+                        return `
+                            <div class="relative">
+                                <div class="w-2.5 h-2.5 rounded-full bg-brand-500 absolute -left-[21px] top-1"></div>
+                                <div class="text-xs text-gray-400">${formatDate(a.completedAt)} • ${a.communicationType}</div>
+                                <div class="text-sm font-bold text-gray-800">${a.activityType} ${c ? `w/ ${c.firstName} ${c.lastName}` : ''}</div>
+                                <p class="text-xs text-gray-600 mt-1 bg-gray-50 p-2.5 rounded border border-gray-100">${a.notes}</p>
+                            </div>
+                        `;
+                    }).join('') : '<p class="text-xs text-gray-400 italic">No sales stop activity logged yet.</p>'}
+                </div>
+            </div>
+        `;
+
+        const actionSlot = document.getElementById('audit-action-btn-slot');
+        if (currentUser.role === 'finance' && p && p.meetingCompleted && !p.payoutApproved) {
+            actionSlot.innerHTML = `
+                <button type="button" onclick="openFinanceApproveModal('${p.id}')" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-sm transition-colors">
+                    <i class="fa-solid fa-money-bill-wave mr-1"></i> Authorize Payout
+                </button>
+            `;
+        } else {
+            actionSlot.innerHTML = '';
+        }
+
+        document.getElementById('modal-audit').classList.remove('hidden');
+    }
+
+    function renderAdmin() {
+        const tbody = document.getElementById('admin-users-body');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        db.users.forEach(u => {
+            tbody.innerHTML += `
+                <tr class="hover:bg-gray-50">
+                    <td class="p-4">
+                        <div class="font-bold text-gray-900">${u.firstName} ${u.lastName}</div>
+                        <div class="text-xs text-gray-500">${u.email}</div>
+                    </td>
+                    <td class="p-4 capitalize text-gray-700">${u.role}</td>
+                    <td class="p-4 font-mono text-gray-600">${u.homeZipCode}</td>
+                </tr>
+            `;
+        });
+    }
+
+    function hideLocationWarning() {
+        const banner = document.getElementById('location-warning-banner');
+        if (banner) {
+            banner.classList.add('translate-y-full');
+            setTimeout(() => banner.classList.add('hidden'), 300);
+        }
+    }
+
+    function showLocationWarning() {
+        const banner = document.getElementById('location-warning-banner');
+        if (banner) {
+            banner.classList.remove('hidden');
+            setTimeout(() => banner.classList.remove('translate-y-full'), 10);
+        }
+    }
+
+    function launchRadarSearch(source = 'home', btnElement = null) {
+        if (!currentUser) return;
+        
+        let locationType = 'home';
+        if (source === 'pool') {
+            const select = document.getElementById('radar-location-pool');
+            if (select) locationType = select.value;
+        } else if (source === 'modal') {
+            const select = document.getElementById('radar-location-modal');
+            if (select) locationType = select.value;
+        }
+
+        if (locationType === 'current') {
+            if (navigator.geolocation) {
+                let originalContent = '';
+                if (btnElement) {
+                    originalContent = btnElement.innerHTML;
+                    btnElement.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Locating...';
+                    btnElement.disabled = true;
+                }
+                
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        if (btnElement) {
+                            btnElement.innerHTML = originalContent;
+                            btnElement.disabled = false;
+                        }
+                        
+                        const lat = pos.coords.latitude;
+                        const lng = pos.coords.longitude;
+                        const url = MAPS_SEARCH_BASE + 'car+dealerships+near+' + lat + ',' + lng;
+                        
+                        const newWin = window.open(url, '_blank');
+                        
+                        if (!newWin || newWin.closed || typeof newWin.closed == 'undefined') {
+                            showToast(`📍 Location found! <a href="${url}" target="_blank" class="underline font-bold text-blue-800 ml-1">Click here to open Maps</a>`);
+                        } else {
+                            showToast("Radar centered on your live coordinates.");
+                        }
+                    },
+                    (err) => {
+                        if (btnElement) {
+                            btnElement.innerHTML = originalContent;
+                            btnElement.disabled = false;
+                        }
+                        
+                        showLocationWarning();
+                        
+                        const url = MAPS_SEARCH_BASE + 'car+dealerships+near+me';
+                        window.open(url, '_blank');
+                        showToast("Location denied. Searching 'near me' on Maps.", "error");
+                    },
+                    { timeout: 10000 }
+                );
+            } else {
+                window.open(MAPS_SEARCH_BASE + 'car+dealerships+near+me', '_blank');
+            }
+        } else {
+            if (!currentUser.homeZipCode) {
+                return showToast("Please update your profile with a valid Home Zip Code first.", "error");
+            }
+            const query = `car dealerships near ${currentUser.homeZipCode}`;
+            window.open(MAPS_SEARCH_BASE + encodeURIComponent(query), '_blank');
+            showToast("Opening Google Maps radar search around Home Zip...");
+        }
+    }
+
+    function openUserProfile() {
+        document.getElementById('up-fname').value = currentUser.firstName;
+        document.getElementById('up-lname').value = currentUser.lastName;
+        document.getElementById('up-zip').value = currentUser.homeZipCode;
+        document.getElementById('modal-user-profile').classList.remove('hidden');
+    }
+
+    function submitUserProfile() {
+        currentUser.firstName = document.getElementById('up-fname').value.trim();
+        currentUser.lastName = document.getElementById('up-lname').value.trim();
+        currentUser.homeZipCode = document.getElementById('up-zip').value.trim();
+        document.getElementById('user-name').innerText = `${currentUser.firstName} ${currentUser.lastName}`;
+        closeModal('modal-user-profile');
+        showToast("Profile saved successfully.");
+    }
+
+    function applyFilters() {
+        if (currentView === 'dealerships') renderDealerships();
+    }
+
+    function clearAllFilters() {
+        document.getElementById('filter-hide-confirmed').checked = false;
+        document.querySelectorAll('.filter-type, .filter-status').forEach(el => el.checked = false);
+        applyFilters();
+    }
+
+    function renderPerformance() {
+        const isManager = currentUser.role === 'manager';
+        
+        document.getElementById('perf-title').innerText = isManager ? "Team Cumulative Performance" : "My Game Day Metrics";
+        document.getElementById('perf-subtitle').innerText = isManager ? "Aggregated stats for you and your direct reports." : "Your activity tracking and verified touches.";
+        
+        let teamIds = [currentUser.id];
+        if (isManager) {
+            const reports = db.users.filter(u => u.managerId === currentUser.id);
+            teamIds = [currentUser.id, ...reports.map(r => r.id)];
+            document.getElementById('perf-manager-section').classList.remove('hidden');
+        } else {
+            document.getElementById('perf-manager-section').classList.add('hidden');
+        }
+
+        // Generate Contextual Data to mirror the screenshot layout
+        const generateStats = (userId, index) => {
+            const seed = userId.length + index; 
+            
+            const mockOutcomes = [
+                "12 live meetings last week; 1 indy agent onboarded<br><span class='text-gray-400 text-xs'>Holman 11-store training lock; Baywatch NADA roadmap</span>",
+                "Classic Hyundai of Sherman<br><span class='text-gray-400 text-xs'>Holiday Automotive group (might be DOWC structure)</span>",
+                "Group1 HEN store visits; ALM & First Choice",
+                "Cold drop-ins: McGovern, Sawmill, Kaplin<br><span class='text-gray-400 text-xs'>Sawmill waiting on controller sign-off</span>",
+                "<span class='text-gray-400 italic'>No deals reported</span>"
+            ];
+            
+            const mockNextSteps = [
+                "Follow up emails and text; finalize Ceramic",
+                "<span class='text-red-600 font-medium'>Need Jason assistance with DOWC unrem</span>",
+                "Visiting ALM today; finalize EV warranty att",
+                "<span class='text-red-600 font-medium'>Sawmill tomorrow; needs exec support or</span>",
+                "<span class='text-gray-400'>Enter planned steps...</span>"
+            ];
+            
+            const mockOwners = ["Self", "Jason Scott", "Self", "Jason Scott", "None"];
+            const hasData = index < 4;
+
+            return {
+                social: hasData ? (index === 0 ? '' : seed % 6) : '—',
+                emails: hasData ? 9 + (index * 6) : '—',
+                calls: hasData ? 3 + (index * 4) : '—',
+                texts: hasData ? 5 + (index * 13) : '—',
+                convs: hasData ? (index === 2 ? '' : (index === 0 ? 4 : 2)) : '—',
+                apptsBooked: hasData ? (index === 2 ? 2 : 1) : '—',
+                aiHandoff: index === 0 ? 3 : '',
+                outcome: mockOutcomes[Math.min(index, 4)],
+                nextSteps: mockNextSteps[Math.min(index, 4)],
+                supportOwner: mockOwners[Math.min(index, 4)]
+            };
+        };
+
+        // Aggregate Totals
+        let totals = { emails: 0, calls: 0, texts: 0, convs: 0, apptsBooked: 0, apptsHeld: 0 };
+        const tbody = document.getElementById('perf-team-body');
+        if (tbody) tbody.innerHTML = '';
+
+        teamIds.forEach((id, index) => {
+            const user = db.users.find(u => u.id === id);
+            const stats = generateStats(id, index);
+            
+            // Calc totals (ignoring dashes)
+            if (stats.emails !== '—') totals.emails += stats.emails;
+            if (stats.calls !== '—') totals.calls += stats.calls;
+            if (stats.texts !== '—') totals.texts += stats.texts;
+            if (stats.convs !== '—' && stats.convs !== '') totals.convs += stats.convs;
+            if (stats.apptsBooked !== '—') totals.apptsBooked += stats.apptsBooked;
+            totals.apptsHeld += (index === 0 ? 4 : 0); // Fake held metric
+
+            if (isManager && tbody && user) {
+                
+                // Style Support Owner Badge
+                let ownerBadge = `<span class="px-2.5 py-1 rounded bg-gray-100 text-gray-600 text-[10px] font-bold">Self</span>`;
+                if (stats.supportOwner === "Jason Scott") ownerBadge = `<span class="px-2.5 py-1 rounded bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">Jason Scott</span>`;
+                if (stats.supportOwner === "None") ownerBadge = `<span class="px-2.5 py-1 rounded bg-transparent text-gray-400 text-[10px] font-bold">None</span>`;
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="p-4 align-top">
+                            <div class="font-bold text-gray-900">${user.firstName} ${user.lastName}</div>
+                            <div class="text-[10px] text-gray-400 uppercase tracking-wider">${user.role === 'manager' ? 'CRO' : user.role}</div>
+                        </td>
+                        <td class="p-3 text-center align-top text-gray-600">${stats.social}</td>
+                        <td class="p-3 text-center align-top text-gray-600">${stats.emails}</td>
+                        <td class="p-3 text-center align-top text-gray-600">${stats.calls}</td>
+                        <td class="p-3 text-center align-top text-gray-600">${stats.texts}</td>
+                        <td class="p-3 text-center align-top font-bold text-blue-800">${stats.convs}</td>
+                        <td class="p-3 text-center align-top font-bold text-green-700">${stats.apptsBooked}</td>
+                        <td class="p-3 text-center align-top text-gray-600">${stats.aiHandoff}</td>
+                        <td class="p-4 align-top text-sm text-gray-800 leading-tight">${stats.outcome}</td>
+                        <td class="p-4 align-top text-sm text-gray-800 leading-tight">${stats.nextSteps}</td>
+                        <td class="p-4 text-center align-top">${ownerBadge}</td>
+                    </tr>
+                `;
+            }
+        });
+
+        // Hardcode specific header stat numbers for the prototype demo
+        if (currentUser.id === 'u_rep_vet' && !isManager) {
+            totals = { emails: 52, calls: 33, texts: 80, convs: 11, apptsBooked: 1, apptsHeld: 4 };
+        }
+
+        // Update the 5 Top Cards
+        document.getElementById('stat-emails').innerText = totals.emails;
+        document.getElementById('stat-calls').innerText = totals.calls;
+        document.getElementById('stat-texts').innerText = totals.texts;
+        document.getElementById('stat-convs').innerText = totals.convs;
+        document.getElementById('stat-appts').innerText = totals.apptsBooked + totals.apptsHeld;
+        document.getElementById('stat-appts-sub').innerText = `${totals.apptsBooked} Booked / ${totals.apptsHeld} Held`;
+    }
+
+    function toggleParkDealership(id, forcePark = false) {
+        const d = db.dealerships.find(x => x.id === id);
+        if (!d) return;
+        
+        if (forcePark || d.status !== 'Parked') {
+            d.status = 'Parked';
+            showToast("Account parked. It will be hidden from active views.");
+        } else {
+            d.status = 'In Progress';
+            d.lastTouchpointDate = new Date().toISOString();
+            showToast("Account unparked and moved to In Progress.");
+        }
+        
+        if (currentView === 'pipeline') renderPipeline();
+        if (currentView === 'dealerships') renderDealerships();
+        
+        if (!document.getElementById('modal-quick-detail').classList.contains('hidden')) {
+            openQuickDealershipDetail(id);
+        } else {
+            openDealershipDetail(id);
+        }
+    }
+
+    function claimDealership(id) {
+        const d = db.dealerships.find(x => x.id === id);
+        if (d) {
+            d.ownerId = currentUser.id;
+            d.status = 'Uncontacted';
+            if (!d.leadSource) d.leadSource = 'Prospect Pool';
+            
+            showToast(`Claimed "${d.dealershipName}" to your Bench!`);
+            
+            if (currentView === 'pool') renderPool();
+            if (currentView === 'dealerships') renderDealerships();
+            
+            if (!document.getElementById('modal-quick-detail').classList.contains('hidden')) {
+                openQuickDealershipDetail(id);
+            } else {
+                openDealershipDetail(id);
+            }
+        }
+    }
+
+    function claimPoolDeal(id) {
+        const d = db.dealerships.find(x => x.id === id);
+        if (d) {
+            d.ownerId = currentUser.id;
+            d.status = 'Uncontacted';
+            if (!d.leadSource) d.leadSource = 'Prospect Pool';
+            
+            showToast(`Claimed "${d.dealershipName}" to your Bench!`);
+            renderPool();
+        }
+    }
+
+    function approveDecisionCard(cardId, accountName) {
+        const el = document.getElementById(cardId);
+        if (el) {
+            el.classList.add('opacity-50', 'pointer-events-none');
+            setTimeout(() => el.remove(), 400);
+        }
+        showToast(`Approved recommendation for ${accountName}. Rep notified!`);
+    }
+
+    function dismissDecisionCard(cardId) {
+        const el = document.getElementById(cardId);
+        if (el) {
+            el.classList.add('opacity-50', 'pointer-events-none');
+            setTimeout(() => el.remove(), 400);
+        }
+        showToast("Proposal dismissed.");
+    }
+
+    function toggleInPersonTools() {
+        const type = document.querySelector('input[name="comm_type"]:checked')?.value;
+        const tools = document.getElementById('in-person-tools');
+        if (tools) {
+            tools.style.display = type === 'In-Person' ? 'flex' : 'none';
+        }
+    }
+
+    function importMockMeetNotes() {
+        document.getElementById('modal-drive-import').classList.remove('hidden');
+    }
+
+    function selectDriveNote(summaryText) {
+        const notesEl = document.getElementById('stop-notes');
+        if (!notesEl) return;
+        
+        if (notesEl.value.trim() === '') {
+            notesEl.value = summaryText;
+        } else {
+            notesEl.value += "\n\n" + summaryText;
+        }
+        
+        closeModal('modal-drive-import');
+        showToast("Meeting summary imported from Google Drive!");
+    }
+
+    function toggleReferralField(selectEl) {
+        const field = document.getElementById('referral-field');
+        if (selectEl.value === 'Referral') {
+            field.classList.remove('hidden');
+        } else {
+            field.classList.add('hidden');
+        }
+    }
+
+    function progressDeal(id, newStatus) {
+        const d = db.dealerships.find(x => x.id === id);
+        if (!d) return;
+
+        const oldStatus = d.status;
+        d.status = newStatus;
+        d.lastTouchpointDate = new Date().toISOString();
+
+        if (newStatus === 'Client') {
+            showToast(`${d.dealershipName} is now fully onboarded as an active Client!`, "success");
+        }
+
+        db.activities.push({
+            id: generateId('a'), repId: currentUser.id, dealershipId: d.id, contactId: null,
+            activityType: 'System Log', communicationType: 'System', status: 'completed',
+            completedAt: new Date().toISOString(), notes: `Account progressed from ${oldStatus} to ${newStatus}.`, nextActionDate: null
+        });
+
+        if (currentView === 'pipeline') renderPipeline();
+        if (currentView === 'dealerships') renderDealerships();
+        if (currentView === 'clients') renderClients();
+        if (currentView === 'dashboard') renderDashboard();
+        if (!document.getElementById('modal-quick-detail').classList.contains('hidden')) openQuickDealershipDetail(id);
+        else if (!document.getElementById('view-dealership-detail').classList.contains('hidden')) openDealershipDetail(id);
+    }
+
+    function quickRestock(id) {
+        const d = db.dealerships.find(x => x.id === id);
+        if (!d) return;
+        
+        d.lastTouchpointDate = new Date().toISOString();
+        db.activities.push({
+            id: generateId('a'), repId: currentUser.id, dealershipId: d.id, contactId: null,
+            activityType: 'Keyfetch Inventory Restock', communicationType: 'In-Person', status: 'completed',
+            completedAt: new Date().toISOString(), notes: 'Quick Restock performed.', nextActionDate: null
+        });
+        showToast("Inventory restock logged successfully!");
+        
+        if (currentView === 'clients') renderClients();
+        if (currentView === 'dashboard') renderDashboard();
+        if (!document.getElementById('modal-quick-detail').classList.contains('hidden')) openQuickDealershipDetail(id);
+        else if (!document.getElementById('view-dealership-detail').classList.contains('hidden')) openDealershipDetail(id);
+    }
+
+    let dealershipToReassign = null;
+    function promptReassign(id, isSignUp = false) {
+        dealershipToReassign = id;
+        const d = db.dealerships.find(x => x.id === id);
+        const scoutUser = db.users.find(u => u.id === d.scoutId);
+        
+        const isSignUpInput = document.getElementById('reassign-is-signup');
+        if (isSignUpInput) isSignUpInput.value = isSignUp ? 'true' : 'false';
+        
+        document.getElementById('reassign-modal-title').innerHTML = isSignUp 
+            ? `<i class="fa-solid fa-file-signature text-purple-600 mr-2"></i> Start Sign-Up` 
+            : `<i class="fa-solid fa-user-gear text-brand-600 mr-2"></i> Reassign Account`;
+            
+        const btn = document.getElementById('reassign-confirm-btn');
+        if (btn) {
+            btn.className = isSignUp
+                ? `px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors shadow-sm`
+                : `px-6 py-2 bg-gray-900 hover:bg-black text-white font-medium rounded-lg transition-colors shadow-sm`;
+            btn.innerText = isSignUp ? "Confirm & Assign to Rep" : "Confirm Transfer";
+        }
+        
+        const descEl = document.getElementById('reassign-modal-desc');
+        if (descEl) {
+            if (isSignUp) {
+                descEl.innerHTML = `Deal closed! This account will automatically be assigned back to the original sales rep (<strong>${scoutUser ? scoutUser.firstName + ' ' + scoutUser.lastName : 'Field Rep'}</strong>) to continue the sign-up and onboarding process.`;
+                descEl.classList.remove('hidden');
+            } else {
+                descEl.classList.add('hidden');
+            }
+        }
+
+        const select = document.getElementById('reassign-rep');
+        if (select) {
+            select.innerHTML = '<option value="">-- Select New Owner --</option>';
+            db.users.filter(u => u.role === 'rep').forEach(u => {
+                select.innerHTML += `<option value="${u.id}">${u.firstName} ${u.lastName}</option>`;
+            });
+            
+            // Hide the dropdown entirely if this is a sign-up handback and we know the scout
+            if (isSignUp && d.scoutId) {
+                select.value = d.scoutId;
+                select.parentElement.classList.add('hidden');
+            } else {
+                select.parentElement.classList.remove('hidden');
+            }
+        }
+        
+        document.getElementById('reassign-note').value = isSignUp ? 'Deal successfully closed by Executive. Transitioning back to Field Rep for sign-up and onboarding.' : '';
+        document.getElementById('modal-reassign').classList.remove('hidden');
+    }
+
+    function executeReassign() {
+        if (!dealershipToReassign) return;
+        const newOwnerId = document.getElementById('reassign-rep').value;
+        const note = document.getElementById('reassign-note').value.trim();
+        const isSignUpInput = document.getElementById('reassign-is-signup');
+        const isSignUp = isSignUpInput ? isSignUpInput.value === 'true' : false;
+        
+        if (!newOwnerId || !note) return showToast("Please select a rep and provide a reason.", "error");
+        
+        const d = db.dealerships.find(x => x.id === dealershipToReassign);
+        const oldOwner = db.users.find(u => u.id === d.ownerId);
+        const newOwner = db.users.find(u => u.id === newOwnerId);
+        
+        d.ownerId = newOwnerId;
+        
+        if (isSignUp) {
+            d.status = 'Onboarding';
+            showToast(`Deal Won! Handed back to ${newOwner ? newOwner.firstName : 'Rep'} for onboarding.`, "success");
+        } else {
+            showToast(`Account reassigned to ${newOwner ? newOwner.firstName : 'Rep'}.`);
+        }
+
+        db.activities.push({
+            id: generateId('a'), repId: currentUser.id, dealershipId: d.id, contactId: null,
+            activityType: 'System Log', communicationType: 'System', status: 'completed',
+            completedAt: new Date().toISOString(), 
+            notes: isSignUp ? `Deal closed and transitioned to Onboarding phase. Owner transferred to ${newOwner ? newOwner.firstName : 'Rep'}. Note: ${note}` : `Owner reassigned from ${oldOwner ? oldOwner.firstName : 'None'} to ${newOwner ? newOwner.firstName : 'Rep'}. Reason: ${note}`, 
+            nextActionDate: null
+        });
+        
+        closeModal('modal-reassign');
+        dealershipToReassign = null;
+        
+        if (currentView === 'pipeline') renderPipeline();
+        if (currentView === 'dealerships') renderDealerships();
+        if (!document.getElementById('modal-quick-detail').classList.contains('hidden')) closeModal('modal-quick-detail');
+        else if (!document.getElementById('view-dealership-detail').classList.contains('hidden')) openDealershipDetail(d.id);
+    }
+
+    
+</script>

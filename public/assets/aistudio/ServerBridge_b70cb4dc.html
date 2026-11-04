@@ -1,0 +1,63 @@
+<script>
+    // --- PRE-POPULATED DATABASE ---
+    // Using window.db ensures this data is globally accessible across all your split script files!
+    window.db = {
+        jobTitles: [
+            { id: 'jt1', title: 'Dealer Principal / Owner', isDecisionMaker: true },
+            { id: 'jt2', title: 'General Manager (GM)', isDecisionMaker: true },
+            { id: 'jt3', title: 'General Sales Manager (GSM)', isDecisionMaker: true },
+            { id: 'jt4', title: 'F&I Director / Finance Director', isDecisionMaker: true },
+            { id: 'jt5', title: 'Sales Associate / Sales Executive', isDecisionMaker: false },
+            { id: 'jt6', title: 'Service Manager', isDecisionMaker: false }
+        ],
+        users: [
+            { id: 'u_rep_vet', firstName: 'Sarah', lastName: 'Connor', email: 'sarah@genzcrm.com', role: 'rep', managerId: 'u_mgr_1', homeZipCode: '90210' },
+            { id: 'u_rep_new', firstName: 'John', lastName: 'Connor', email: 'john@genzcrm.com', role: 'rep', managerId: 'u_exec_1', homeZipCode: '90211' },
+            { id: 'u_mgr_1', firstName: 'Kyle', lastName: 'Reese', email: 'kyle@genzcrm.com', role: 'manager', managerId: 'u_exec_1', homeZipCode: '90001' },
+            { id: 'u_exec_1', firstName: 'Miles', lastName: 'Dyson', email: 'miles@genzcrm.com', role: 'executive', managerId: null, homeZipCode: '90002' },
+            { id: 'u_fin_1', firstName: 'Erica', lastName: 'Albright', email: 'erica@genzcrm.com', role: 'finance', managerId: null, homeZipCode: '10001' },
+            { id: 'u_admin_1', firstName: 'System', lastName: 'Admin', email: 'admin@genzcrm.com', role: 'admin', managerId: null, homeZipCode: '10001' }
+        ],
+        dealerships: [
+            { id: 'd1', dealershipName: 'Metro Ford', phone: '(555) 123-4567', address: '100 Auto Dr', dealershipType: 'Franchise', usedCarsOnLot: 120, status: 'In Progress', heatLevel: 'Warm', ownerId: 'u_rep_vet', distanceFromHome: 12, lastTouchpointDate: new Date(Date.now() - 2 * 86400000).toISOString(), createdAt: new Date(Date.now() - 40 * 86400000).toISOString(), manualOrder: 1 },
+            { id: 'd2', dealershipName: 'Valley Honda', phone: '(555) 234-5678', address: '200 Auto Dr', dealershipType: 'Franchise', usedCarsOnLot: 85, status: 'Uncontacted', heatLevel: 'Cold', ownerId: 'u_rep_vet', distanceFromHome: 25, lastTouchpointDate: null, createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), manualOrder: 1 },
+            { id: 'd3', dealershipName: 'Elite Motors', phone: '(555) 345-6789', address: '300 Auto Dr', dealershipType: 'Independent', usedCarsOnLot: 30, status: 'Handed Off', heatLevel: 'Hot', ownerId: 'u_rep_vet', distanceFromHome: 8, lastTouchpointDate: new Date(Date.now() - 5 * 86400000).toISOString(), createdAt: new Date(Date.now() - 20 * 86400000).toISOString(), manualOrder: 1 },
+            { id: 'd4', dealershipName: 'Highway Toyota', phone: '(555) 456-7890', address: '400 Auto Dr', dealershipType: 'Franchise', usedCarsOnLot: 150, status: 'Handed Off', heatLevel: 'Hot', ownerId: 'u_rep_vet', distanceFromHome: 45, lastTouchpointDate: new Date(Date.now() - 10 * 86400000).toISOString(), createdAt: new Date(Date.now() - 15 * 86400000).toISOString(), manualOrder: 2 },
+            { id: 'd9', dealershipName: 'Seaside Chevrolet', phone: '(555) 678-9012', address: '900 Marina Blvd', dealershipType: 'Franchise', usedCarsOnLot: 210, status: 'In Progress', heatLevel: 'Hot', ownerId: 'u_rep_vet', distanceFromHome: 18, lastTouchpointDate: new Date(Date.now() - 1 * 86400000).toISOString(), createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), manualOrder: 0 },
+            { id: 'd10', dealershipName: 'Apex Nissan', phone: '(555) 789-0123', address: '101 Summit Way', dealershipType: 'Franchise', usedCarsOnLot: 60, status: 'Uncontacted', heatLevel: 'Cold', ownerId: 'u_rep_vet', distanceFromHome: 5, lastTouchpointDate: null, createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), manualOrder: 0 },
+            { id: 'd11', dealershipName: 'Riverside Hyundai', phone: '(555) 890-1234', address: '202 River Rd', dealershipType: 'Franchise', usedCarsOnLot: 45, status: 'Parked', heatLevel: 'Cold', ownerId: 'u_rep_vet', distanceFromHome: 33, lastTouchpointDate: new Date(Date.now() - 65 * 86400000).toISOString(), createdAt: new Date(Date.now() - 90 * 86400000).toISOString(), manualOrder: 0 },
+            { id: 'd12', dealershipName: 'Summit Subaru', phone: '(555) 901-2345', address: '303 Alpine Dr', dealershipType: 'Franchise', usedCarsOnLot: 95, status: 'In Progress', heatLevel: 'Warm', ownerId: 'u_rep_vet', distanceFromHome: 22, lastTouchpointDate: new Date(Date.now() - 14 * 86400000).toISOString(), createdAt: new Date(Date.now() - 18 * 86400000).toISOString(), manualOrder: 2 },
+            { id: 'd13', dealershipName: 'Premier Auto Group', phone: '(555) 012-3456', address: '404 Executive Park', dealershipType: 'Franchise', usedCarsOnLot: 400, status: 'In Progress', heatLevel: 'Hot', ownerId: 'u_rep_vet', distanceFromHome: 10, lastTouchpointDate: new Date(Date.now() - 3 * 86400000).toISOString(), createdAt: new Date(Date.now() - 12 * 86400000).toISOString(), manualOrder: 3 },
+            { id: 'd15', dealershipName: 'Pacific Auto', phone: '(555) 222-1111', address: '1200 Coast Hwy', dealershipType: 'Franchise', usedCarsOnLot: 180, status: 'Onboarding', heatLevel: 'Hot', ownerId: 'u_rep_vet', distanceFromHome: 15, lastTouchpointDate: new Date(Date.now() - 5 * 86400000).toISOString(), createdAt: new Date(Date.now() - 60 * 86400000).toISOString(), manualOrder: 0 },
+            { id: 'd16', dealershipName: 'North Star Motors', phone: '(555) 333-2222', address: '450 North Blvd', dealershipType: 'Independent', usedCarsOnLot: 55, status: 'Client', heatLevel: 'Warm', ownerId: 'u_rep_vet', distanceFromHome: 8, lastTouchpointDate: new Date(Date.now() - 45 * 86400000).toISOString(), createdAt: new Date(Date.now() - 50 * 86400000).toISOString(), manualOrder: 0 },
+            { id: 'd17', dealershipName: 'Sun City Honda', phone: '(555) 444-3333', address: '123 Solar Way', dealershipType: 'Franchise', usedCarsOnLot: 110, status: 'Client', heatLevel: 'Warm', ownerId: 'u_rep_vet', distanceFromHome: 20, lastTouchpointDate: new Date(Date.now() - 12 * 86400000).toISOString(), createdAt: new Date(Date.now() - 25 * 86400000).toISOString(), manualOrder: 1 },
+            { id: 'd5', dealershipName: 'Downtown Jeep', phone: '(555) 567-8901', address: '500 Auto Dr', dealershipType: 'Franchise', usedCarsOnLot: 65, status: 'In Progress', heatLevel: 'Warm', ownerId: 'u_rep_new', distanceFromHome: 5, lastTouchpointDate: new Date(Date.now() - 2 * 86400000).toISOString(), createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), manualOrder: 0 },
+            { id: 'd14', dealershipName: 'City Dodge', phone: '(555) 112-2334', address: '600 Central Ave', dealershipType: 'Franchise', usedCarsOnLot: 88, status: 'Uncontacted', heatLevel: 'Cold', ownerId: 'u_rep_new', distanceFromHome: 14, lastTouchpointDate: null, createdAt: new Date(Date.now() - 6 * 86400000).toISOString(), manualOrder: 0 },
+            { id: 'd6', dealershipName: 'Oceanside Kia', phone: '', address: '600 Coast Hwy', dealershipType: 'Franchise', usedCarsOnLot: 110, status: 'Uncontacted', heatLevel: 'Cold', ownerId: null, distanceFromHome: 58, lastTouchpointDate: null, createdAt: new Date().toISOString() }
+        ],
+        contacts: [
+            { id: 'c1', dealershipId: 'd1', firstName: 'Bob', lastName: 'Smith', jobTitle: 'General Manager (GM)', phone: '555-1111', email: 'bob@metroford.com', isDecisionMaker: true },
+            { id: 'c2', dealershipId: 'd3', firstName: 'Alice', lastName: 'Jones', jobTitle: 'Dealer Principal / Owner', phone: '555-2222', email: 'alice@elitemotors.com', isDecisionMaker: true },
+            { id: 'c3', dealershipId: 'd4', firstName: 'Tom', lastName: 'Clark', jobTitle: 'General Sales Manager (GSM)', phone: '555-3333', email: 'tom@highwaytoyota.com', isDecisionMaker: true },
+            { id: 'c4', dealershipId: 'd9', firstName: 'Jessica', lastName: 'Williams', jobTitle: 'F&I Director / Finance Director', phone: '555-4444', email: 'jwilliams@seasidechevrolet.com', isDecisionMaker: true },
+            { id: 'c5', dealershipId: 'd12', firstName: 'David', lastName: 'Miller', jobTitle: 'General Sales Manager (GSM)', phone: '555-5555', email: 'dmiller@summitsubaru.com', isDecisionMaker: true },
+            { id: 'c6', dealershipId: 'd13', firstName: 'Michael', lastName: 'Davis', jobTitle: 'General Manager (GM)', phone: '555-6667', email: 'mdavis@premierauto.com', isDecisionMaker: true },
+            { id: 'c7', dealershipId: 'd5', firstName: 'Sandra', lastName: 'Bullock', jobTitle: 'General Sales Manager (GSM)', phone: '555-5671', email: 'sbullock@downtownjeep.com', isDecisionMaker: true }
+        ],
+        activities: [
+            { id: 'a1', repId: 'u_rep_vet', dealershipId: 'd1', contactId: 'c1', activityType: 'Sales Stop', communicationType: 'In-Person', status: 'completed', completedAt: new Date(Date.now() - 2 * 86400000).toISOString(), notes: 'Met with Bob Smith. Walked the lot, pitched our program.' },
+            { id: 'a2', repId: 'u_rep_vet', dealershipId: 'd9', contactId: 'c4', activityType: 'Sales Stop', communicationType: 'In-Person', status: 'completed', completedAt: new Date(Date.now() - 1 * 86400000).toISOString(), notes: 'Met with Jessica. Excellent reception, preparing proposal.' },
+            { id: 'a3_d3', repId: 'u_rep_vet', dealershipId: 'd3', contactId: 'c2', activityType: 'Sales Stop', communicationType: 'In-Person', status: 'completed', completedAt: new Date(Date.now() - 7 * 86400000).toISOString(), notes: 'Met owner Alice Jones. Confirmed program trial.' },
+            { id: 'a4_d4', repId: 'u_rep_vet', dealershipId: 'd4', contactId: 'c3', activityType: 'Sales Stop', communicationType: 'In-Person', status: 'completed', completedAt: new Date(Date.now() - 11 * 86400000).toISOString(), notes: 'Met GSM Tom Clark. High interest in digital retail.' },
+            
+            // TODAY'S PLANNED ROUTE STOPS (PRE-SEEDED)
+            { id: 'a10', repId: 'u_rep_vet', dealershipId: 'd12', contactId: null, activityType: 'Planned Visit', communicationType: 'In-Person', status: 'pending', completedAt: null, notes: '', plannedDate: new Date().toISOString().split('T')[0], orderIndex: 0 },
+            { id: 'a11', repId: 'u_rep_vet', dealershipId: 'd10', contactId: null, activityType: 'Planned Visit', communicationType: 'In-Person', status: 'pending', completedAt: null, notes: '', plannedDate: new Date().toISOString().split('T')[0], orderIndex: 1 },
+            { id: 'a12', repId: 'u_rep_vet', dealershipId: 'd11', contactId: null, activityType: 'Planned Visit', communicationType: 'Phone', status: 'pending', completedAt: null, notes: '', plannedDate: new Date().toISOString().split('T')[0], orderIndex: 2 }
+        ],
+        payouts: [
+            { id: 'p1', dealershipId: 'd3', dealershipName: 'Elite Motors', repId: 'u_rep_vet', closerId: 'u_exec_1', handoffDate: new Date(Date.now() - 5 * 86400000).toISOString(), meetingCompleted: true, payoutApproved: false, payoutAmount: null, payoutMethod: null },
+            { id: 'p2', dealershipId: 'd4', dealershipName: 'Highway Toyota', repId: 'u_rep_vet', closerId: 'u_exec_1', handoffDate: new Date(Date.now() - 10 * 86400000).toISOString(), meetingCompleted: true, payoutApproved: true, payoutAmount: 250.00, payoutMethod: 'Payroll Direct Deposit' }
+        ]
+    };
+</script>
