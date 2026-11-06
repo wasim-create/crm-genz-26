@@ -1,4 +1,4 @@
-import type { DistanceBand } from './planner';
+import type { DistanceBand } from '../utils/territory';
 
 export type UserRole = 
   | 'new_rep' 
@@ -7,7 +7,8 @@ export type UserRole =
   | 'manager' 
   | 'finance' 
   | 'executive' 
-  | 'owner';
+  | 'owner'
+  | 'admin';
 
 export type USRegion = 'Northeast' | 'Midwest' | 'Southeast' | 'West' | 'Texas / South Central';
 
@@ -26,6 +27,10 @@ export interface User {
   avatarUrl?: string;
   hireDate: string;
   isRookie?: boolean;
+  /** Job title / designation inside the company. */
+  title?: string;
+  /** Removed people stay in history but no longer appear in lists. */
+  active?: boolean;
 }
 
 export type PipelineStage = 
@@ -46,11 +51,21 @@ export type PipelineStage =
   | 'Not Now'
   | 'Disqualified';
 
-export type LeadSource = 'Pool' | 'Assigned' | 'Manual Search';
+export type LeadSource = 'Pool' | 'Assigned' | 'Manual Search' | 'Radar' | 'Referral';
 export type DealershipType = 'Standalone' | 'Dealer Group';
 export type FranchiseType = 'Franchise' | 'Independent';
 export type HeatLevel = 'Cold' | 'Warm' | 'Hot';
-export type TimeZone = 'America/New_York' | 'America/Chicago' | 'America/Denver' | 'America/Los_Angeles';
+export type TimeZone =
+  | 'America/New_York'
+  | 'America/Chicago'
+  | 'America/Denver'
+  | 'America/Los_Angeles'
+  | 'America/Phoenix'
+  | 'America/Detroit'
+  | 'America/Boise'
+  | 'America/Indiana/Indianapolis'
+  | 'America/Anchorage'
+  | 'Pacific/Honolulu';
 
 export interface UsedCarInventoryHistory {
   date: string;
@@ -173,8 +188,26 @@ export interface Dealership {
   distanceBand?: DistanceBand;
   primaryContactName?: string;
   zip?: string;
+  website?: string;
+  referral?: ReferralInfo;
+  /** Placeholder rooftop created with a new dealer group — details to be filled in. */
+  isPlaceholder?: boolean;
+  /** Map position estimated from ZIP / city rather than an exact address match. */
+  locationApproximate?: boolean;
+  discoveredVia?: 'Radar' | 'Manual' | 'Import';
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ReferralInfo {
+  internalUserId?: string;
+  internalName?: string;
+  externalName?: string;
+  externalCompany?: string;
+  relationship?: string;
+  recordedAt: string;
+  recordedByUserId: string;
+  recordedByName: string;
 }
 
 export interface DealerGroup {
@@ -187,6 +220,8 @@ export interface DealerGroup {
   mainDecisionMaker: string;
   mainPhone: string;
   notes: string;
+  domain?: string;
+  rooftopCount?: number;
   groupAccountOwnerId?: string | null;
 }
 
@@ -201,6 +236,11 @@ export interface Contact {
   isDecisionMaker: boolean;
   notes?: string;
   linkedInUrl?: string;
+  otherSocials?: string;
+  /** Free-text title when "Other" is chosen. */
+  customTitle?: string;
+  createdByUserId?: string;
+  createdAt?: string;
 }
 
 export interface Activity {
@@ -211,7 +251,7 @@ export interface Activity {
   userName: string;
   contactId?: string;
   contactName?: string;
-  activityType: 'In-Person Visit' | 'Phone Call' | 'Email' | 'Google Meet' | 'Chat' | 'System Note' | 'Keyfetch Top-up';
+  activityType: 'In-Person Visit' | 'Phone Call' | 'Email' | 'Text Message' | 'Google Meet' | 'Chat' | 'System Note' | 'Keyfetch Top-up';
   communicationType: 'In-Person' | 'Virtual' | 'Phone' | 'Email' | 'System';
   status: 'pending' | 'completed' | 'cancelled';
   plannedDate?: string; // YYYY-MM-DD
@@ -435,4 +475,4 @@ export interface AuditLogRecord {
   details: string;
 }
 
-export * from './planner';
+export type { DistanceBand };

@@ -57,6 +57,11 @@ interface DealershipDetailModalProps {
   onAddContact: (contact: Contact) => void;
   onLogKeyfetchTopup: (dealershipId: string, quantity: number, notes?: string) => void;
   onAddToPlan?: (dealership: Dealership) => void;
+  onPlanLater?: (dealership: Dealership) => void;
+  /** My Plan panel: what's planned and the open action points for this dealership. */
+  planPanel?: React.ReactNode;
+  /** Opens the shared Add Contact form for this dealership. */
+  onRequestAddContact?: (dealership: Dealership) => void;
 }
 
 export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
@@ -74,7 +79,10 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
   onRequestAssist,
   onAddContact,
   onLogKeyfetchTopup,
-  onAddToPlan
+  onAddToPlan,
+  onPlanLater,
+  planPanel,
+  onRequestAddContact
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'visit_log' | 'products' | 'assist' | 'contacts' | 'audit'>('overview');
 
@@ -238,6 +246,18 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                 <span>Add to My Plan</span>
               </button>
             )}
+            {onPlanLater && (
+              <button
+                type="button"
+                onClick={() => {
+                  onPlanLater(dealership);
+                  onClose();
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-white border border-blue-300 hover:bg-blue-50 text-blue-700 font-bold text-xs shadow-xs cursor-pointer"
+              >
+                Plan later
+              </button>
+            )}
             {!isClient && (
               <button
                 type="button"
@@ -286,6 +306,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
           {/* TAB 1: OVERVIEW & RELATIONSHIP TEMPERATURE */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {planPanel}
               {/* Relationship Temperature Card (Section 7) */}
               {dealership.relationshipTemperature && (
                 <div className="bg-linear-to-r from-indigo-50/80 via-white to-purple-50/80 p-4 rounded-2xl border border-indigo-200/80 space-y-3">
@@ -593,12 +614,27 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
           {/* TAB 5: CONTACTS */}
           {activeTab === 'contacts' && (
             <div className="space-y-3">
-              <h4 className="font-bold text-sm text-slate-900">Key Stakeholders & Decision Makers</h4>
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-bold text-sm text-slate-900">Key Stakeholders & Decision Makers</h4>
+                {onRequestAddContact && (
+                  <button
+                    type="button"
+                    onClick={() => onRequestAddContact(dealership)}
+                    className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer"
+                  >
+                    + Add contact
+                  </button>
+                )}
+              </div>
+              {dealContacts.length === 0 && <p className="text-xs text-slate-500">No contacts yet.</p>}
+              {dealContacts.length > 0 && !dealContacts.some(c => c.isDecisionMaker) && (
+                <p className="text-xs text-amber-700 font-semibold">No decision maker on file yet.</p>
+              )}
               {dealContacts.map(c => (
                 <div key={c.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
                   <div>
                     <span className="font-bold text-slate-900">{c.firstName} {c.lastName}</span>
-                    <span className="text-slate-500 block text-[11px]">{c.jobTitle} • {formatUSPhone(c.phone)}</span>
+                    <span className="text-slate-500 block text-[11px]">{c.jobTitle}{c.phone ? ` • ${formatUSPhone(c.phone)}` : ''}{c.email ? ` • ${c.email}` : ''}</span>
                   </div>
                   {c.isDecisionMaker && (
                     <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">

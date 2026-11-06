@@ -1,255 +1,270 @@
-import React, { useState } from 'react';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Calendar,
-  Sparkles,
-  Type,
-  MessageSquare,
-  Navigation,
-  Clock,
-  ArrowRight
-} from 'lucide-react';
-import { MyPlanProvider, useMyPlan } from './context/MyPlanContext';
-import { DayView } from './components/DayView';
-import { WeekView } from './components/WeekView';
-import { MonthView } from './components/MonthView';
-import { PastDaysDiary } from './components/PastDaysDiary';
-import { AddFlowModal } from './components/AddFlow/AddFlowModal';
-import { TripPlanningSheet } from './components/TripPlanningSheet';
-import { TextQueueDrawer } from './components/TextQueueDrawer';
+// My Plan — the sales rep's day, week and month. Entry point used by App.
 
-interface MyPlanModuleProps {
-  currentUser: any;
-  dealerships: any[];
-  contacts?: any[];
-  users?: any[];
-  preselectedDealership?: any;
-  onClearPreselected?: () => void;
+import React, { useEffect, useMemo, useState } from 'react';
+import { Undo2, X } from 'lucide-react';
+import {
+  Activity,
+  Contact,
+  DealerGroup,
+  Dealership,
+  GameRule,
+  ManagerPriority,
+  ProductBonus,
+  ProductCatalogItem,
+  User
+} from '../../types/crm';
+import { DEFAULT_ENGINE_SETTINGS } from './engine/geo';
+import { layoutDay } from './engine/schedule';
+import { isMessage } from './engine/tasks';
+import { addDays, todayISO, toHHMM } from './engine/time';
+import { dismissToast, ensureSeeded, getSettings, lunchFor, setActiveUser, undo, useMyPlanState } from './data/store';
+import { zoneDiffMinutes, zoneFor, zoneForRegion } from './engine/timezones';
+import type { LayoutContext } from './engine/schedule';
+import type { PlanSlot } from './types';
+import type { ProspectFormResult } from '../../components/forms/ProspectForm';
+import { mockGoogleCalendar } from './connectors/googleConnectors';
+import { buildSuggestions } from './services/suggestions';
+import { MyPlanContextValue, MyPlanProvider, SheetState } from './ui/context';
+import { Header, MonthView } from './ui/HeaderAndMonth';
+import { DayView } from './ui/DayView';
+import { WeekView } from './ui/WeekView';
+import { AddFlow } from './ui/AddFlow';
+import { EditSlotSheet, MoveSheet } from './ui/SlotSheets';
+import { OutcomeSheet } from './ui/OutcomeSheet';
+import { BasketSheet, ReminderBanner, SettingsSheet, TodoSheet, Walkthrough } from './ui/OtherSheets';
+import { LunchSheet, QuickViewSheet, ReplanSheet, TimeSheet } from './ui/DaySheets';
+
+export interface MyPlanModuleProps {
+  currentUser: User;
+  users: User[];
+  dealerships: Dealership[];
+  contacts: Contact[];
+  groups: DealerGroup[];
+  catalog: ProductCatalogItem[];
+  gameRules: GameRule[];
+  productBonuses: ProductBonus[];
+  priorities: ManagerPriority[];
+  activities: Activity[];
+  /** Opened from elsewhere in the CRM ("Add to my plan" / "Plan later"). */
+  request?: { dealershipId: string; planLater?: boolean; nonce: number } | null;
+  onRequestHandled?: () => void;
+  onAddContact: (c: Contact) => void;
+  onSaveProspect: (r: ProspectFormResult) => void;
+  onClaimDealership: (d: Dealership) => void;
+  onOpenDealership: (d: Dealership) => void;
 }
 
-const MyPlanInner: React.FC<MyPlanModuleProps> = ({
-  currentUser,
-  dealerships,
-  contacts = [],
-  users = [],
-  preselectedDealership,
-  onClearPreselected
-}) => {
-  const {
-    activeDate,
-    setActiveDate,
-    currentView,
-    setCurrentView,
-    biggerText,
-    toggleBiggerText,
-    openingQuestionAnswered,
-    setLastPlanningChoice,
-    lastPlanningChoice,
-    isAddFlowOpen,
-    addFlowPreselected,
-    openAddFlow,
-    closeAddFlow,
-    sendQueue
-  } = useMyPlan();
+const VIEWER_ROLES = ['manager', 'team_lead', 'owner', 'executive'];
 
-  React.useEffect(() => {
-    if (preselectedDealership) {
-      openAddFlow({ dealership: preselectedDealership });
-      onClearPreselected?.();
+export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
+  const { currentUser, users, dealerships, contacts, groups, catalog } = props;
+  const state = useMyPlanState();
+  const today = todayISO();
+  const [date, setDate] = useState(today);
+  const [view, setView] = useState<'day' | 'week' | 'month'>('day');
+  const [sheet, setSheet] = useState<SheetState>(null);
+  const [viewUserId, setViewUserId] = useState(currentUser.id);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => setViewUserId(currentUser.id), [currentUser.id]);
+
+  useEffect(() => {
+    if (dealerships.length > 0) ensureSeeded({ users, dealerships, contacts, groups, catalog, today });
+  }, [dealerships.length, state.seededOn, users, contacts, groups, catalog, today]);
+
+  useEffect(() => setActiveUser(currentUser.id), [currentUser.id]);
+
+  const viewUser = users.find(u => u.id === viewUserId) ?? currentUser;
+  const readOnly = viewUser.id !== currentUser.id;
+  const settings = getSettings(currentUser.id);
+  const viewSettings = getSettings(viewUser.id);
+  const engine = useMemo(
+    () => ({ ...DEFAULT_ENGINE_SETTINGS, dayStart: viewSettings.dayStart, preferredFinish: viewSettings.preferredFinish, lunch: viewSettings.lunch }),
+    [viewSettings.dayStart, viewSettings.preferredFinish, viewSettings.lunch]
+  );
+  const home = viewUser.homeCoords;
+
+  const userSlots = useMemo(() => state.slots.filter(s => s.userId === viewUser.id), [state.slots, viewUser.id]);
+  const byDate = useMemo(() => {
+    const m = new Map<string, typeof userSlots>();
+    userSlots.forEach(s => {
+      if (!s.date) return;
+      const list = m.get(s.date) ?? [];
+      list.push(s);
+      m.set(s.date, list);
+    });
+    return m;
+  }, [userSlots]);
+  const repZone = zoneForRegion(viewUser.region);
+  const tzDiffFor = (slot: Pick<PlanSlot, 'target'>, d: string) =>
+    slot.target.kind === 'block' ? 0 : zoneDiffMinutes(repZone, slot.target.timeZone ?? zoneFor(slot.target.state, slot.target.city), d);
+  const layoutCtx = (d: string): LayoutContext => {
+    const lunch = lunchFor(viewUser.id, d);
+    return {
+      home,
+      settings: { ...engine, lunch: lunch.enabled, lunchTime: lunch.time, lunchDurationMin: lunch.durationMin, lunchFlexible: lunch.flexible },
+      tzDiff: slot => tzDiffFor(slot, d)
+    };
+  };
+  const layoutCache = useMemo(() => new Map<string, ReturnType<typeof layoutDay>>(), [byDate, engine, home, state.dayOverrides, state.settings]);
+  const daySlots = (d: string) => byDate.get(d) ?? [];
+  const layout = (d: string) => {
+    let l = layoutCache.get(d);
+    if (!l) {
+      l = layoutDay(daySlots(d), layoutCtx(d));
+      layoutCache.set(d, l);
     }
-  }, [preselectedDealership, openAddFlow, onClearPreselected]);
+    return l;
+  };
+  const basket = useMemo(() => userSlots.filter(s => s.status === 'basket').sort((a, b) => a.orderIndex - b.orderIndex), [userSlots]);
+  const dealershipById = useMemo(() => new Map(dealerships.map(d => [d.id, d])), [dealerships]);
+  const suggestions = useMemo(
+    () =>
+      viewSettings.aiSuggestions
+        ? buildSuggestions({ user: viewUser, dealerships, priorities: props.priorities, bonuses: props.productBonuses, catalog, slots: userSlots, today })
+        : new Map(),
+    [viewSettings.aiSuggestions, viewUser, dealerships, props.priorities, props.productBonuses, catalog, userSlots, today]
+  );
 
-  const [isTripSheetOpen, setIsTripSheetOpen] = useState(false);
-  const [tripAnchorData, setTripAnchorData] = useState<{ anchor: any; nearby: any[] } | null>(null);
-  const [isTextQueueOpen, setIsTextQueueOpen] = useState(false);
+  const viewers = useMemo(() => {
+    if (!VIEWER_ROLES.includes(currentUser.role)) return [];
+    const reps = users.filter(u => u.role === 'new_rep' || u.role === 'veteran_rep' || u.role === 'manager');
+    if (currentUser.role === 'manager') return reps.filter(u => u.managerId === currentUser.id);
+    return reps.filter(u => u.id !== currentUser.id);
+  }, [currentUser, users]);
 
-  // Date manipulation helpers
-  const handleShiftDay = (days: number) => {
-    const current = new Date(activeDate + 'T12:00:00');
-    current.setDate(current.getDate() + days);
-    setActiveDate(current.toISOString().split('T')[0]);
+  // First visit: short walkthrough.
+  useEffect(() => {
+    if (!readOnly && state.seededOn && !settings.walkthroughDone && !sheet) setSheet({ kind: 'walkthrough' });
+  }, [readOnly, state.seededOn, settings.walkthroughDone]);
+
+  // "Add to my plan" / "Plan later" from elsewhere in the CRM.
+  useEffect(() => {
+    if (!props.request) return;
+    setViewUserId(currentUser.id);
+    setSheet({ kind: 'add', preset: { dealershipId: props.request.dealershipId, planLater: props.request.planLater, nonce: props.request.nonce } });
+    props.onRequestHandled?.();
+  }, [props.request?.nonce]);
+
+  // Keep the (demo) Google Calendar in step with the plan.
+  useEffect(() => {
+    if (readOnly) return;
+    const t = setTimeout(() => {
+      const events: Parameters<typeof mockGoogleCalendar.replaceForSlots>[1] = [];
+      for (let i = -7; i <= 30; i++) {
+        const d = addDays(today, i);
+        const list = byDate.get(d);
+        if (!list) continue;
+        const l = layoutDay(list, layoutCtx(d));
+        list.forEach(s => {
+          if (s.source === 'calendar' || s.status === 'skipped') return;
+          const t2 = l.timings[s.id];
+          const start = t2 ? toHHMM(t2.start) : s.sendTime ?? '10:00';
+          const end = t2 ? toHHMM(t2.end) : start;
+          events.push({ slotId: s.id, title: `${isMessage(s.how) ? 'Send' : s.how === 'in_person' ? 'Visit' : 'Call'} — ${s.target.name}`, date: d, start, end });
+        });
+      }
+      void mockGoogleCalendar.replaceForSlots(viewUser.id, events);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [byDate, readOnly, viewUser.id, engine, home, today]);
+
+  const value: MyPlanContextValue = {
+    today,
+    now,
+    user: currentUser,
+    viewUser,
+    readOnly,
+    users,
+    dealerships,
+    dealershipById,
+    contacts,
+    groups,
+    catalog,
+    gameRules: props.gameRules,
+    productBonuses: props.productBonuses,
+    priorities: props.priorities,
+    settings,
+    engine,
+    home,
+    slots: userSlots,
+    allSlots: state.slots,
+    daySlots,
+    layout,
+    layoutCtx,
+    repZone,
+    tzDiffFor,
+    activities: props.activities,
+    basket,
+    suggestions,
+    date,
+    setDate,
+    view,
+    setView,
+    sheet,
+    openSheet: setSheet,
+    closeSheet: () => setSheet(null),
+    onAddContact: props.onAddContact,
+    onSaveProspect: props.onSaveProspect,
+    onClaimDealership: props.onClaimDealership,
+    onOpenDealership: props.onOpenDealership
   };
 
-  const formattedDate = new Date(activeDate + 'T12:00:00').toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric'
-  });
+  const close = () => setSheet(null);
 
   return (
-    <div className={`min-h-screen bg-slate-950 text-slate-100 ${biggerText ? 'text-lg' : 'text-sm'}`}>
-      {/* 4. The Opening Question Banner */}
-      {!openingQuestionAnswered && (
-        <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-slate-900 border-b border-amber-500/30 p-4 animate-fade-in">
-          <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
-            <div>
-              <span className="text-[11px] font-black uppercase tracking-wider text-amber-400">
-                Welcome to My Plan
-              </span>
-              <h3 className="text-base font-bold text-white">What are you planning today?</h3>
-            </div>
-            <div className="flex flex-wrap gap-2 justify-center">
-              {[
-                { id: 'today', label: 'Today', date: new Date().toISOString().split('T')[0], view: 'day' as const },
-                { id: 'tomorrow', label: 'Tomorrow', date: new Date(Date.now() + 86400000).toISOString().split('T')[0], view: 'day' as const },
-                { id: 'week', label: 'This Week', date: new Date().toISOString().split('T')[0], view: 'week' as const },
-                { id: 'custom', label: 'Choose Days', date: new Date().toISOString().split('T')[0], view: 'month' as const }
-              ].map(opt => (
-                <button
-                  key={opt.id}
-                  onClick={() => {
-                    setActiveDate(opt.date);
-                    setCurrentView(opt.view);
-                    setLastPlanningChoice(opt.id as any);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-amber-500 hover:text-slate-950 font-bold text-xs text-white border border-slate-700 transition"
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+    <MyPlanProvider value={value}>
+      <div className="mx-auto max-w-6xl text-[16px]" style={settings.biggerText ? { zoom: 1.15 } : undefined}>
+        <Header viewers={viewers} onViewUser={setViewUserId} />
+        <ReminderBanner />
+        {!state.seededOn ? (
+          <div className="py-16 text-center text-slate-500">Loading your plan…</div>
+        ) : view === 'day' ? (
+          <div className="mx-auto max-w-3xl">
+            <DayView />
           </div>
-        </div>
-      )}
-
-      {/* Main Top Header Controls */}
-      <div className="max-w-2xl mx-auto pt-6 px-4 space-y-4">
-        {/* Date Title & Day Navigation */}
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => handleShiftDay(-1)}
-              aria-label="Previous day"
-              className="p-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-white transition"
-            >
-              <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
-            </button>
-
-            <h1 className={`font-black text-white tracking-tight ${biggerText ? 'text-2xl sm:text-3xl' : 'text-xl sm:text-2xl'}`}>
-              {formattedDate}
-            </h1>
-
-            <button
-              onClick={() => handleShiftDay(1)}
-              aria-label="Next day"
-              className="p-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-white transition"
-            >
-              <ChevronRight className="w-5 h-5 stroke-[2.5]" />
-            </button>
-
-            <button
-              onClick={() => setActiveDate(new Date().toISOString().split('T')[0])}
-              className="ml-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-bold text-slate-300 hover:text-white transition"
-            >
-              Today
-            </button>
-          </div>
-
-          {/* Quick Tools: Bigger text & Text queue */}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={toggleBiggerText}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition ${
-                biggerText
-                  ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-              }`}
-              title="Toggle larger accessibility text"
-            >
-              <Type className="w-3.5 h-3.5" />
-              <span>Bigger text</span>
-            </button>
-
-            <button
-              onClick={() => setIsTextQueueOpen(true)}
-              className="relative p-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-white transition"
-              title="Open SMS dispatch queue"
-            >
-              <MessageSquare className="w-4 h-4" />
-              {sendQueue.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">
-                  {sendQueue.length}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* 3 Large Big Tabs: Day | Week | Month | Diary */}
-        <div className="grid grid-cols-4 p-1 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-bold">
-          {[
-            { id: 'day' as const, label: 'Day' },
-            { id: 'week' as const, label: 'Week' },
-            { id: 'month' as const, label: 'Month' },
-            { id: 'past' as const, label: 'Past Diary' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setCurrentView(tab.id)}
-              className={`py-2.5 rounded-xl text-center transition ${
-                currentView === tab.id
-                  ? 'bg-amber-500 text-slate-950 font-black shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        ) : view === 'week' ? (
+          <WeekView />
+        ) : (
+          <MonthView />
+        )}
       </div>
 
-      {/* Main View Area */}
-      <div className="max-w-4xl mx-auto px-4 pt-6">
-        {currentView === 'day' && <DayView onOpenAddModal={() => openAddFlow()} />}
-        {currentView === 'week' && <WeekView onOpenAddModal={() => openAddFlow()} />}
-        {currentView === 'month' && <MonthView />}
-        {currentView === 'past' && <PastDaysDiary />}
-      </div>
+      {sheet?.kind === 'add' && <AddFlow key={sheet.preset?.nonce ?? 'add'} preset={sheet.preset} onClose={close} />}
+      {sheet?.kind === 'edit' && <EditSlotSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
+      {sheet?.kind === 'outcome' && <OutcomeSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
+      {sheet?.kind === 'move' && <MoveSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
+      {sheet?.kind === 'todo' && <TodoSheet onClose={close} />}
+      {sheet?.kind === 'basket' && <BasketSheet onClose={close} />}
+      {sheet?.kind === 'settings' && <SettingsSheet onClose={close} />}
+      {sheet?.kind === 'walkthrough' && <Walkthrough onClose={close} start={sheet.start} />}
+      {sheet?.kind === 'details' && <QuickViewSheet dealershipId={sheet.dealershipId} groupId={sheet.groupId} onClose={close} />}
+      {sheet?.kind === 'time' && <TimeSheet slotId={sheet.slotId} onClose={close} />}
+      {sheet?.kind === 'lunch' && <LunchSheet date={sheet.date} onClose={close} />}
+      {sheet?.kind === 'replan' && <ReplanSheet date={sheet.date} onClose={close} />}
 
-      {/* Full-Screen Add Flow Modal */}
-      {isAddFlowOpen && (
-        <AddFlowModal
-          isOpen={isAddFlowOpen}
-          onClose={closeAddFlow}
-          dealerships={dealerships}
-          contacts={contacts}
-          currentUser={currentUser}
-          preselected={addFlowPreselected}
-          onTriggerTrip={(anchor, nearby) => {
-            setTripAnchorData({ anchor, nearby });
-            setIsTripSheetOpen(true);
-          }}
-        />
+      {state.toast && (
+        <div
+          role="status"
+          className="fixed left-1/2 top-3 z-[70] flex w-[min(92vw,560px)] -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-[16px] text-white shadow-2xl"
+        >
+          {state.toast.points ? <span className="rounded-lg bg-amber-500 px-2 font-bold text-slate-900">+{state.toast.points}</span> : null}
+          <span className="flex-1">{state.toast.text}</span>
+          {state.toast.canUndo && (
+            <button type="button" onClick={undo} className="inline-flex min-h-[44px] items-center gap-1 rounded-xl bg-white/15 px-3 font-bold text-amber-300 hover:bg-white/25">
+              <Undo2 className="h-4 w-4" /> Undo
+            </button>
+          )}
+          <button type="button" aria-label="Dismiss" onClick={dismissToast} className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-300 hover:bg-white/10">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
       )}
-
-      {/* Out-of-Town Trip Assistant Sheet */}
-      {isTripSheetOpen && tripAnchorData && (
-        <TripPlanningSheet
-          isOpen={isTripSheetOpen}
-          onClose={() => {
-            setIsTripSheetOpen(false);
-            setTripAnchorData(null);
-          }}
-          anchorDealership={tripAnchorData.anchor}
-          nearbyDealerships={tripAnchorData.nearby}
-          currentUser={currentUser}
-        />
-      )}
-
-      {/* Text Queue Drawer */}
-      <TextQueueDrawer
-        isOpen={isTextQueueOpen}
-        onClose={() => setIsTextQueueOpen(false)}
-      />
-    </div>
-  );
-};
-
-export const MyPlanModule: React.FC<MyPlanModuleProps> = (props) => {
-  return (
-    <MyPlanProvider userHomeZip={props.currentUser?.homeZipCode || props.currentUser?.homeZip || '75001'}>
-      <MyPlanInner {...props} />
     </MyPlanProvider>
   );
 };

@@ -167,6 +167,21 @@ export const USERS: User[] = [
     homeCoords: { lat: 42.3487, lng: -83.0641 },
     phone: '(313) 555-0149',
     hireDate: '2019-05-20'
+  },
+  {
+    // Demo-only login: manages the people list (add / remove staff).
+    id: 'u_admin',
+    firstName: 'Demo',
+    lastName: 'Admin',
+    email: 'admin@example.com',
+    role: 'admin',
+    region: 'Northeast',
+    managerId: null,
+    homeZipCode: '02108',
+    homeCoords: { lat: 42.3588, lng: -71.0638 },
+    phone: '(617) 555-0199',
+    hireDate: '2026-01-01',
+    title: 'System Administrator (demo)'
   }
 ];
 
@@ -1087,6 +1102,17 @@ function buildInitialDealerships(): Dealership[] {
     });
   });
 
+  // A few dealerships in sign-up / onboarding stages per region, so every
+  // My Plan tab (Prospects / Sign-up & Onboarding / Clients) has real data.
+  const stageOverrides: Record<number, Dealership['stage']> = {
+    8: 'Onboarding', 9: 'Signed', 24: 'Onboarding', 38: 'Onboarding',
+    53: 'Won', 67: 'Onboarding', 68: 'Contract'
+  };
+  Object.entries(stageOverrides).forEach(([i, stage]) => {
+    const t = templates[Number(i)];
+    if (t && t.repId) { t.stage = stage; t.heat = 'Warm'; }
+  });
+
   const now = new Date('2026-11-02T12:00:00Z').getTime();
 
   return templates.map((t, index) => {
@@ -1095,6 +1121,7 @@ function buildInitialDealerships(): Dealership[] {
     const createdDate = new Date(now - t.daysAgoCreated * 86400000).toISOString();
     const touchDate = t.daysAgoTouch ? new Date(now - t.daysAgoTouch * 86400000).toISOString() : null;
     const isClient = t.stage === 'Client';
+    const hasSignedUp = isClient || t.stage === 'Onboarding' || t.stage === 'Signed';
 
     // Scouting product interests
     const productInterests = [
@@ -1118,7 +1145,7 @@ function buildInitialDealerships(): Dealership[] {
 
     // Signed products for client
     const signedProducts: string[] = [];
-    if (isClient) {
+    if (hasSignedUp) {
       signedProducts.push('prod_3'); // Keyfetch
       if (index % 2 === 0) signedProducts.push('prod_1'); // VSC
       if (index % 4 === 0) signedProducts.push('prod_4'); // GAP
@@ -1220,30 +1247,62 @@ function buildInitialDealerships(): Dealership[] {
 
 export const INITIAL_DEALERSHIPS = buildInitialDealerships();
 
-export const INITIAL_CONTACTS: Contact[] = INITIAL_DEALERSHIPS.slice(0, 60).map((d, i) => {
-  const titles = [
+// Demo contacts: every claimed dealership gets a key decision maker, most also
+// get a second person in another role (titles from src/data/jobTitles.ts).
+export const INITIAL_CONTACTS: Contact[] = (() => {
+  const key = [
     'Dealer Principal / Owner',
     'General Manager (GM)',
     'General Sales Manager (GSM)',
-    'F&I Director / Finance Director'
+    'F&I Director / Finance Director',
+    'Finance and Insurance (F&I) Manager',
+    'Corporate VP of Finance / F&I Director'
   ];
-  const firstNames = ['David', 'Sarah', 'Marcus', 'Robert', 'Elena', 'James', 'Rachel', 'Thomas', 'Brian', 'Jennifer'];
-  const lastNames = ['Miller', 'Vance', 'Klein', 'Rostova', 'Sterling', 'Thompson', 'Anderson', 'Hayes', 'Sullivan', 'Foster'];
-  const fn = firstNames[i % firstNames.length];
-  const ln = lastNames[(i + 3) % lastNames.length];
-
-  return {
-    id: `cont_${d.id}_1`,
-    dealershipId: d.id,
-    firstName: fn,
-    lastName: ln,
-    jobTitle: titles[i % titles.length],
-    phone: d.phone,
-    email: `${fn.toLowerCase()}.${ln.toLowerCase()}@${d.dealershipName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
-    isDecisionMaker: true,
-    notes: 'Primary decision-maker for lot accessories and reinsurance structuring.'
-  };
-});
+  const other = [
+    'Used Car Manager / Pre-owned Director',
+    'Internet Sales Manager / Digital Concierge',
+    'BDC Representative (Business Development Centre)',
+    'Aftersales Manager / Service Director',
+    'Sales Administrator',
+    'Marketing / Social Media Manager',
+    'Receptionist'
+  ];
+  const firstNames = ['David', 'Sarah', 'Marcus', 'Robert', 'Elena', 'James', 'Rachel', 'Thomas', 'Brian', 'Jennifer', 'Luis', 'Angela', 'Derek', 'Monica', 'Grant', 'Tasha'];
+  const lastNames = ['Miller', 'Vance', 'Klein', 'Rostova', 'Sterling', 'Thompson', 'Anderson', 'Hayes', 'Sullivan', 'Foster', 'Ortega', 'Bishop', 'Coleman', 'Reyes'];
+  const out: Contact[] = [];
+  INITIAL_DEALERSHIPS.filter(d => d.stage !== 'Pool').forEach((d, i) => {
+    const slug = d.dealershipName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const fn = firstNames[i % firstNames.length];
+    const ln = lastNames[(i + 3) % lastNames.length];
+    out.push({
+      id: `cont_${d.id}_1`,
+      dealershipId: d.id,
+      firstName: fn,
+      lastName: ln,
+      jobTitle: key[i % key.length],
+      phone: d.phone,
+      email: `${fn.toLowerCase()}.${ln.toLowerCase()}@${slug}.com`,
+      isDecisionMaker: true,
+      notes: 'Main decision maker for lot accessories and F&I products.'
+    });
+    if (i % 3 !== 2) {
+      const fn2 = firstNames[(i + 7) % firstNames.length];
+      const ln2 = lastNames[(i + 9) % lastNames.length];
+      out.push({
+        id: `cont_${d.id}_2`,
+        dealershipId: d.id,
+        firstName: fn2,
+        lastName: ln2,
+        jobTitle: other[i % other.length],
+        phone: d.phone.replace(/\d{4}$/, String(1000 + ((i * 37) % 8999))),
+        email: `${fn2.toLowerCase()}.${ln2.toLowerCase()}@${slug}.com`,
+        isDecisionMaker: false,
+        notes: 'Day-to-day contact.'
+      });
+    }
+  });
+  return out;
+})();
 
 export const INITIAL_ACTIVITIES: Activity[] = [
   {
