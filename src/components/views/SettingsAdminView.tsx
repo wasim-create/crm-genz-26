@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ProductCatalogItem, User } from '../../types/crm';
+import { PeopleAdminPanel } from './PeopleAdminPanel';
 import {
   Settings,
   Database,
@@ -26,6 +27,8 @@ interface SettingsAdminViewProps {
   onUpdateCatalog: (catalog: ProductCatalogItem[]) => void;
   onUpdateFISystems: (systems: string[]) => void;
   onNavigateToGameRules?: () => void;
+  onUpdateUsers?: (users: User[], message: string) => void;
+  knownLocations?: { zipCode: string; city: string; state: string; coordinates: { lat: number; lng: number } }[];
 }
 
 export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
@@ -37,9 +40,11 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   onResetDemoData,
   onUpdateCatalog,
   onUpdateFISystems,
-  onNavigateToGameRules
+  onNavigateToGameRules,
+  onUpdateUsers,
+  knownLocations = []
 }) => {
-  const [activeTab, setActiveTab] = useState<'storage' | 'catalog' | 'fi_systems' | 'territory'>('catalog');
+  const [activeTab, setActiveTab] = useState<'storage' | 'catalog' | 'fi_systems' | 'territory' | 'people'>(currentUser.role === 'admin' ? 'people' : 'catalog');
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [newProductName, setNewProductName] = useState('');
   const [newProductCategory, setNewProductCategory] = useState('Ancillary');
@@ -118,7 +123,8 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
           { id: 'catalog', label: `Product Catalog (${catalog.length} Products)` },
           { id: 'territory', label: 'Territory & Planning Rules' },
           { id: 'storage', label: 'Data Storage Adapters' },
-          { id: 'fi_systems', label: 'F&I Systems List' }
+          { id: 'fi_systems', label: 'F&I Systems List' },
+          { id: 'people', label: `People (${allUsers.filter(u => u.active !== false).length})` }
         ].map(tab => (
           <button
             key={tab.id}
@@ -132,6 +138,10 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
           </button>
         ))}
       </div>
+
+      {activeTab === 'people' && onUpdateUsers && (
+        <PeopleAdminPanel currentUser={currentUser} users={allUsers} knownLocations={knownLocations} onChange={onUpdateUsers} />
+      )}
 
       {/* TAB 1: PRODUCT CATALOG (Section 2 - strictly NO price fields) */}
       {activeTab === 'catalog' && (

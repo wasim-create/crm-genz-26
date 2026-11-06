@@ -11,6 +11,7 @@ import { defaultTaskIds, durationFor, TASK_BY_ID, workTypeForStage } from '../en
 import { addDays, isWeekend, nextWeekday, toHHMM } from '../engine/time';
 import { staggerSendTimes, suggestSendTime } from '../engine/schedule';
 import { hasKeyfetch } from '../services/suggestions';
+import { zoneFor } from '../engine/timezones';
 
 export interface SeedInput {
   users: User[];
@@ -35,7 +36,9 @@ export function targetFromDealership(d: Dealership) {
     name: d.dealershipName,
     city: d.city,
     state: d.state,
-    coords: d.coordinates
+    coords: d.coordinates,
+    address: [d.address, d.city, `${d.state} ${d.zipCode}`.trim()].filter(Boolean).join(', '),
+    timeZone: zoneFor(d.state, d.city)
   };
 }
 
@@ -54,6 +57,8 @@ export function targetFromGroup(g: DealerGroup, rooftops: Dealership[]) {
     city: g.hqCity,
     state: g.hqState,
     coords,
+    address: [g.hqAddress, g.hqCity, `${g.hqState} ${g.hqZip}`.trim()].filter(Boolean).join(', '),
+    timeZone: zoneFor(g.hqState, g.hqCity),
     rooftopIds: rooftops.map(r => r.id)
   };
 }

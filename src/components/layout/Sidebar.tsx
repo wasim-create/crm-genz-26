@@ -80,7 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const pipelineItem: NavItem = {
       id: 'pipeline',
-      label: 'Pipeline Kanban',
+      label: 'Pipeline',
       icon: <KanbanSquare className="w-4 h-4" />,
       badge: hotDealCount > 0 ? `${hotDealCount} HOT` : undefined,
       badgeColor: 'bg-rose-100 text-rose-700 font-bold',
@@ -204,6 +204,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {
           title: 'Company Records',
           items: [clientsItem, pipelineItem, benchItem, settingsItem]
+        }
+      ];
+    }
+
+    if (role === 'admin') {
+      return [
+        {
+          title: 'System Admin',
+          items: [settingsItem, gameRulesItem]
+        },
+        {
+          title: 'Company Records',
+          items: [benchItem, poolItem, clientsItem, groupsItem]
         }
       ];
     }

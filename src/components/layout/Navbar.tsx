@@ -44,6 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'finance': return 'Finance Controller';
       case 'executive': return 'Executive / C-Level';
       case 'owner': return 'Company Owner';
+      case 'admin': return 'Administrator';
       default: return role;
     }
   };
@@ -232,9 +233,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {u.firstName} {u.lastName} (Finance Controller)
                 </option>
               ))}
-              {allUsers.filter(u => u.role === 'owner').map(u => (
+              {allUsers.filter(u => u.role === 'owner' || u.role === 'executive').map(u => (
                 <option key={u.id} value={u.id}>
-                  {u.firstName} {u.lastName} (Owner / C-Level)
+                  {u.firstName} {u.lastName} ({u.role === 'owner' ? 'Owner' : 'Executive'} / C-Level)
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Team Leads & Admin">
+              {allUsers.filter(u => u.role === 'team_lead' || u.role === 'admin').map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.firstName} {u.lastName} ({u.role === 'admin' ? 'Admin login' : 'Team Lead'})
                 </option>
               ))}
             </optgroup>

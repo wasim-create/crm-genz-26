@@ -6,6 +6,9 @@ import { estimatePoints } from '../services/writeback';
 import { BandChip, Card, HowLabel, TargetIcon, WORK_STYLE, WorkChip } from './primitives';
 import { useMyPlan } from './context';
 import { taskSummary, timeText } from './slotHelpers';
+import { ZONE_SHORT } from '../engine/timezones';
+import { format12h } from '../engine/time';
+import { Clock3, Info } from 'lucide-react';
 
 export interface SlotCardProps {
   slot: PlanSlot;
@@ -20,6 +23,8 @@ export interface SlotCardProps {
   highlight?: boolean;
   onOpen?: () => void;
   footer?: React.ReactNode;
+  /** Hide the small "Details / Change time" row (e.g. on the NEXT card, which has its own buttons). */
+  hideActions?: boolean;
 }
 
 export const SlotCard: React.FC<SlotCardProps> = ({
@@ -34,9 +39,12 @@ export const SlotCard: React.FC<SlotCardProps> = ({
   compact,
   highlight,
   onOpen,
-  footer
+  footer,
+  hideActions
 }) => {
-  const { home, engine, catalog, gameRules, readOnly, openSheet } = useMyPlan();
+  const { home, engine, catalog, gameRules, readOnly, openSheet, tzDiffFor } = useMyPlan();
+  const tz = slot.date && start !== undefined ? tzDiffFor(slot, slot.date) : 0;
+  const dealerZone = ZONE_SHORT[slot.target.timeZone ?? ''] ?? '';
   const miles = slot.target.coords ? milesBetween(home, slot.target.coords) : undefined;
   const band = miles !== undefined ? distanceBand(miles, engine) : undefined;
   const done = slot.status === 'done';
@@ -58,6 +66,11 @@ export const SlotCard: React.FC<SlotCardProps> = ({
             <span className={`text-[18px] font-bold tabular-nums ${done || skipped ? 'text-slate-500' : 'text-slate-900'}`}>
               {timeText(slot, start, end)}
             </span>
+            {tz !== 0 && start !== undefined && (
+              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[13px] font-semibold text-sky-800">
+                {format12h(start + tz)} {dealerZone || 'dealership'} time
+              </span>
+            )}
             {slot.locked && (
               <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[13px] font-semibold text-indigo-800">
                 <Lock className="h-3.5 w-3.5" /> Locked
@@ -175,6 +188,28 @@ export const SlotCard: React.FC<SlotCardProps> = ({
           )
         )}
       </div>
+      {!hideActions && (slot.target.kind !== 'block' || (!readOnly && slot.status === 'planned')) && (
+        <div className="flex flex-wrap gap-1 border-t border-slate-100 px-2 py-1.5">
+          {slot.target.kind !== 'block' && (
+            <button
+              type="button"
+              onClick={() => openSheet(slot.target.kind === 'group' ? { kind: 'details', groupId: slot.target.id } : { kind: 'details', dealershipId: slot.target.id })}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-3 text-[15px] font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              <Info className="h-4 w-4" /> Details
+            </button>
+          )}
+          {!readOnly && slot.status === 'planned' && (
+            <button
+              type="button"
+              onClick={() => openSheet({ kind: 'time', slotId: slot.id })}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-3 text-[15px] font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              <Clock3 className="h-4 w-4" /> Earlier / later
+            </button>
+          )}
+        </div>
+      )}
       {footer && <div className="border-t border-slate-100 px-3 pb-3 pt-2 sm:px-4">{footer}</div>}
     </Card>
   );

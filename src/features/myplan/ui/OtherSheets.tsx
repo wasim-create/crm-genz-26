@@ -297,7 +297,22 @@ export const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <input type="time" className="mt-1 min-h-[48px] w-full rounded-xl border border-slate-300 px-3 text-[16px]" value={settings.preferredFinish} onChange={e => set({ preferredFinish: e.target.value })} />
             </label>
           </div>
-          <Checkbox checked={settings.lunch} onChange={v => set({ lunch: v })} label="Keep a 30-minute lunch break" />
+          <Checkbox checked={settings.lunch} onChange={v => set({ lunch: v })} label="Usual lunch break" hint="Applies to every day. Change a single day by tapping its lunch row." />
+          {settings.lunch && (
+            <div className="space-y-3 pl-2">
+              <label className="flex flex-wrap items-center gap-3 text-[15px] font-medium text-slate-700">
+                At
+                <input type="time" className="min-h-[48px] rounded-xl border border-slate-300 px-3 text-[16px]" value={settings.lunchTime} onChange={e => set({ lunchTime: e.target.value })} />
+              </label>
+              <Segmented
+                ariaLabel="Lunch length"
+                value={String(settings.lunchDurationMin)}
+                onChange={v => set({ lunchDurationMin: Number(v) })}
+                options={[15, 30, 45, 60].map(m => ({ value: String(m), label: `${m} min` }))}
+              />
+              <Checkbox checked={settings.lunchFlexible} onChange={v => set({ lunchFlexible: v })} label="Flexible" hint="Fit lunch around visits, up to an hour either side" />
+            </div>
+          )}
           <p className="text-[14px] text-slate-500">Visits, calls and Meets are suggested between 10 AM and 4 PM (dealership time).</p>
         </Card>
 
@@ -373,13 +388,13 @@ export const ReminderBanner: React.FC = () => {
 const TOUR = [
   { title: 'This is your day', text: 'Everything you plan to do — visits, calls, Google Meets, emails and texts — in order, with real drive times and when to leave home.' },
   { title: 'Tap “Add to my plan”', text: 'Start with a dealership or with what you want to do. Tick everything you’ll do there, and we suggest the best times.' },
-  { title: 'Tap a card to change it', text: 'Change the day, time, how or tasks any time. Use ▲ ▼ (or drag) to change the order — times update by themselves.' },
+  { title: 'Tap a card to change it', text: 'Change the day, time, how or tasks any time. ▲ ▼ swaps the order. Hold ⋮⋮ and drag a little to move the time, or further to swap. “Details” shows the dealership.' },
   { title: 'Plan your week on Sunday', text: 'During the week, tap “Plan later” on any dealership. On Sunday, drag them into days in “Plan my week”.' }
 ];
 
-export const Walkthrough: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export const Walkthrough: React.FC<{ onClose: () => void; start?: number }> = ({ onClose, start = 0 }) => {
   const { user, settings } = useMyPlan();
-  const [i, setI] = useState(0);
+  const [i, setI] = useState(start);
   const last = i === TOUR.length;
   const finish = (enabled: boolean) => {
     updateSettings(user.id, { walkthroughDone: true, reminderAsked: true, reminder: { ...settings.reminder, enabled } });

@@ -3,13 +3,15 @@
 // Back button that never loses choices.
 
 import React, { useMemo, useState } from 'react';
-import { Building2, CheckCircle2, Compass, Inbox, ListChecks, MapPin, Plus, Search, SlidersHorizontal, Sparkles, Users } from 'lucide-react';
+import { AlertTriangle, Building2, CheckCircle2, Compass, Inbox, Info, ListChecks, MapPin, Plus, Radar as RadarIcon, Search, SlidersHorizontal, Sparkles, Users } from 'lucide-react';
+import { ProspectForm } from '../../../components/forms/ProspectForm';
+import { ZONE_SHORT } from '../engine/timezones';
 import { Dealership, DealerGroup } from '../../../types/crm';
 import { HowType, PlanSlot, SlotTask, WorkType } from '../types';
 import { distanceBand, milesBetween } from '../engine/geo';
 import { durationFor, HOW_LABEL, isMessage, TASK_BY_ID, WORK_TYPE_LABEL, workTypeForStage } from '../engine/tasks';
 import { format12h, formatDayLong, formatDayShort, nextWeekday, parseISODate, toMin } from '../engine/time';
-import { indexForTime, insertAt, layoutDay, PlacementSuggestion, sendTimeAdvice, staggerSendTimes, suggestPlacements, suggestSendTime } from '../engine/schedule';
+import { checkDuplicates, indexForTime, insertAt, layoutDay, PlacementSuggestion, sendTimeAdvice, staggerSendTimes, suggestPlacements, suggestSendTime } from '../engine/schedule';
 import { addSlots, upsertSlots } from '../data/store';
 import { contactsFor } from '../data/seed';
 import { BandChip, Button, Card, Checkbox, ChoiceCard, HOW_ICON, Segmented, Sheet, WorkChip } from './primitives';
@@ -55,7 +57,7 @@ const DEFAULT_MESSAGE: Record<BatchPurpose, string> = {
 
 export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({ preset, onClose }) => {
   const ctx = useMyPlan();
-  const { viewUser, user, dealerships, dealershipById, groups, contacts, catalog, today, home, engine, slots, onClaimDealership } = ctx;
+  const { viewUser, dealerships, dealershipById, groups, contacts, catalog, today, home, engine, slots, onClaimDealership } = ctx;
   const basketSlot = preset?.basketSlotId ? slots.find(s => s.id === preset.basketSlotId) : undefined;
   const presetDealership = preset?.dealershipId ? dealershipById.get(preset.dealershipId) : undefined;
   const presetGroup = preset?.groupId ? groups.find(g => g.id === preset.groupId) : undefined;
@@ -83,7 +85,11 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
     | { type: 'exact'; time: string }
     | null
   >(null);
-  const [ownTime, setOwnTime] = useState('11:00');
+  const [ownTime, setOwnTime] = useState(() => {
+    const n = new Date();
+    const m = Math.ceil((n.getHours() * 60 + n.getMinutes()) / 5) * 5;
+    return (preset?.date ?? today) === today && m < 21 * 60 ? `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : '10:00';
+  });
   const [sendTime, setSendTime] = useState<string | undefined>(undefined);
   const [tripExtras, setTripExtras] = useState<string[]>([]);
   const [added, setAdded] = useState<PlanSlot[] | null>(null);
@@ -174,7 +180,20 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
     }
 
     if (isBatch || (messageHow && draft)) {
-      const ids = isBatch ? multi : [draft!.target.id];
+      const blockedIds = new Set(
+        isBatch
+          ? multi.filter(id =>
+              checkDuplicates({
+                candidate: { id: '__new__', how: how!, target: { kind: 'dealership', id, name: '' }, durationMin: 5 },
+                date,
+                daySlots: ctx.daySlots(date),
+                layout: ctx.layout(date)
+              }).some(d => d.level === 'block')
+            )
+          : []
+      );
+      const ids = isBatch ? multi.filter(id => !blockedIds.has(id)) : [draft!.target.id];
+      if (ids.length === 0) return;
       const base = sendTime ?? suggestSendTime(how as 'email' | 'text', date);
       const times = staggerSendTimes(how as 'email' | 'text', base, ids.length);
       const batchId = ids.length > 1 ? newId('batch') : undefined;
@@ -212,14 +231,17 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
 
     if (!draft) return;
     const daySlots = ctx.daySlots(date).filter(s => s.id !== draft.id);
-    const lay = layoutDay(daySlots, { home, settings: engine });
+    const lay = layoutDay(daySlots, ctx.layoutCtx(date));
     let index = lay.sequence.length;
     let slot: PlanSlot = { ...draft, date, status: 'planned', timeMode: 'flow', fixedTime: draft.locked ? draft.fixedTime : undefined };
     const ch = choice ?? (suggestions[0] ? { type: 'suggest' as const, s: suggestions[0] } : { type: 'mode' as const, mode: 'flow' as const });
-    if (ch.type === 'suggest') index = ch.s.index;
+    if (ch.type === 'suggest') {
+      index = ch.s.index;
+      if (ch.s.fixedTime) slot = { ...slot, timeMode: 'exact', fixedTime: ch.s.fixedTime };
+    }
     else if (ch.type === 'exact') {
       slot = { ...slot, timeMode: 'exact', fixedTime: ch.time };
-      index = indexForTime(daySlots, { home, settings: engine }, ch.time);
+      index = indexForTime(daySlots, ctx.layoutCtx(date), ch.time);
     } else if (ch.type === 'mode') {
       slot = { ...slot, timeMode: ch.mode === 'flow' ? 'flow' : ch.mode };
       const pick =
@@ -240,7 +262,7 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
       const d = dealershipById.get(slot.target.id);
       if (d && d.stage === 'Pool') onClaimDealership(d);
     }
-    const t = layoutDay(list, { home, settings: engine }).timings[slot.id];
+    const t = layoutDay(list, ctx.layoutCtx(date)).timings[slot.id];
     upsertSlots(
       list,
       `Added ${HOW_LABEL[slot.how].toLowerCase()} — ${slot.target.name}, ${formatDayShort(date)}${t ? ` at ${format12h(t.start)}` : ''}${extras.length ? ` (+${extras.length} nearby stops)` : ''}`
@@ -250,22 +272,64 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
   };
 
   // --- suggestions for "when" ---
+  const nowMin = ctx.now.getHours() * 60 + ctx.now.getMinutes();
+  const notBefore = date === today ? nowMin : undefined;
   const suggestions: PlacementSuggestion[] = useMemo(() => {
     if (!draft || messageHow || step !== 'when') return [];
     const daySlots = ctx.daySlots(date).filter(s => s.id !== draft.id);
-    return suggestPlacements(daySlots, { ...draft, date, status: 'planned' }, { home, settings: engine });
-  }, [draft, date, step, messageHow, ctx, home, engine]);
+    const cand = { ...draft, date, status: 'planned' as const };
+    const list = suggestPlacements(daySlots, cand, ctx.layoutCtx(date), 3, { notBefore });
+    // "+ Add here" between two stops: offer that exact spot first.
+    if (preset?.insertIndex !== undefined && date === preset.date) {
+      const here = suggestPlacements(daySlots, cand, ctx.layoutCtx(date), 1, { notBefore, onlyIndex: preset.insertIndex })[0];
+      if (here) {
+        const lay = ctx.layout(date);
+        const before = daySlots.find(x => x.id === lay.sequence[preset.insertIndex! - 1]);
+        const after = daySlots.find(x => x.id === lay.sequence[preset.insertIndex!]);
+        const hereLabelled = {
+          ...here,
+          reason: here.fits ? `Here — between ${before?.target.name ?? 'the start'} and ${after?.target.name ?? 'the end'}` : here.reason
+        };
+        return [hereLabelled, ...list.filter(x => x.index !== here.index)].slice(0, 3);
+      }
+    }
+    return list;
+  }, [draft, date, step, messageHow, ctx, notBefore, preset?.insertIndex, preset?.date]);
 
   const roomElsewhere = useMemo(() => {
     if (!draft || messageHow || step !== 'when' || suggestions.some(s => s.fits)) return undefined;
     let d = date;
     for (let i = 0; i < 6; i++) {
       d = nextWeekday(d);
-      const s = suggestPlacements(ctx.daySlots(d).filter(x => x.id !== draft.id), { ...draft, date: d, status: 'planned' }, { home, settings: engine }, 1)[0];
+      const s = suggestPlacements(ctx.daySlots(d).filter(x => x.id !== draft.id), { ...draft, date: d, status: 'planned' }, ctx.layoutCtx(d), 1)[0];
       if (s?.fits) return { date: d, s };
     }
     return undefined;
   }, [draft, date, step, messageHow, suggestions, ctx, home, engine]);
+
+  // Duplicate checks for the chosen time (blocks the same dealership + same
+  // method at an overlapping time; warns about the same dealership that day).
+  const duplicates = useMemo(() => {
+    if (step !== 'when' || basketSlot) return [];
+    const day = ctx.daySlots(date);
+    const lay = ctx.layout(date);
+    const teammates = ctx.users
+      .filter(u => u.id !== viewUser.id)
+      .map(u => ({ name: `${u.firstName} ${u.lastName}`, slots: ctx.allSlots.filter(x => x.userId === u.id) }));
+    if (messageHow) {
+      const ids = isBatch ? multi : draft ? [draft.target.id] : [];
+      return ids.flatMap(id => {
+        const t = dealershipById.get(id);
+        if (!t) return [];
+        return checkDuplicates({ candidate: { id: '__new__', how: how!, target: { kind: 'dealership', id, name: t.dealershipName }, durationMin: 5 }, date, daySlots: day, layout: lay });
+      });
+    }
+    if (!draft) return [];
+    const ch = choice ?? (suggestions[0] ? { type: 'suggest' as const, s: suggestions[0] } : null);
+    const start = ch?.type === 'suggest' ? ch.s.start : ch?.type === 'exact' ? toMin(ch.time) : undefined;
+    return checkDuplicates({ candidate: draft, start, date, daySlots: day, layout: lay, teammates });
+  }, [step, basketSlot, ctx, date, viewUser.id, messageHow, isBatch, multi, draft, dealershipById, how, choice, suggestions]);
+  const blocked = duplicates.some(d => d.level === 'block') && !isBatch;
 
   const nextDisabled =
     (step === 'tasks' && !isBatch && (!draft || draft.tasks.length === 0)) ||
@@ -275,9 +339,23 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
 
   const footer =
     step === 'start' || step === 'done' || (step === 'pick' && !isBatch) ? undefined : step === 'when' ? (
-      <Button variant="primary" size="lg" block onClick={confirm} icon={<CheckCircle2 className="h-5 w-5" />}>
-        {messageHow ? 'Add to my plan' : 'Add to my plan'}
-      </Button>
+      <div className="space-y-2">
+        {duplicates.map((d, i) => (
+          <div
+            key={i}
+            className={`flex items-start gap-2 rounded-xl p-3 text-[15px] ${d.level === 'block' ? 'bg-rose-50 text-rose-900' : d.level === 'warn' ? 'bg-amber-50 text-amber-950' : 'bg-slate-100 text-slate-700'}`}
+          >
+            {d.level === 'info' ? <Info className="mt-0.5 h-5 w-5 shrink-0" /> : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />}
+            <span>
+              {d.message}
+              {d.level === 'block' && (isBatch ? ' It will be skipped.' : ' Pick a different time or contact method.')}
+            </span>
+          </div>
+        ))}
+        <Button variant="primary" size="lg" block onClick={confirm} disabled={blocked} icon={<CheckCircle2 className="h-5 w-5" />}>
+          Add to my plan
+        </Button>
+      </div>
     ) : step === 'how' && planLater ? (
       <Button variant="primary" size="lg" block onClick={confirm} disabled={!how} icon={<Inbox className="h-5 w-5" />}>
         Put in my plan-later basket
@@ -478,7 +556,8 @@ const Picker: React.FC<{
   onPick: (t: { kind: 'dealership'; d: Dealership } | { kind: 'group'; g: DealerGroup }) => void;
   allowGroups: boolean;
 }> = ({ multi, selected, onToggle, onPick, allowGroups }) => {
-  const { viewUser, dealerships, groups, home, engine, suggestions, slots, today, onAddDealership } = useMyPlan();
+  const { viewUser, users, dealerships, groups, catalog, home, engine, suggestions, slots, today, onSaveProspect } = useMyPlan();
+  const [radar, setRadar] = useState(false);
   const [tab, setTab] = useState<Tab>('prospect');
   const [query, setQuery] = useState('');
   const [quick, setQuick] = useState<string | null>(null);
@@ -546,7 +625,26 @@ const Picker: React.FC<{
     { id: 'basket', label: 'In basket' }
   ];
 
-  if (adding) return <NewDealershipForm onCancel={() => setAdding(false)} onCreate={d => { onAddDealership(d); onPick({ kind: 'dealership', d }); }} />;
+  const prospectForm = adding ? (
+    <ProspectForm
+      currentUser={viewUser}
+      users={users}
+      dealerships={dealerships}
+      groups={groups}
+      catalog={catalog}
+      startWithRadar={radar}
+      onCancel={() => setAdding(false)}
+      onSave={r => {
+        onSaveProspect(r);
+        setAdding(false);
+        onPick({ kind: 'dealership', d: r.dealership });
+      }}
+      onOpenExisting={d => {
+        setAdding(false);
+        if (d.assignedRepId === viewUser.id || d.stage === 'Pool') onPick({ kind: 'dealership', d });
+      }}
+    />
+  ) : null;
 
   return (
     <div>
@@ -688,16 +786,36 @@ const Picker: React.FC<{
             })}
           </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
             {!showPool && (
               <Button variant="secondary" size="lg" icon={<Compass className="h-5 w-5" />} onClick={() => setShowPool(true)}>
-                Find more nearby (pool)
+                Find more in the pool
               </Button>
             )}
-            <Button variant="secondary" size="lg" icon={<Plus className="h-5 w-5" />} onClick={() => setAdding(true)}>
+            <Button
+              variant="secondary"
+              size="lg"
+              icon={<RadarIcon className="h-5 w-5" />}
+              onClick={() => {
+                setRadar(true);
+                setAdding(true);
+              }}
+            >
+              Open Radar
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              icon={<Plus className="h-5 w-5" />}
+              onClick={() => {
+                setRadar(false);
+                setAdding(true);
+              }}
+            >
               Add a new dealership
             </Button>
           </div>
+          {prospectForm}
         </>
       )}
     </div>
@@ -717,76 +835,6 @@ const Select: React.FC<{ label: string; value: string; onChange: (v: string) => 
     </select>
   </label>
 );
-
-const NewDealershipForm: React.FC<{ onCancel: () => void; onCreate: (d: Dealership) => void }> = ({ onCancel, onCreate }) => {
-  const { viewUser, dealerships } = useMyPlan();
-  const [form, setForm] = useState({ name: '', city: '', state: '', zip: '' });
-  const create = () => {
-    const near = dealerships.find(d => d.zipCode?.slice(0, 3) === form.zip.slice(0, 3)) ?? dealerships.find(d => d.city.toLowerCase() === form.city.trim().toLowerCase());
-    const coords = near?.coordinates ?? viewUser.homeCoords;
-    const now = new Date().toISOString();
-    const template = dealerships[0];
-    const d: Dealership = {
-      ...template,
-      id: newId('deal'),
-      dealershipName: form.name.trim(),
-      groupId: null,
-      groupName: undefined,
-      dealershipType: 'Standalone',
-      rooftopCount: 1,
-      city: form.city.trim(),
-      state: form.state.trim().toUpperCase(),
-      zipCode: form.zip.trim(),
-      address: '',
-      phone: '',
-      coordinates: coords,
-      stage: 'Claimed',
-      heatLevel: 'Cold',
-      source: 'Manual Search',
-      assignedRepId: viewUser.id,
-      originRepId: viewUser.id,
-      claimedAt: now,
-      lastTouchpointDate: null,
-      productInterests: [],
-      signedProducts: [],
-      topups: [],
-      upsells: [],
-      hasActiveAssist: false,
-      activeAssistId: undefined,
-      inventoryHistory: [],
-      createdAt: now,
-      updatedAt: now
-    };
-    onCreate(d);
-  };
-  return (
-    <Card className="space-y-3 p-4">
-      <div className="text-[18px] font-bold text-slate-900">Add a new dealership</div>
-      <p className="text-[15px] text-slate-600">It’s added to your prospects. You can fill in the rest of the details later.</p>
-      {(
-        [
-          ['name', 'Dealership name'],
-          ['city', 'City'],
-          ['state', 'State (e.g. TX)'],
-          ['zip', 'ZIP code']
-        ] as const
-      ).map(([k, l]) => (
-        <label key={k} className="block">
-          <span className="text-[15px] font-medium text-slate-700">{l}</span>
-          <input className="mt-1 min-h-[48px] w-full rounded-xl border border-slate-300 px-3 text-[16px]" value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })} />
-        </label>
-      ))}
-      <div className="flex gap-2">
-        <Button variant="primary" disabled={!form.name.trim() || !form.city.trim()} onClick={create}>
-          Add and continue
-        </Button>
-        <Button variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </Card>
-  );
-};
 
 // ---------- Step: when ----------
 
@@ -809,7 +857,7 @@ const WhenStep: React.FC<{
   onPlanLater?: () => void;
 }> = props => {
   const { draft, messageHow, date, setDate, suggestions, choice, setChoice, ownTime, setOwnTime, roomElsewhere, tripExtras, setTripExtras, onPlanLater } = props;
-  const { home, engine, dealerships, viewUser } = useMyPlan();
+  const { home, engine, dealerships, viewUser, tzDiffFor, today, now } = useMyPlan();
 
   if (messageHow) {
     const suggested = suggestSendTime(messageHow, date);
@@ -848,6 +896,7 @@ const WhenStep: React.FC<{
   }
 
   if (!draft) return null;
+  const tzDiff = tzDiffFor(draft, date);
   const miles = draft.target.coords ? milesBetween(home, draft.target.coords) : 0;
   const outOfTown = draft.how === 'in_person' && distanceBand(miles, engine) === 'out_of_town';
   const nearby = outOfTown && draft.target.coords
@@ -896,6 +945,15 @@ const WhenStep: React.FC<{
         </Card>
       )}
 
+      {tzDiff !== 0 && (
+        <Card className="flex items-start gap-2 border-sky-200 bg-sky-50 p-3 text-[15px] text-sky-950">
+          <Info className="mt-0.5 h-5 w-5 shrink-0" />
+          Times below are your time. {draft.target.name} is {Math.abs(tzDiff / 60)} hour{Math.abs(tzDiff) === 60 ? '' : 's'} {tzDiff > 0 ? 'ahead' : 'behind'} ({ZONE_SHORT[draft.target.timeZone ?? ''] ?? 'their'} time) — the 10–4 window is checked in their time.
+        </Card>
+      )}
+      {date === today && (
+        <p className="text-[15px] text-slate-600">Starting from now ({format12h(Math.ceil((now.getHours() * 60 + now.getMinutes()) / 5) * 5)}){draft.how === 'in_person' ? ', including the drive there' : ''}.</p>
+      )}
       <div>
         <div className="mb-2 text-[17px] font-bold text-slate-900">Best times on {formatDayLong(date)}</div>
         <div className="space-y-2">

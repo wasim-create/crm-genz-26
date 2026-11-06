@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Undo2, X } from 'lucide-react';
 import {
+  Activity,
   Contact,
   DealerGroup,
   Dealership,
@@ -16,7 +17,11 @@ import { DEFAULT_ENGINE_SETTINGS } from './engine/geo';
 import { layoutDay } from './engine/schedule';
 import { isMessage } from './engine/tasks';
 import { addDays, todayISO, toHHMM } from './engine/time';
-import { dismissToast, ensureSeeded, getSettings, setActiveUser, undo, useMyPlanState } from './data/store';
+import { dismissToast, ensureSeeded, getSettings, lunchFor, setActiveUser, undo, useMyPlanState } from './data/store';
+import { zoneDiffMinutes, zoneFor, zoneForRegion } from './engine/timezones';
+import type { LayoutContext } from './engine/schedule';
+import type { PlanSlot } from './types';
+import type { ProspectFormResult } from '../../components/forms/ProspectForm';
 import { mockGoogleCalendar } from './connectors/googleConnectors';
 import { buildSuggestions } from './services/suggestions';
 import { MyPlanContextValue, MyPlanProvider, SheetState } from './ui/context';
@@ -27,6 +32,7 @@ import { AddFlow } from './ui/AddFlow';
 import { EditSlotSheet, MoveSheet } from './ui/SlotSheets';
 import { OutcomeSheet } from './ui/OutcomeSheet';
 import { BasketSheet, ReminderBanner, SettingsSheet, TodoSheet, Walkthrough } from './ui/OtherSheets';
+import { LunchSheet, QuickViewSheet, ReplanSheet, TimeSheet } from './ui/DaySheets';
 
 export interface MyPlanModuleProps {
   currentUser: User;
@@ -38,11 +44,12 @@ export interface MyPlanModuleProps {
   gameRules: GameRule[];
   productBonuses: ProductBonus[];
   priorities: ManagerPriority[];
+  activities: Activity[];
   /** Opened from elsewhere in the CRM ("Add to my plan" / "Plan later"). */
   request?: { dealershipId: string; planLater?: boolean; nonce: number } | null;
   onRequestHandled?: () => void;
   onAddContact: (c: Contact) => void;
-  onAddDealership: (d: Dealership) => void;
+  onSaveProspect: (r: ProspectFormResult) => void;
   onClaimDealership: (d: Dealership) => void;
   onOpenDealership: (d: Dealership) => void;
 }
@@ -93,12 +100,23 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
     });
     return m;
   }, [userSlots]);
-  const layoutCache = useMemo(() => new Map<string, ReturnType<typeof layoutDay>>(), [byDate, engine, home]);
+  const repZone = zoneForRegion(viewUser.region);
+  const tzDiffFor = (slot: Pick<PlanSlot, 'target'>, d: string) =>
+    slot.target.kind === 'block' ? 0 : zoneDiffMinutes(repZone, slot.target.timeZone ?? zoneFor(slot.target.state, slot.target.city), d);
+  const layoutCtx = (d: string): LayoutContext => {
+    const lunch = lunchFor(viewUser.id, d);
+    return {
+      home,
+      settings: { ...engine, lunch: lunch.enabled, lunchTime: lunch.time, lunchDurationMin: lunch.durationMin, lunchFlexible: lunch.flexible },
+      tzDiff: slot => tzDiffFor(slot, d)
+    };
+  };
+  const layoutCache = useMemo(() => new Map<string, ReturnType<typeof layoutDay>>(), [byDate, engine, home, state.dayOverrides, state.settings]);
   const daySlots = (d: string) => byDate.get(d) ?? [];
   const layout = (d: string) => {
     let l = layoutCache.get(d);
     if (!l) {
-      l = layoutDay(daySlots(d), { home, settings: engine });
+      l = layoutDay(daySlots(d), layoutCtx(d));
       layoutCache.set(d, l);
     }
     return l;
@@ -142,7 +160,7 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
         const d = addDays(today, i);
         const list = byDate.get(d);
         if (!list) continue;
-        const l = layoutDay(list, { home, settings: engine });
+        const l = layoutDay(list, layoutCtx(d));
         list.forEach(s => {
           if (s.source === 'calendar' || s.status === 'skipped') return;
           const t2 = l.timings[s.id];
@@ -175,8 +193,13 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
     engine,
     home,
     slots: userSlots,
+    allSlots: state.slots,
     daySlots,
     layout,
+    layoutCtx,
+    repZone,
+    tzDiffFor,
+    activities: props.activities,
     basket,
     suggestions,
     date,
@@ -187,7 +210,7 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
     openSheet: setSheet,
     closeSheet: () => setSheet(null),
     onAddContact: props.onAddContact,
-    onAddDealership: props.onAddDealership,
+    onSaveProspect: props.onSaveProspect,
     onClaimDealership: props.onClaimDealership,
     onOpenDealership: props.onOpenDealership
   };
@@ -219,7 +242,11 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
       {sheet?.kind === 'todo' && <TodoSheet onClose={close} />}
       {sheet?.kind === 'basket' && <BasketSheet onClose={close} />}
       {sheet?.kind === 'settings' && <SettingsSheet onClose={close} />}
-      {sheet?.kind === 'walkthrough' && <Walkthrough onClose={close} />}
+      {sheet?.kind === 'walkthrough' && <Walkthrough onClose={close} start={sheet.start} />}
+      {sheet?.kind === 'details' && <QuickViewSheet dealershipId={sheet.dealershipId} groupId={sheet.groupId} onClose={close} />}
+      {sheet?.kind === 'time' && <TimeSheet slotId={sheet.slotId} onClose={close} />}
+      {sheet?.kind === 'lunch' && <LunchSheet date={sheet.date} onClose={close} />}
+      {sheet?.kind === 'replan' && <ReplanSheet date={sheet.date} onClose={close} />}
 
       {state.toast && (
         <div

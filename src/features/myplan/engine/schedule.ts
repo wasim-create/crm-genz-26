@@ -11,7 +11,18 @@ import { dayOfWeek, format12h, toHHMM, toMin } from './time';
 export interface LayoutContext {
   home: LatLng;
   settings: EngineSettings;
+  /** Minutes to add to the rep's time to get the dealership's local time (time zones / DST). */
+  tzDiff?: (slot: PlanSlot) => number;
 }
+
+/** Local wall-clock minutes of an ISO timestamp (device time zone). */
+export const isoToLocalMin = (iso: string): number => {
+  const d = new Date(iso);
+  return d.getHours() * 60 + d.getMinutes();
+};
+
+/** Round up to the next 5 minutes. */
+export const roundUp5 = (min: number): number => Math.ceil(min / 5) * 5;
 
 export interface SlotTiming {
   start: number;
@@ -60,9 +71,7 @@ export interface DayLayout {
   warnings: DayWarning[];
 }
 
-const LUNCH_EARLIEST = 12 * 60;
-const LUNCH_LATEST = 14 * 60;
-const LUNCH_MIN = 30;
+const LUNCH_WINDOW = 60; // a flexible lunch can move up to an hour either way
 const AFTERNOON_START = 13 * 60;
 const MORNING_END = 12 * 60;
 
@@ -89,6 +98,9 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
   let cursor = toMin(s.dayStart);
   let location: LatLng = ctx.home;
   let lunchTaken = !s.lunch;
+  const lunchAt = toMin(s.lunchTime ?? '12:00');
+  const lunchLen = s.lunchDurationMin ?? 30;
+  const lunchFlexible = s.lunchFlexible ?? true;
   let driveMin = 0;
   let workMin = 0;
   let leaveBy: number | undefined;
@@ -100,11 +112,23 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
     const isVisit = slot.how === 'in_person' && slot.target.kind !== 'block';
     const live = isLive(slot.how) && slot.target.kind !== 'block';
 
-    // Lunch: taken before the next item once the day has passed noon.
-    if (!lunchTaken && i > 0 && cursor >= LUNCH_EARLIEST && cursor <= LUNCH_LATEST) {
-      rows.push({ kind: 'lunch', start: cursor, end: cursor + LUNCH_MIN });
-      cursor += LUNCH_MIN;
-      lunchTaken = true;
+    // Lunch. Flexible: taken in the first free moment from the preferred
+    // time (± 1 hour). Fixed: taken at its time, before anything that would
+    // run into it.
+    if (!lunchTaken && i > 0) {
+      const wouldEnd = cursor + slot.durationMin + 10;
+      if (lunchFlexible) {
+        if (cursor >= lunchAt - 15 && cursor <= lunchAt + LUNCH_WINDOW) {
+          rows.push({ kind: 'lunch', start: cursor, end: cursor + lunchLen });
+          cursor += lunchLen;
+          lunchTaken = true;
+        }
+      } else if (wouldEnd > lunchAt || cursor >= lunchAt) {
+        const ls = Math.max(cursor, lunchAt);
+        rows.push({ kind: 'lunch', start: ls, end: ls + lunchLen });
+        cursor = ls + lunchLen;
+        lunchTaken = true;
+      }
     }
 
     // Travel (visits only): drive from the previous visit or from home, plus parking.
@@ -121,16 +145,25 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
       rows.push({ kind: 'travel', toSlotId: slot.id, minutes: travel, miles, fromHome });
     }
 
+    // The dealership may be in another time zone: 10–4 is THEIR time.
+    const tz = ctx.tzDiff ? ctx.tzDiff(slot) : 0;
+    const liveStartRep = liveStart - tz;
+    const liveEndRep = liveEnd - tz;
     // Earliest the rep can physically be there…
     const reachable = cursor + travel;
     // …and earliest the engine would *suggest* (live contact waits for 10 AM).
     let earliest = reachable;
-    if (live) earliest = Math.max(earliest, liveStart);
+    if (live) earliest = Math.max(earliest, liveStartRep);
     if (slot.timeMode === 'afternoon') earliest = Math.max(earliest, AFTERNOON_START);
 
     let start = earliest;
-    const pinned = (slot.locked || slot.timeMode === 'exact') && slot.fixedTime;
-    if (pinned) {
+    const holdsTime = slot.locked || slot.autoPinned;
+    const pinned = (holdsTime || slot.timeMode === 'exact') && slot.fixedTime;
+    const actualStart = slot.checkInAt && (slot.status === 'in_progress' || slot.status === 'done') ? isoToLocalMin(slot.checkInAt) : undefined;
+    if (actualStart !== undefined) {
+      // What really happened wins.
+      start = actualStart;
+    } else if (pinned) {
       // A time the rep chose is respected (even outside 10–4, with a gentle
       // note below); we only complain if they can't physically make it.
       const fixed = toMin(slot.fixedTime);
@@ -141,27 +174,31 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
           slotId: slot.id,
           message: `You can't reach ${slot.target.name} by ${format12h(fixed)} — about ${late} min late.`
         });
-        start = slot.locked ? fixed : reachable;
+        start = holdsTime ? fixed : reachable;
       } else {
         start = fixed;
       }
     }
-    const end = start + slot.durationMin;
+    const actualEnd =
+      slot.status === 'done' && slot.completedAt && actualStart !== undefined ? Math.max(actualStart + 5, isoToLocalMin(slot.completedAt)) : undefined;
+    const end = actualEnd ?? start + slot.durationMin;
 
-    if (live && start < liveStart) {
+    if (actualStart !== undefined) {
+      // no warnings for what has already happened
+    } else if (live && start < liveStartRep) {
       warnings.push({
         code: 'outside_live',
         slotId: slot.id,
         message: `${slot.target.name} is at ${format12h(start)}. Dealerships are usually busy before 10 AM.`
       });
-    } else if (live && end > liveEnd) {
+    } else if (live && end > liveEndRep) {
       warnings.push({
         code: 'outside_live',
         slotId: slot.id,
         message: `${slot.target.name} ends at ${format12h(end)}. Dealerships are usually busy after 4 PM.`
       });
     }
-    if (slot.timeMode === 'morning' && start >= MORNING_END) {
+    if (actualStart === undefined && slot.timeMode === 'morning' && start >= MORNING_END) {
       warnings.push({
         code: 'morning_missed',
         slotId: slot.id,
@@ -185,7 +222,7 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
     rows.push({ kind: 'slot', slotId: slot.id, start, end });
     timings[slot.id] = { start, end, travelBefore: travel, driveMiles: miles };
     driveMin += travel;
-    workMin += slot.durationMin;
+    workMin += end - start;
     cursor = end;
 
     if (isVisit) location = slot.target.coords ?? location;
@@ -248,8 +285,9 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
  * Move a slot to a new position in the day's sequence. All other slots keep
  * their relative order and every slot gets a fresh orderIndex, so times are
  * always recalculated from the new order (this is what makes the ▲/▼ arrows
- * reliable). A moved slot that had an exact time becomes "anytime", unless
- * it is locked; locked slots never move.
+ * reliable). Swap rule: the moved slot takes over the start time of the slot
+ * it replaces (if that one had a set time) and the replaced slot follows
+ * after it. Locked slots never move.
  */
 export function reorderDay(daySlots: PlanSlot[], slotId: string, toIndex: number): PlanSlot[] {
   const sequence = daySlots.filter(isScheduled).filter(takesTime).sort(byOrder);
@@ -260,6 +298,9 @@ export function reorderDay(daySlots: PlanSlot[], slotId: string, toIndex: number
   const target = Math.max(0, Math.min(sequence.length - 1, toIndex));
   if (target === from) return daySlots;
 
+  const displaced = sequence[target];
+  const takeTime = displaced && !displaced.locked && displaced.status === 'planned' && (displaced.timeMode === 'exact' || displaced.autoPinned) && displaced.fixedTime;
+
   const next = [...sequence];
   next.splice(from, 1);
   next.splice(target, 0, moving);
@@ -267,8 +308,15 @@ export function reorderDay(daySlots: PlanSlot[], slotId: string, toIndex: number
   const updated = new Map<string, PlanSlot>();
   next.forEach((x, i) => {
     let slot: PlanSlot = { ...x, orderIndex: i };
-    if (x.id === slotId && x.timeMode === 'exact') {
-      slot = { ...slot, timeMode: 'flow', fixedTime: undefined };
+    if (x.id === slotId) {
+      slot = takeTime
+        ? { ...slot, timeMode: 'exact', fixedTime: displaced.fixedTime, autoPinned: false }
+        : x.timeMode === 'exact' || x.autoPinned
+          ? { ...slot, timeMode: 'flow', fixedTime: undefined, autoPinned: false }
+          : slot;
+    } else if (takeTime && x.id === displaced.id) {
+      // The replaced slot now simply follows after the moved one.
+      slot = { ...slot, timeMode: 'flow', fixedTime: undefined, autoPinned: false };
     }
     updated.set(x.id, slot);
   });
@@ -301,6 +349,8 @@ export function insertAt(daySlots: PlanSlot[], slot: PlanSlot, index: number): P
 export interface PlacementSuggestion {
   index: number;
   start: number;
+  /** Set when the slot must be held at this time (e.g. "from now" today). */
+  fixedTime?: string;
   label: string;
   reason: string;
   fits: boolean;
@@ -316,18 +366,32 @@ export function suggestPlacements(
   daySlots: PlanSlot[],
   candidate: PlanSlot,
   ctx: LayoutContext,
-  max = 3
+  max = 3,
+  opts: { notBefore?: number; onlyIndex?: number } = {}
 ): PlacementSuggestion[] {
   const base = layoutDay(daySlots, ctx);
   const baseWarnings = new Set(base.warnings.map(w => `${w.code}:${w.slotId ?? ''}`));
   const n = base.sequence.length;
-  const options: (PlacementSuggestion & { score: number })[] = [];
+  const options: (PlacementSuggestion & { score: number; fixedTime?: string })[] = [];
+  // Never insert before something that has already happened.
+  const byId = new Map(daySlots.map(x => [x.id, x]));
+  const lastStarted = base.sequence.map(id => byId.get(id)!).map(x => x.status !== 'planned').lastIndexOf(true);
 
-  for (let pos = 0; pos <= n; pos++) {
-    const trial = insertAt(daySlots, { ...candidate, timeMode: 'flow', fixedTime: undefined, locked: false }, pos);
-    const layout = layoutDay(trial, ctx);
-    const timing = layout.timings[candidate.id];
+  for (let pos = Math.max(0, lastStarted + 1); pos <= n; pos++) {
+    if (opts.onlyIndex !== undefined && pos !== opts.onlyIndex) continue;
+    let placed: PlanSlot = { ...candidate, timeMode: 'flow', fixedTime: undefined, locked: false, autoPinned: false };
+    let trial = insertAt(daySlots, placed, pos);
+    let layout = layoutDay(trial, ctx);
+    let timing = layout.timings[candidate.id];
     if (!timing) continue;
+    if (opts.notBefore !== undefined && timing.start < opts.notBefore) {
+      // Today: start from the current time, not earlier.
+      placed = { ...placed, timeMode: 'exact', fixedTime: toHHMM(roundUp5(opts.notBefore + timing.travelBefore)) };
+      trial = insertAt(daySlots, placed, pos);
+      layout = layoutDay(trial, ctx);
+      timing = layout.timings[candidate.id];
+      if (!timing) continue;
+    }
     const newWarnings = layout.warnings.filter(w => !baseWarnings.has(`${w.code}:${w.slotId ?? ''}`));
     const addedDrive = layout.driveMin - base.driveMin;
     const fits = newWarnings.length === 0;
@@ -353,7 +417,8 @@ export function suggestPlacements(
       reason,
       fits,
       addedDriveMin: addedDrive,
-      score
+      score,
+      fixedTime: placed.fixedTime
     });
   }
 
@@ -367,6 +432,135 @@ export function suggestPlacements(
     .filter(o => (seen.has(o.start) ? false : (seen.add(o.start), true)))
     .slice(0, max)
     .map(({ score, ...rest }) => rest);
+}
+
+// ---------- Smart drag ----------
+
+/**
+ * Smart drag: how far the card has been dragged (in pixels) relative to half
+ * the neighbouring card's height decides what happens. Short drags nudge the
+ * time in 5-minute steps (up to 15), medium in 10-minute steps (up to 60),
+ * long in 30-minute steps (up to 3 hours, landing on :00 / :30). Past half
+ * the neighbouring card it becomes a swap.
+ */
+export type DragIntent = { mode: 'none' } | { mode: 'nudge'; minutes: number } | { mode: 'swap'; direction: 'up' | 'down' };
+
+export function dragIntent(dyPx: number, halfNeighbourPx: number, hasNeighbour: boolean): DragIntent {
+  const dist = Math.abs(dyPx);
+  const half = Math.max(40, halfNeighbourPx);
+  if (hasNeighbour && dist >= half) return { mode: 'swap', direction: dyPx < 0 ? 'up' : 'down' };
+  const r = Math.min(dist / half, 0.999);
+  let minutes = 0;
+  if (r < 0.08) minutes = 0;
+  else if (r < 0.35) minutes = 5 * Math.min(3, 1 + Math.floor(((r - 0.08) / 0.27) * 3));
+  else if (r < 0.65) minutes = 20 + 10 * Math.min(4, Math.floor(((r - 0.35) / 0.3) * 5));
+  else minutes = 90 + 30 * Math.min(3, Math.floor(((r - 0.65) / 0.35) * 4));
+  if (minutes === 0) return { mode: 'none' };
+  return { mode: 'nudge', minutes: dyPx < 0 ? -minutes : minutes };
+}
+
+/** New start time for a nudge; 30-minute steps land on :00 or :30. */
+export function nudgedTime(startMin: number, deltaMin: number): number {
+  const raw = startMin + deltaMin;
+  if (Math.abs(deltaMin) >= 90) return deltaMin < 0 ? Math.floor(raw / 30) * 30 : Math.ceil(raw / 30) * 30;
+  return Math.round(raw / 5) * 5;
+}
+
+// ---------- Check-in, finishing and re-planning ----------
+
+/**
+ * On check-in, hold the times of everything still to come, so nothing moves
+ * by itself. The rep is asked at the end of the appointment (or uses
+ * "Re-plan the rest of my day") whether to move them.
+ */
+export function holdRestOfDay(daySlots: PlanSlot[], layout: DayLayout, afterSlotId: string): PlanSlot[] {
+  const idx = layout.sequence.indexOf(afterSlotId);
+  if (idx < 0) return daySlots;
+  const rest = new Set(layout.sequence.slice(idx + 1));
+  return daySlots.map(x =>
+    rest.has(x.id) && x.status === 'planned' && !x.locked && x.timeMode !== 'exact'
+      ? { ...x, timeMode: 'exact', fixedTime: toHHMM(layout.timings[x.id].start), autoPinned: true }
+      : x
+  );
+}
+
+export interface ReplanChange {
+  slotId: string;
+  name: string;
+  from: number;
+  to: number;
+}
+
+/**
+ * What "Re-plan the rest of my day" would change: held (auto-pinned) slots,
+ * and any of the rep's own set times that now overlap, are allowed to flow
+ * again from where the day actually is.
+ */
+export function replanPreview(daySlots: PlanSlot[], ctx: LayoutContext): { slots: PlanSlot[]; changes: ReplanChange[] } {
+  const current = layoutDay(daySlots, ctx);
+  const late = new Set(current.warnings.filter(w => w.code === 'late_for_fixed').map(w => w.slotId));
+  const freed = daySlots.map(x =>
+    x.status === 'planned' && !x.locked && (x.autoPinned || (x.timeMode === 'exact' && late.has(x.id)))
+      ? { ...x, timeMode: 'flow' as const, fixedTime: undefined, autoPinned: false }
+      : x
+  );
+  const next = layoutDay(freed, ctx);
+  const changes: ReplanChange[] = [];
+  for (const id of next.sequence) {
+    const a = current.timings[id];
+    const b = next.timings[id];
+    const x = daySlots.find(y => y.id === id)!;
+    if (a && b && x.status === 'planned' && Math.abs(a.start - b.start) >= 5) {
+      changes.push({ slotId: id, name: x.target.name, from: a.start, to: b.start });
+    }
+  }
+  return { slots: freed, changes };
+}
+
+// ---------- Duplicates ----------
+
+export interface DuplicateCheck {
+  level: 'block' | 'warn' | 'info';
+  message: string;
+  existingId?: string;
+}
+
+/**
+ * Same dealership + same contact method at an overlapping time is blocked.
+ * Same dealership on the same day (different method or time) is a warning.
+ * A teammate planning the same dealership that day is information only.
+ */
+export function checkDuplicates(params: {
+  candidate: Pick<PlanSlot, 'id' | 'how' | 'target' | 'durationMin'>;
+  start?: number;
+  date: string;
+  daySlots: PlanSlot[];
+  layout: DayLayout;
+  teammates?: { name: string; slots: PlanSlot[] }[];
+}): DuplicateCheck[] {
+  const { candidate, start, daySlots, layout } = params;
+  const out: DuplicateCheck[] = [];
+  const same = daySlots.filter(
+    x => x.id !== candidate.id && x.target.id === candidate.target.id && x.status !== 'skipped' && x.status !== 'basket'
+  );
+  for (const x of same) {
+    const t = layout.timings[x.id];
+    const isMsg = candidate.how === 'email' || candidate.how === 'text';
+    const overlap =
+      x.how === candidate.how &&
+      (isMsg || (t && start !== undefined && start < t.end && start + candidate.durationMin > t.start));
+    const when = t ? format12h(t.start) : x.sendTime ? format12h(x.sendTime) : 'that day';
+    if (overlap) {
+      out.push({ level: 'block', existingId: x.id, message: `You already have this ${x.how === 'in_person' ? 'visit' : x.how === 'phone' ? 'call' : x.how === 'meet' ? 'Google Meet' : x.how} with ${x.target.name} at ${when}.` });
+    } else {
+      out.push({ level: 'warn', existingId: x.id, message: `${x.target.name} is already in your plan at ${when} (${x.how === 'in_person' ? 'visit' : x.how}). Add this too?` });
+    }
+  }
+  for (const tm of params.teammates ?? []) {
+    const hit = tm.slots.find(x => x.target.id === candidate.target.id && x.date === params.date && x.status !== 'skipped');
+    if (hit) out.push({ level: 'info', message: `${tm.name} also has ${candidate.target.name} planned that day.` });
+  }
+  return out;
 }
 
 /** Position in the sequence for a slot the rep wants at a specific time. */

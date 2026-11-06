@@ -1,16 +1,4 @@
-import React from 'react';
-import {
-  DndContext,
-  DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  TouchSensor,
-  closestCenter,
-  useSensor,
-  useSensors
-} from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import React, { useRef, useState } from 'react';
 import {
   AlertTriangle,
   CalendarPlus,
@@ -25,14 +13,17 @@ import {
   MapPin,
   Phone,
   Plus,
+  RefreshCw,
   Send,
   Timer,
-  Video
+  Video,
+  X
 } from 'lucide-react';
 import { PlanSlot } from '../types';
-import { DayLayout, layoutDay } from '../engine/schedule';
-import { format12h, formatDayLong, formatDuration } from '../engine/time';
-import { arrowMove, reorderWithinDay, updateActionPoint, updateSlot, useMyPlanState } from '../data/store';
+import { DayLayout, dragIntent, holdRestOfDay, layoutDay, nudgedTime, replanPreview } from '../engine/schedule';
+import { addDays, format12h, formatDayLong, formatDuration, toHHMM } from '../engine/time';
+import { isClockChangeDay } from '../engine/timezones';
+import { arrowMove, updateActionPoint, updateSlot, upsertSlots, useMyPlanState } from '../data/store';
 import { Button, Card, EmptyState, SectionTitle } from './primitives';
 import { SlotCard } from './SlotCard';
 import { useMyPlan } from './context';
@@ -46,9 +37,21 @@ const FULLNESS_TEXT: Record<DayLayout['fullness'], { label: string; tone: string
   too_much: { label: 'Too much', tone: 'bg-rose-500', width: 'w-full' }
 };
 
+const TIP_KEY = 'apexdrive_myplan_drag_tip_seen';
+
+interface DragState {
+  id: string;
+  startY: number;
+  dy: number;
+  aboveId?: string;
+  belowId?: string;
+  aboveH: number;
+  belowH: number;
+}
+
 export const DayView: React.FC = () => {
   const ctx = useMyPlan();
-  const { date, today, daySlots, layout, readOnly, openSheet, viewUser, basket } = ctx;
+  const { date, today, daySlots, layout, readOnly, openSheet, viewUser, basket, repZone } = ctx;
   const slots = daySlots(date);
   const lay = layout(date);
   const byId = new Map(slots.map(s => [s.id, s]));
@@ -57,101 +60,267 @@ export const DayView: React.FC = () => {
   const skipped = slots.filter(s => s.status === 'skipped');
   const isPast = date < today;
   const isToday = date === today;
+  const editable = !readOnly && !isPast;
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const refs = useRef(new Map<string, HTMLLIElement>());
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const [tipSeen, setTipSeen] = useState(() => {
+    try {
+      return localStorage.getItem(TIP_KEY) === '1';
+    } catch {
+      return true;
+    }
+  });
+  const dismissTip = () => {
+    setTipSeen(true);
+    try {
+      localStorage.setItem(TIP_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  };
 
-  const onDragEnd = (e: DragEndEvent) => {
-    if (!e.over || e.active.id === e.over.id) return;
-    const toIndex = lay.sequence.indexOf(String(e.over.id));
-    const moving = byId.get(String(e.active.id));
-    if (toIndex < 0 || !moving) return;
-    reorderWithinDay(viewUser.id, date, moving.id, toIndex, `Moved ${moving.target.name}. Times updated.`);
+  // ----- smart drag -----
+  const intentFor = (d: DragState) => {
+    const neighbourH = d.dy < 0 ? d.aboveH : d.belowH;
+    const hasNeighbour = d.dy < 0 ? !!d.aboveId : !!d.belowId;
+    return dragIntent(d.dy, neighbourH / 2, hasNeighbour);
+  };
+
+  const nudgePreview = (slot: PlanSlot, minutes: number) => {
+    const start = lay.timings[slot.id]?.start ?? 600;
+    const desired = nudgedTime(start, minutes);
+    const trialSlots = slots.map(s => (s.id === slot.id ? { ...s, timeMode: 'exact' as const, fixedTime: toHHMM(desired), autoPinned: false } : s));
+    const trial = layoutDay(trialSlots, ctx.layoutCtx(date));
+    const actual = trial.timings[slot.id]?.start ?? desired;
+    const pushed = lay.sequence.filter(id => id !== slot.id && (trial.timings[id]?.start ?? 0) - (lay.timings[id]?.start ?? 0) >= 5).length;
+    const late = trial.warnings.some(w => w.code === 'late_for_fixed' && !lay.warnings.some(b => b.code === w.code && b.slotId === w.slotId));
+    return { desired, actual, pushed, late };
+  };
+
+  const startDrag = (e: React.PointerEvent<HTMLButtonElement>, slot: PlanSlot) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const idx = lay.sequence.indexOf(slot.id);
+    const aboveId = lay.sequence[idx - 1];
+    const belowId = lay.sequence[idx + 1];
+    const h = (id?: string) => (id ? refs.current.get(id)?.offsetHeight ?? 180 : 180);
+    setDrag({ id: slot.id, startY: e.clientY, dy: 0, aboveId, belowId, aboveH: h(aboveId), belowH: h(belowId) });
+    if (!tipSeen) dismissTip();
+  };
+
+  const moveDrag = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!drag) return;
+    const limit = Math.max(drag.aboveH, drag.belowH) * 0.75;
+    setDrag({ ...drag, dy: Math.max(-limit, Math.min(limit, e.clientY - drag.startY)) });
+  };
+
+  const endDrag = () => {
+    if (!drag) return;
+    const slot = byId.get(drag.id);
+    const intent = intentFor(drag);
+    setDrag(null);
+    if (!slot) return;
+    if (intent.mode === 'swap') {
+      const other = byId.get((intent.direction === 'up' ? drag.aboveId : drag.belowId)!);
+      arrowMove(viewUser.id, date, slot.id, intent.direction, `Swapped ${slot.target.name} with ${other?.target.name ?? 'the next stop'}. Times updated.`);
+    } else if (intent.mode === 'nudge') {
+      const p = nudgePreview(slot, intent.minutes);
+      updateSlot(
+        slot.id,
+        { timeMode: 'exact', fixedTime: toHHMM(p.actual), autoPinned: false },
+        { message: `${slot.target.name} now ${format12h(p.actual)}${p.pushed ? ` · ${p.pushed} later stop${p.pushed === 1 ? '' : 's'} moved` : ''}` }
+      );
+    }
+  };
+
+  const dragLabel = (slot: PlanSlot): { text: string; tone: string } | null => {
+    if (!drag || drag.id !== slot.id) return null;
+    const intent = intentFor(drag);
+    if (intent.mode === 'none') return { text: 'Drag a little to change the time · further to swap', tone: 'bg-slate-800' };
+    if (intent.mode === 'swap') {
+      const other = byId.get((intent.direction === 'up' ? drag.aboveId : drag.belowId)!);
+      return { text: `↕ Release to swap with ${other?.target.name ?? 'the next stop'}`, tone: 'bg-violet-700' };
+    }
+    const p = nudgePreview(slot, intent.minutes);
+    const mins = Math.abs(intent.minutes);
+    const what = `${mins >= 60 && mins % 60 === 0 ? `${mins / 60} hr` : `${mins} min`} ${intent.minutes < 0 ? 'earlier' : 'later'}`;
+    if (p.actual !== p.desired) return { text: `Earliest possible: ${format12h(p.actual)}`, tone: 'bg-amber-600' };
+    return {
+      text: `${format12h(p.actual)} · ${what}${p.pushed ? ` · moves ${p.pushed} later stop${p.pushed === 1 ? '' : 's'}` : ''}${p.late ? ' · overlaps a set time' : ''}`,
+      tone: p.late ? 'bg-amber-600' : 'bg-blue-700'
+    };
   };
 
   const arrow = (slot: PlanSlot, dir: 'up' | 'down') =>
     arrowMove(viewUser.id, date, slot.id, dir, `Moved ${slot.target.name} ${dir === 'up' ? 'earlier' : 'later'}. Times updated.`);
 
+  // ----- banners -----
+  const replan = isToday && !readOnly ? replanPreview(slots, ctx.layoutCtx(date)) : { changes: [] as unknown[] };
+  const clockToday = isClockChangeDay(repZone, date);
+  const clockTomorrow = isClockChangeDay(repZone, addDays(date, 1));
+
+  // ----- timeline rows (with "+ Add here" between stops) -----
+  const items: React.ReactNode[] = [];
+  const rows = lay.rows;
+  let lastSlotK = -1;
+  rows.forEach((row, i) => {
+    if (row.kind === 'travel') {
+      if (row.minutes > 0)
+        items.push(
+          <li key={`t${i}`} className="flex items-center gap-2 py-1.5 pl-6 text-[15px] text-slate-500">
+            <span className="h-6 border-l-2 border-dashed border-slate-300" />
+            <Car className="h-4 w-4" />
+            <span>
+              {row.fromHome ? 'Drive from home' : 'Drive'} · {formatDuration(row.minutes - ctx.engine.parkingMin)}
+              {row.miles > 0 ? ` (${Math.round(row.miles * 1.3)} mi)` : ''} + parking
+            </span>
+          </li>
+        );
+      return;
+    }
+    if (row.kind === 'lunch') {
+      items.push(
+        <li key={`l${i}`} className="py-1 pl-6">
+          <button
+            type="button"
+            disabled={!editable}
+            onClick={() => openSheet({ kind: 'lunch', date })}
+            className="flex min-h-[44px] items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white px-3 text-[15px] text-slate-600 hover:border-blue-400 disabled:hover:border-slate-300"
+          >
+            <Coffee className="h-4 w-4" />
+            Lunch {format12h(row.start)} – {format12h(row.end)}
+            {editable && <span className="font-semibold text-blue-700">· Change</span>}
+          </button>
+        </li>
+      );
+      return;
+    }
+    if (row.kind === 'home') {
+      items.push(
+        <li key={`h${i}`} className="flex items-center gap-2 py-1.5 pl-6 text-[15px] text-slate-500">
+          <span className="h-6 border-l-2 border-dashed border-slate-300" />
+          <Home className="h-4 w-4" />
+          <span>
+            Drive home · {formatDuration(row.minutes)} · home around {format12h(row.at)}
+          </span>
+        </li>
+      );
+    } else {
+      const slot = byId.get(row.slotId);
+      if (!slot) return;
+      const idx = lay.sequence.indexOf(slot.id);
+      const canDrag = editable && !slot.locked && slot.status === 'planned';
+      const label = dragLabel(slot);
+      const dragging = drag?.id === slot.id;
+      items.push(
+        <li
+          key={slot.id}
+          ref={el => {
+            if (el) refs.current.set(slot.id, el);
+            else refs.current.delete(slot.id);
+          }}
+          className="relative"
+          style={dragging ? { transform: `translateY(${drag!.dy}px)`, zIndex: 30 } : undefined}
+        >
+          {label && (
+            <div className={`pointer-events-none absolute -top-11 left-1/2 z-40 -translate-x-1/2 whitespace-nowrap rounded-xl px-3 py-2 text-[15px] font-semibold text-white shadow-lg ${label.tone}`} role="status">
+              {label.text}
+            </div>
+          )}
+          <div className={dragging ? 'rounded-2xl shadow-2xl ring-2 ring-blue-400' : ''}>
+            <SlotCard
+              slot={slot}
+              start={row.start}
+              end={row.end}
+              canMoveUp={idx > 0}
+              canMoveDown={idx < lay.sequence.length - 1}
+              onMoveUp={editable ? () => arrow(slot, 'up') : undefined}
+              onMoveDown={editable ? () => arrow(slot, 'down') : undefined}
+              dragHandle={
+                canDrag
+                  ? {
+                      onPointerDown: e => startDrag(e, slot),
+                      onPointerMove: moveDrag,
+                      onPointerUp: endDrag,
+                      onPointerCancel: () => setDrag(null)
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        </li>
+      );
+    }
+    // "+ Add here" after a stop (and its drive home), when another stop follows.
+    const next = rows[i + 1];
+    const lastIdx = row.kind === 'slot' ? lay.sequence.indexOf(row.slotId) : -1;
+    const isEndOfGroup = row.kind === 'home' || (row.kind === 'slot' && next?.kind !== 'home');
+    if (row.kind === 'slot') lastSlotK = lastIdx;
+    const k = lastSlotK;
+    if (editable && isEndOfGroup && k >= 0 && k < lay.sequence.length - 1) {
+      const nextId = lay.sequence[k + 1];
+      const free = lay.timings[nextId].start - lay.timings[nextId].travelBefore - (row.kind === 'home' ? row.at : lay.timings[lay.sequence[k]].end);
+      items.push(
+        <li key={`add${i}`} className="py-1 pl-6">
+          <button
+            type="button"
+            onClick={() => openSheet({ kind: 'add', preset: { date, insertIndex: k + 1, nonce: Date.now() } })}
+            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-dashed border-blue-300 bg-blue-50/60 px-3 text-[14px] font-semibold text-blue-800 hover:bg-blue-100"
+          >
+            <Plus className="h-4 w-4" /> Add here{free >= 10 ? ` · ${formatDuration(free)} free` : ''}
+          </button>
+        </li>
+      );
+    }
+  });
+
   return (
     <div className="pb-32">
+      {(clockToday || clockTomorrow) && (
+        <Card className="mb-3 flex items-center gap-2 border-sky-200 bg-sky-50 p-3 text-[15px] text-sky-950">
+          <Clock className="h-5 w-5 text-sky-700" />
+          {clockToday
+            ? `Clocks ${clockToday === 'back' ? 'went back' : 'went forward'} an hour last night. The times shown are already the new time.`
+            : `Clocks ${clockTomorrow === 'back' ? 'go back' : 'go forward'} an hour tonight. Tomorrow's times are already adjusted.`}
+        </Card>
+      )}
+
+      {replan.changes.length > 0 && (
+        <Card className="mb-3 flex flex-wrap items-center justify-between gap-3 border-amber-300 bg-amber-50 p-4">
+          <div className="flex items-center gap-2 text-[16px] text-amber-950">
+            <RefreshCw className="h-5 w-5 text-amber-700" />
+            Your day has changed since you planned it — {replan.changes.length} stop{replan.changes.length === 1 ? '' : 's'} could move.
+          </div>
+          <Button variant="primary" onClick={() => openSheet({ kind: 'replan', date })}>
+            Re-plan the rest of my day
+          </Button>
+        </Card>
+      )}
+
       <DaySummary layout={lay} slots={slots} />
 
       {isToday && !readOnly && <NextCard sequence={sequence} messages={messages} layout={lay} />}
 
       {(sequence.length > 0 || messages.length > 0) && (
         <>
-          <SectionTitle
-            right={
-              !readOnly && !isPast && sequence.length > 1 ? (
-                <span className="text-[14px] text-slate-500">Use ▲ ▼ or drag to change the order</span>
-              ) : undefined
-            }
-          >
-            Visits, calls &amp; meetings
-          </SectionTitle>
+          <SectionTitle>Visits, calls &amp; meetings</SectionTitle>
+          {editable && !tipSeen && sequence.length > 1 && (
+            <Card className="mb-3 flex items-start gap-3 border-blue-200 bg-blue-50 p-3 text-[15px] text-blue-950">
+              <span className="flex-1">
+                <span className="font-bold">Tip:</span> use ▲ ▼ to swap the order. Or hold the ⋮⋮ handle and drag: a little to change the time (5, 10 or 30 minutes), further to swap with the next stop.
+              </span>
+              <button type="button" aria-label="Dismiss tip" onClick={dismissTip} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-blue-100">
+                <X className="h-5 w-5" />
+              </button>
+            </Card>
+          )}
           {sequence.length === 0 ? (
             <Card className="p-4 text-[16px] text-slate-600">No visits or calls on this day — only messages.</Card>
           ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <SortableContext items={lay.sequence} strategy={verticalListSortingStrategy}>
-                <ol className="space-y-0" aria-label="Day timeline">
-                  {lay.rows.map((row, i) => {
-                    if (row.kind === 'travel') {
-                      if (row.minutes === 0) return null;
-                      return (
-                        <li key={`t${i}`} className="flex items-center gap-2 py-1.5 pl-6 text-[15px] text-slate-500">
-                          <span className="h-6 border-l-2 border-dashed border-slate-300" />
-                          <Car className="h-4 w-4" />
-                          <span>
-                            {row.fromHome ? 'Drive from home' : 'Drive'} · {formatDuration(row.minutes - ctx.engine.parkingMin)}
-                            {row.miles > 0 ? ` (${Math.round(row.miles * 1.3)} mi)` : ''} + parking
-                          </span>
-                        </li>
-                      );
-                    }
-                    if (row.kind === 'lunch') {
-                      return (
-                        <li key={`l${i}`} className="flex items-center gap-2 py-1.5 pl-6 text-[15px] text-slate-500">
-                          <span className="h-6 border-l-2 border-dashed border-slate-300" />
-                          <Coffee className="h-4 w-4" />
-                          <span>Lunch break · {format12h(row.start)}</span>
-                        </li>
-                      );
-                    }
-                    if (row.kind === 'home') {
-                      return (
-                        <li key={`h${i}`} className="flex items-center gap-2 py-1.5 pl-6 text-[15px] text-slate-500">
-                          <span className="h-6 border-l-2 border-dashed border-slate-300" />
-                          <Home className="h-4 w-4" />
-                          <span>
-                            Drive home · {formatDuration(row.minutes)} · home around {format12h(row.at)}
-                          </span>
-                        </li>
-                      );
-                    }
-                    const slot = byId.get(row.slotId);
-                    if (!slot) return null;
-                    const idx = lay.sequence.indexOf(slot.id);
-                    return (
-                      <SortableSlot
-                        key={slot.id}
-                        slot={slot}
-                        start={row.start}
-                        end={row.end}
-                        disabled={readOnly || isPast || slot.locked || slot.status === 'done'}
-                        canMoveUp={idx > 0}
-                        canMoveDown={idx < lay.sequence.length - 1}
-                        onMoveUp={isPast ? undefined : () => arrow(slot, 'up')}
-                        onMoveDown={isPast ? undefined : () => arrow(slot, 'down')}
-                      />
-                    );
-                  })}
-                </ol>
-              </SortableContext>
-            </DndContext>
+            <ol className="space-y-0" aria-label="Day timeline">
+              {items}
+            </ol>
           )}
 
           {messages.length > 0 && (
@@ -181,7 +350,7 @@ export const DayView: React.FC = () => {
 
       <DayTodo />
 
-      {!readOnly && !isPast && basket.length > 0 && sequence.length + messages.length > 0 && (
+      {editable && basket.length > 0 && sequence.length + messages.length > 0 && (
         <Card className="mt-6 flex flex-wrap items-center justify-between gap-3 p-4">
           <div className="flex items-center gap-3">
             <Inbox className="h-6 w-6 text-slate-500" />
@@ -196,48 +365,19 @@ export const DayView: React.FC = () => {
         </Card>
       )}
 
-      {!readOnly && !isPast && (
-        <div className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 md:static md:mt-8 md:justify-start md:px-0">
-          <Button
-            variant="primary"
-            size="lg"
-            className="w-full max-w-md rounded-2xl shadow-lg md:w-auto"
-            onClick={() => openSheet({ kind: 'add', preset: { date } })}
-            icon={<Plus className="h-6 w-6" />}
+      {editable && (
+        <div className="fixed bottom-4 right-4 z-40 md:hidden">
+          <button
+            type="button"
+            aria-label="Add to my plan"
+            onClick={() => openSheet({ kind: 'add', preset: { date, nonce: Date.now() } })}
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-white shadow-xl active:scale-95"
           >
-            Add to my plan
-          </Button>
+            <Plus className="h-8 w-8" />
+          </button>
         </div>
       )}
     </div>
-  );
-};
-
-const SortableSlot: React.FC<{
-  slot: PlanSlot;
-  start: number;
-  end: number;
-  disabled: boolean;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-}> = ({ slot, start, end, disabled, ...rest }) => {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: slot.id, disabled });
-  return (
-    <li
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 20 : undefined, position: 'relative' }}
-      className={isDragging ? 'opacity-90 shadow-xl' : ''}
-    >
-      <SlotCard
-        slot={slot}
-        start={start}
-        end={end}
-        dragHandle={disabled ? undefined : { ...attributes, ...listeners, ref: setActivatorNodeRef }}
-        {...rest}
-      />
-    </li>
   );
 };
 
@@ -373,9 +513,28 @@ const NextCard: React.FC<{ sequence: PlanSlot[]; messages: PlanSlot[]; layout: D
   const timing = layout.timings[target.id];
   const contact = contacts.find(c => c.id === target.contactIds[0]);
 
+  // "I've arrived": the real time becomes this slot's start. Everything still
+  // to come keeps its time (nothing moves by itself) until the rep re-plans.
+  const checkIn = () => {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const planned = timing?.start ?? nowMin;
+    const diff = nowMin - planned;
+    const held = holdRestOfDay(ctx.daySlots(ctx.date), layout, target.id).map(s =>
+      s.id === target.id ? { ...s, status: 'in_progress' as const, checkInAt: now.toISOString() } : s
+    );
+    const msg =
+      diff > 5
+        ? `Checked in — ${formatDuration(diff)} later than planned. The rest of your day stays put until you re-plan.`
+        : diff < -5
+          ? `Checked in — ${formatDuration(-diff)} early.`
+          : `Checked in at ${target.target.name}, on time.`;
+    upsertSlots(held, msg);
+  };
+
   const extend = (minutes: number) => {
     const extended = ctx.daySlots(ctx.date).map(s => (s.id === target.id ? { ...s, durationMin: s.durationMin + minutes } : s));
-    const after = layoutDay(extended, { home: ctx.home, settings: ctx.engine });
+    const after = layoutDay(extended, ctx.layoutCtx(ctx.date));
     const newWarning = after.warnings.find(w => !layout.warnings.some(b => b.code === w.code && b.slotId === w.slotId));
     const finish = after.homeAt ?? after.finish;
     const msg = newWarning
@@ -405,15 +564,12 @@ const NextCard: React.FC<{ sequence: PlanSlot[]; messages: PlanSlot[]; layout: D
             href={mapsUrl(target)}
             target="_blank"
             rel="noreferrer"
+            onClick={() => updateSlot(target.id, { leftAt: new Date().toISOString() }, { undoable: false })}
             className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-[17px] font-semibold text-white shadow-sm hover:bg-blue-700"
           >
             <MapPin className="h-5 w-5" /> Start driving
           </a>
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={() => updateSlot(target.id, { status: 'in_progress', checkInAt: new Date().toISOString() }, { message: `Checked in at ${target.target.name}` })}
-          >
+          <Button variant="secondary" size="lg" onClick={checkIn}>
             I've arrived
           </Button>
         </>
@@ -480,6 +636,7 @@ const NextCard: React.FC<{ sequence: PlanSlot[]; messages: PlanSlot[]; layout: D
         start={timing?.start}
         end={timing?.end}
         highlight
+        hideActions
         footer={
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {actions}

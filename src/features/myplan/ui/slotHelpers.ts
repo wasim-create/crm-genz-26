@@ -126,7 +126,8 @@ export const howVerb: Record<HowType, string> = {
 export const describeSlot = (slot: PlanSlot) =>
   slot.target.kind === 'block' ? slot.target.name : `${HOW_LABEL[slot.how]} — ${slot.target.name}`;
 
-export const mapsUrl = (slot: PlanSlot) =>
-  slot.target.coords
-    ? `https://www.google.com/maps/dir/?api=1&destination=${slot.target.coords.lat},${slot.target.coords.lng}`
-    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${slot.target.name} ${slot.target.city ?? ''} ${slot.target.state ?? ''}`)}`;
+/** Google Maps directions (opens the Google Maps app on phones). Uses the street address when we have it. */
+export const mapsUrl = (slot: PlanSlot) => {
+  const dest = slot.target.address || (slot.target.coords ? `${slot.target.coords.lat},${slot.target.coords.lng}` : `${slot.target.name} ${slot.target.city ?? ''} ${slot.target.state ?? ''}`);
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+};

@@ -25,6 +25,9 @@ export interface SlotTarget {
   city?: string;
   state?: string;
   coords?: LatLng;
+  address?: string;
+  /** IANA time zone of the dealership (e.g. America/Phoenix). */
+  timeZone?: string;
   /** For group targets: the rooftops this conversation covers. */
   rooftopIds?: string[];
 }
@@ -78,6 +81,8 @@ export interface PlanSlot {
   durationMin: number;
   durationOverridden?: boolean;
   locked?: boolean;
+  /** Time held in place by the system after a check-in, until the rep re-plans. */
+  autoPinned?: boolean;
 
   /** Email / text: when it should go out (HH:MM). */
   sendTime?: string;
@@ -90,6 +95,7 @@ export interface PlanSlot {
   managerPriorityFrom?: string;
   assistManagerName?: string;
 
+  leftAt?: string;
   checkInAt?: string;
   completedAt?: string;
   spokeWithContactIds?: string[];
@@ -130,10 +136,22 @@ export interface ReminderSettings {
   forceShow?: boolean;
 }
 
+export interface LunchSettings {
+  enabled: boolean;
+  /** Preferred start, HH:MM */
+  time: string;
+  durationMin: number;
+  /** Flexible = the engine fits it around visits within ±1 hour of the preferred time. */
+  flexible: boolean;
+}
+
 export interface MyPlanSettings {
   dayStart: string;
   preferredFinish: string;
   lunch: boolean;
+  lunchTime: string;
+  lunchDurationMin: number;
+  lunchFlexible: boolean;
   biggerText: boolean;
   reminder: ReminderSettings;
   reminderAsked: boolean;
@@ -145,6 +163,9 @@ export interface EngineSettings {
   dayStart: string;
   preferredFinish: string;
   lunch: boolean;
+  lunchTime?: string;
+  lunchDurationMin?: number;
+  lunchFlexible?: boolean;
   liveStart: string;
   liveEnd: string;
   homeBandMiles: number;

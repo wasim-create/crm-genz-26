@@ -26,6 +26,8 @@ import { MyPlanModule } from './features/myplan/MyPlanModule';
 import { DealershipPlanPanel } from './features/myplan/DealershipPlanPanel';
 import { resetMyPlan, setCrmBridge } from './features/myplan/data/store';
 import type { WritebackResult } from './features/myplan/services/writeback';
+import { ProspectForm, ProspectFormResult } from './components/forms/ProspectForm';
+import { ContactForm } from './components/forms/ContactForm';
 import { PipelineView } from './components/views/PipelineView';
 import { ProspectPoolView } from './components/views/ProspectPoolView';
 import { ClientPortfolioView } from './components/views/ClientPortfolioView';
@@ -67,6 +69,9 @@ export default function App() {
 
   // Modals state
   const [selectedDealership, setSelectedDealership] = useState<Dealership | null>(null);
+  // Shared "Add New Prospect / Client" and "Add Contact" forms (used everywhere)
+  const [prospectForm, setProspectForm] = useState<{ mode: 'prospect' | 'client'; radar?: boolean } | null>(null);
+  const [contactFormFor, setContactFormFor] = useState<Dealership | null>(null);
   const [planRequest, setPlanRequest] = useState<{ dealershipId: string; planLater?: boolean; nonce: number } | null>(null);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isWorkspaceSyncOpen, setIsWorkspaceSyncOpen] = useState(false);
@@ -106,6 +111,44 @@ export default function App() {
 
     loadData();
   }, []);
+
+  // Saving from the shared prospect form: the dealership, any new / updated
+  // dealer group, and placeholder rooftops for a new group.
+  const saveProspectResult = (r: ProspectFormResult, who: User) => {
+    const added = [r.dealership, ...r.placeholders];
+    setDealerships(prev => [...added, ...prev]);
+    added.forEach(d => storage.saveDealership(d));
+    const g = r.newGroup ?? r.updatedGroup;
+    if (g) {
+      setGroups(prev => (prev.some(x => x.id === g.id) ? prev.map(x => (x.id === g.id ? g : x)) : [g, ...prev]));
+      storage.saveGroup(g);
+    }
+    const ref = r.dealership.referral;
+    const audit: AuditLogRecord = {
+      id: `aud_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      userId: who.id,
+      userName: `${who.firstName} ${who.lastName}`,
+      dealershipId: r.dealership.id,
+      dealershipName: r.dealership.dealershipName,
+      action: r.dealership.stage === 'Client' ? 'Client added directly' : 'Prospect added',
+      details: [
+        `Source: ${r.dealership.source}`,
+        ref?.internalName ? `Internal referral: ${ref.internalName}` : '',
+        ref?.externalName ? `External referral: ${ref.externalName}${ref.externalCompany ? ` (${ref.externalCompany})` : ''}${ref.relationship ? ` · ${ref.relationship}` : ''}` : '',
+        r.newGroup ? `New dealer group: ${r.newGroup.name} (${r.placeholders.length} placeholder rooftop${r.placeholders.length === 1 ? '' : 's'})` : ''
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    };
+    setAuditLogs(prev => [audit, ...prev]);
+    storage.saveAuditLog(audit);
+  };
+
+  const saveContact = (c: Contact) => {
+    setContacts(prev => (prev.some(x => x.id === c.id) ? prev.map(x => (x.id === c.id ? c : x)) : [c, ...prev]));
+    storage.saveContact(c);
+  };
 
   // My Plan → CRM write-back ("records fill themselves"). Uses functional
   // updates so several write-backs in a row never overwrite each other.
@@ -156,6 +199,7 @@ export default function App() {
     if (u.role === 'finance') setCurrentView('finance');
     else if (u.role === 'manager') setCurrentView('assists');
     else if (u.role === 'executive' || u.role === 'owner') setCurrentView('executive_desk');
+    else if (u.role === 'admin') setCurrentView('settings');
     
     showToast(`Switched persona to ${u.firstName} ${u.lastName} (${u.role})`);
   };
@@ -536,7 +580,7 @@ export default function App() {
       {/* Top Navbar with Persistent Game Strip */}
       <Navbar
         currentUser={currentUser}
-        allUsers={users}
+        allUsers={users.filter(u => u.active !== false)}
         onSelectUser={handleSelectUser}
         onOpenCommand={() => setIsCommandOpen(true)}
         onOpenMobileWorkDay={() => setCurrentView('planner')}
@@ -573,15 +617,13 @@ export default function App() {
               gameRules={gameRules}
               productBonuses={productBonuses}
               priorities={managerPriorities}
+              activities={activities}
               request={planRequest}
               onRequestHandled={() => setPlanRequest(null)}
-              onAddContact={(c) => {
-                setContacts(prev => [c, ...prev]);
-                storage.saveContact(c);
-              }}
-              onAddDealership={(d) => {
-                setDealerships(prev => [d, ...prev]);
-                storage.saveDealership(d);
+              onAddContact={saveContact}
+              onSaveProspect={(r) => {
+                saveProspectResult(r, currentUser);
+                showToast(`Added ${r.dealership.dealershipName}`);
               }}
               onClaimDealership={(d) => handleClaimDealership(d, 'Planned from My Plan')}
               onOpenDealership={(d) => setSelectedDealership(d)}
@@ -604,7 +646,7 @@ export default function App() {
               currentUser={currentUser}
               onClaimDealership={handleClaimDealership}
               onOpenDealership={(d) => setSelectedDealership(d)}
-              onAddNewProspect={(newDeal) => {}}
+              onAddNewProspect={(opts) => setProspectForm({ mode: 'prospect', radar: opts?.radar })}
               isPoolOnly={false}
             />
           )}
@@ -615,7 +657,7 @@ export default function App() {
               currentUser={currentUser}
               onClaimDealership={handleClaimDealership}
               onOpenDealership={(d) => setSelectedDealership(d)}
-              onAddNewProspect={(newDeal) => {}}
+              onAddNewProspect={(opts) => setProspectForm({ mode: 'prospect', radar: opts?.radar })}
               isPoolOnly={true}
             />
           )}
@@ -629,6 +671,8 @@ export default function App() {
               onLogKeyfetchTopup={handleLogKeyfetchTopup}
               onUpdateUpsell={(did, up) => {}}
               onCreateUpsell={handleCreateUpsell}
+              onAddClient={() => setProspectForm({ mode: 'client' })}
+              allUsers={users}
             />
           )}
 
@@ -737,6 +781,12 @@ export default function App() {
               }}
               onUpdateFISystems={setFiSystems}
               onNavigateToGameRules={() => setCurrentView('game_rules')}
+              onUpdateUsers={(list, message) => {
+                setUsers(list);
+                storage.saveUsers(list);
+                showToast(message);
+              }}
+              knownLocations={dealerships}
             />
           )}
         </main>
@@ -775,6 +825,7 @@ export default function App() {
             setCurrentView('planner');
           }}
           planPanel={<DealershipPlanPanel dealership={selectedDealership} user={currentUser} />}
+          onRequestAddContact={(d) => setContactFormFor(d)}
         />
       )}
 
@@ -801,6 +852,45 @@ export default function App() {
             }, 1000);
           }}
           isSyncing={isSyncing}
+        />
+      )}
+      {prospectForm && (
+        <ProspectForm
+          mode={prospectForm.mode}
+          startWithRadar={prospectForm.radar}
+          currentUser={currentUser}
+          users={users}
+          dealerships={dealerships}
+          groups={groups}
+          catalog={catalog}
+          onCancel={() => setProspectForm(null)}
+          onOpenExisting={(d) => {
+            setProspectForm(null);
+            setSelectedDealership(d);
+          }}
+          onSave={(r) => {
+            saveProspectResult(r, currentUser);
+            setProspectForm(null);
+            setSelectedDealership(r.dealership);
+            showToast(
+              `${r.dealership.stage === 'Client' ? 'Client' : 'Prospect'} added: ${r.dealership.dealershipName}${r.placeholders.length ? ` + ${r.placeholders.length} placeholder rooftop${r.placeholders.length === 1 ? '' : 's'}` : ''}. Add the first contact from the Contacts tab.`
+            );
+          }}
+        />
+      )}
+
+      {contactFormFor && (
+        <ContactForm
+          dealershipId={contactFormFor.id}
+          dealershipName={contactFormFor.dealershipName}
+          existingContacts={contacts}
+          currentUser={currentUser}
+          onCancel={() => setContactFormFor(null)}
+          onSave={(c) => {
+            saveContact(c);
+            setContactFormFor(null);
+            showToast(`Contact added: ${c.firstName} ${c.lastName}`);
+          }}
         />
       )}
     </div>

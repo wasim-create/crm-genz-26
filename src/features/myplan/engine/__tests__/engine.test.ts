@@ -115,21 +115,16 @@ test('drive between visits is dealership-to-dealership', () => {
   assert.equal(layout.timings[b.id].travelBefore, expected);
 });
 
-test('▼ arrow swap gives BOTH slots new times from their new positions (bug fix)', () => {
+test('▼ arrow swap: both slots get new times from their new positions (bug fix)', () => {
   const a = slot({ name: 'Plano', coords: PLANO, orderIndex: 0, timeMode: 'exact', fixedTime: '10:00' });
   const b = slot({ name: 'Fort Worth', coords: FORT_WORTH, orderIndex: 1, timeMode: 'exact', fixedTime: '13:30' });
-  const before = layoutDay([a, b], ctx);
-  assert.equal(format12h(before.timings[b.id].start), '1:30 PM');
-
   const swapped = moveByArrow([a, b], a.id, 'down');
   const after = layoutDay(swapped, ctx);
   assert.deepEqual(after.sequence, [b.id, a.id]);
-  // Fort Worth keeps its exact 1:30 PM (it was not the one moved)…
-  assert.equal(format12h(after.timings[b.id].start), '1:30 PM');
-  // …and Plano now flows after it instead of keeping a stale 10:00 AM.
-  assert.ok(after.timings[a.id].start > after.timings[b.id].end);
-  const movedSlot = swapped.find(x => x.id === a.id)!;
-  assert.equal(movedSlot.timeMode, 'flow');
+  // Plano moved down into Fort Worth's 1:30 PM slot…
+  assert.equal(format12h(after.timings[a.id].start), '1:30 PM');
+  // …and Fort Worth now comes first instead of keeping a stale time.
+  assert.equal(format12h(after.timings[b.id].start), '10:00 AM');
 });
 
 test('arrows on flowing slots: the new first slot does NOT keep its old later time', () => {
@@ -251,4 +246,96 @@ test('week helpers', () => {
   assert.equal(startOfWeek('2026-11-08'), '2026-11-02'); // Sunday → previous Monday
   assert.equal(startOfWeek('2026-11-06'), '2026-11-02');
   assert.equal(toMin('13:45'), 825);
+});
+
+// ---------- v2 behaviours ----------
+import { checkDuplicates, dragIntent, holdRestOfDay, nudgedTime, replanPreview } from '../schedule';
+import { isClockChangeDay, utcOffsetMinutes, zoneDiffMinutes, zoneFor } from '../timezones';
+
+test('arrow swap: the moved slot takes the earlier slot’s set time; the other follows after', () => {
+  const a = slot({ name: 'A', coords: PLANO, orderIndex: 0, timeMode: 'exact', fixedTime: '10:30' });
+  const b = slot({ name: 'B', coords: FRISCO, orderIndex: 1 });
+  const after = layoutDay(moveByArrow([a, b], b.id, 'up'), ctx);
+  assert.deepEqual(after.sequence, [b.id, a.id]);
+  assert.equal(format12h(after.timings[b.id].start), '10:30 AM');
+  assert.ok(after.timings[a.id].start >= after.timings[b.id].end);
+});
+
+test('smart drag: 5-min steps up to 15, 10-min up to 60, 30-min up to 3 h, swap past half the neighbour', () => {
+  const half = 100;
+  assert.deepEqual(dragIntent(4, half, true), { mode: 'none' });
+  assert.deepEqual(dragIntent(-12, half, true), { mode: 'nudge', minutes: -5 });
+  assert.deepEqual(dragIntent(30, half, true), { mode: 'nudge', minutes: 15 });
+  assert.deepEqual(dragIntent(36, half, true), { mode: 'nudge', minutes: 20 });
+  assert.deepEqual(dragIntent(-64, half, true), { mode: 'nudge', minutes: -60 });
+  assert.deepEqual(dragIntent(70, half, true), { mode: 'nudge', minutes: 90 });
+  assert.deepEqual(dragIntent(99, half, true), { mode: 'nudge', minutes: 180 });
+  assert.deepEqual(dragIntent(-101, half, true), { mode: 'swap', direction: 'up' });
+  // no neighbour to swap with → keeps nudging
+  assert.equal(dragIntent(150, half, false).mode, 'nudge');
+  assert.equal(nudgedTime(10 * 60 + 10, 90), 12 * 60); // 11:40 → lands on 12:00
+  assert.equal(nudgedTime(10 * 60, -5), 9 * 60 + 55);
+});
+
+test('check-in holds the rest of the day; re-plan moves them only when asked', () => {
+  const a = slot({ name: 'A', coords: PLANO, orderIndex: 0, durationMin: 30 });
+  const b = slot({ name: 'B', coords: FRISCO, orderIndex: 1, durationMin: 30 });
+  const lay = layoutDay([a, b], ctx);
+  const plannedB = lay.timings[b.id].start;
+  // Rep arrives 40 minutes late.
+  const late = new Date(`2026-11-10T${'10:40'}:00`).toISOString();
+  const held = holdRestOfDay([a, b], lay, a.id).map(x => (x.id === a.id ? { ...x, status: 'in_progress' as const, checkInAt: late } : x));
+  const now = layoutDay(held, ctx);
+  assert.equal(now.timings[a.id].start, 10 * 60 + 40, 'actual check-in time is used');
+  assert.equal(now.timings[b.id].start, plannedB, 'B has NOT moved by itself');
+  assert.ok(now.warnings.some(w => w.code === 'late_for_fixed' && w.slotId === b.id), 'overlap is flagged');
+  const preview = replanPreview(held, ctx);
+  assert.equal(preview.changes.length, 1);
+  assert.ok(preview.changes[0].to > preview.changes[0].from, 'B would move later');
+});
+
+test('lunch: flexible, fixed per day, or off', () => {
+  const day = Array.from({ length: 5 }, (_, i) => slot({ coords: PLANO, orderIndex: i, durationMin: 45 }));
+  const fixed = layoutDay(day, { ...ctx, settings: { ...ctx.settings, lunchFlexible: false, lunchTime: '13:00', lunchDurationMin: 45 } });
+  const l = fixed.rows.find(r => r.kind === 'lunch') as { start: number; end: number };
+  assert.ok(l.start >= 13 * 60 && l.end - l.start === 45);
+  const off = layoutDay(day, { ...ctx, settings: { ...ctx.settings, lunch: false } });
+  assert.equal(off.rows.filter(r => r.kind === 'lunch').length, 0);
+});
+
+test('time zones & daylight saving: Arizona vs Denver, Eastern vs Central, clock-change days', () => {
+  assert.equal(zoneFor('AZ'), 'America/Phoenix');
+  assert.equal(zoneFor('TX', 'El Paso'), 'America/Denver');
+  assert.equal(zoneDiffMinutes('America/Denver', 'America/Phoenix', '2026-07-15'), -60); // summer: Phoenix 1 h behind
+  assert.equal(zoneDiffMinutes('America/Denver', 'America/Phoenix', '2026-01-15'), 0); // winter: same
+  assert.equal(zoneDiffMinutes('America/Chicago', 'America/New_York', '2026-11-10'), 60);
+  assert.equal(utcOffsetMinutes('America/New_York', '2026-11-02'), -300);
+  assert.equal(isClockChangeDay('America/New_York', '2026-11-01'), 'back');
+  assert.equal(isClockChangeDay('America/New_York', '2026-03-08'), 'forward');
+  assert.equal(isClockChangeDay('America/Phoenix', '2026-03-08'), null);
+  assert.equal(isClockChangeDay('America/New_York', '2026-10-31'), null);
+});
+
+test('10–4 is the dealership’s time: a Dallas rep calling New York at 3:30 PM is too late there', () => {
+  const call = slot({ how: 'phone', timeMode: 'exact', fixedTime: '15:30', durationMin: 15 });
+  const layout = layoutDay([call], { ...ctx, tzDiff: () => 60 });
+  assert.ok(layout.warnings.some(w => w.code === 'outside_live'));
+  const suggested = layoutDay([slot({ how: 'phone', durationMin: 15 })], { ...ctx, tzDiff: () => 60 });
+  assert.equal(format12h(Object.values(suggested.timings)[0].start), '9:00 AM'); // = 10 AM in New York
+});
+
+test('suggestions for today start from now', () => {
+  const cand = slot({ id: 'c', name: 'C', coords: PLANO, orderIndex: 9 });
+  const s = suggestPlacements([], cand, ctx, 3, { notBefore: 13 * 60 + 2 });
+  assert.ok(s[0].start >= 13 * 60 + 2);
+});
+
+test('duplicates: same dealership + same method + overlapping time is blocked; same day otherwise warns', () => {
+  const visit = slot({ id: 'v', name: 'Smith Motors', coords: PLANO, orderIndex: 0, target: { kind: 'dealership', id: 'dX', name: 'Smith Motors', coords: PLANO } });
+  const layout = layoutDay([visit], ctx);
+  const t = layout.timings.v;
+  const blocked = checkDuplicates({ candidate: { id: 'n', how: 'in_person', target: visit.target, durationMin: 30 }, start: t.start + 10, date: visit.date!, daySlots: [visit], layout });
+  assert.equal(blocked[0].level, 'block');
+  const warned = checkDuplicates({ candidate: { id: 'n', how: 'phone', target: visit.target, durationMin: 15 }, start: 15 * 60, date: visit.date!, daySlots: [visit], layout });
+  assert.equal(warned[0].level, 'warn');
 });

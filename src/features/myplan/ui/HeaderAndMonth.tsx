@@ -1,7 +1,7 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, Eye, Inbox, ListTodo, Settings, Star, WifiOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CircleHelp, Eye, Inbox, ListTodo, Plus, Settings, Star, WifiOff } from 'lucide-react';
 import { User } from '../../../types/crm';
-import { addDays, formatDayLong, formatDayShort, parseISODate, startOfWeek, toISODate, weekDates } from '../engine/time';
+import { addDays, formatDayLong, parseISODate, startOfWeek, toISODate, weekDates } from '../engine/time';
 import { isScheduled } from '../engine/schedule';
 import { useMyPlanState } from '../data/store';
 import { Button, Card, WORK_STYLE } from './primitives';
@@ -35,6 +35,15 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <h1 className="text-[26px] font-extrabold tracking-tight text-slate-900">My Plan</h1>
+          <button
+            type="button"
+            aria-label="Help: how My Plan works"
+            title="How My Plan works"
+            onClick={() => openSheet({ kind: 'walkthrough', start: view === 'week' ? 3 : 0 })}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-blue-700"
+          >
+            <CircleHelp className="h-6 w-6" />
+          </button>
           {offline && (
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-3 py-1 text-[13px] font-semibold text-white">
               <WifiOff className="h-4 w-4" /> Offline — will sync when you’re back online
@@ -60,11 +69,11 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
               </select>
             </label>
           )}
-          <Button variant="secondary" onClick={() => openSheet({ kind: 'todo' })} icon={<ListTodo className="h-5 w-5" />}>
-            To do{todo ? <span className="ml-1 rounded-full bg-rose-600 px-2 text-[13px] text-white">{todo}</span> : null}
+          <Button variant="secondary" aria-label="To do" onClick={() => openSheet({ kind: 'todo' })} icon={<ListTodo className="h-5 w-5" />}>
+            <span className="hidden sm:inline">To do</span>{todo ? <span className="ml-1 rounded-full bg-rose-600 px-2 text-[13px] text-white">{todo}</span> : null}
           </Button>
-          <Button variant="secondary" onClick={() => openSheet({ kind: 'basket' })} icon={<Inbox className="h-5 w-5" />}>
-            Basket <span className="ml-1 rounded-full bg-slate-100 px-2 text-[13px]">{basket.length}</span>
+          <Button variant="secondary" aria-label="Basket" onClick={() => openSheet({ kind: 'basket' })} icon={<Inbox className="h-5 w-5" />}>
+            <span className="hidden sm:inline">Basket</span> <span className="ml-1 rounded-full bg-slate-100 px-2 text-[13px]">{basket.length}</span>
           </Button>
           {!readOnly && <Button variant="ghost" aria-label="My Plan settings" onClick={() => openSheet({ kind: 'settings' })} icon={<Settings className="h-5 w-5" />} />}
         </div>
@@ -112,16 +121,23 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         <Button variant="secondary" aria-label="Previous" onClick={() => shift(-1)} icon={<ChevronLeft className="h-6 w-6" />} />
         <div className="min-w-0 flex-1 text-center text-[17px] font-bold text-slate-900 sm:text-[19px]">
           <span className="hidden sm:inline">{title}</span>
-          <span className="sm:hidden">{view === 'day' ? formatDayShort(date) : title.replace('Week of ', 'Wk of ')}</span>
+          <span className="whitespace-nowrap text-[15px] sm:hidden">{view === 'day' ? parseISODate(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : title.replace('Week of ', 'Wk of ')}</span>
         </div>
         <Button variant="secondary" aria-label="Next" onClick={() => shift(1)} icon={<ChevronRight className="h-6 w-6" />} />
         <Button variant={date === today ? 'ghost' : 'soft'} onClick={() => setDate(today)}>
           Today
         </Button>
+        {view === 'day' && !readOnly && date >= today && (
+          <span className="hidden sm:block">
+            <Button variant="primary" onClick={() => openSheet({ kind: 'add', preset: { date, nonce: Date.now() } })} icon={<Plus className="h-5 w-5" />}>
+            <span className="hidden sm:inline">Add</span>
+          </Button>
+          </span>
+        )}
       </div>
     </div>
   );

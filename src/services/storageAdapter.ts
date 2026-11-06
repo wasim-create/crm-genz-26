@@ -1,3 +1,4 @@
+import { isKeyDecisionMaker, normalizeJobTitle } from '../data/jobTitles';
 import {
   Dealership,
   User,
@@ -62,6 +63,8 @@ export interface StorageAdapter {
   saveAssist(assist: ManagerAssist): Promise<void>;
   saveIncentive(incentive: IntroductionIncentive): Promise<void>;
   saveContact(contact: Contact): Promise<void>;
+  saveGroup(group: DealerGroup): Promise<void>;
+  saveUsers(users: User[]): Promise<void>;
   saveAuditLog(log: AuditLogRecord): Promise<void>;
   saveProduct(product: ProductCatalogItem): Promise<void>;
   saveGameRule(rule: GameRule): Promise<void>;
@@ -70,6 +73,21 @@ export interface StorageAdapter {
   addPointsLedgerEntry(entry: PointsLedgerEntry): Promise<void>;
   transferOwnership(dealershipId: string, toRepId: string, managerId: string, managerName: string, reason: string): Promise<void>;
   resetToSeed(): Promise<void>;
+}
+
+// Older saved demo data: map free-text job titles onto the standard list,
+// and make sure the demo admin login exists.
+function migrateContactTitles(list: Contact[]): Contact[] {
+  return list.map(c => {
+    const n = normalizeJobTitle(c.jobTitle);
+    if (n.title === c.jobTitle || (n.title === 'Other' && c.customTitle)) return c;
+    return n.title === 'Other' ? { ...c, customTitle: n.custom ?? c.jobTitle } : { ...c, jobTitle: n.title, isDecisionMaker: c.isDecisionMaker || isKeyDecisionMaker(n.title) };
+  });
+}
+
+function withAdmin(list: User[]): User[] {
+  const admin = USERS.find(u => u.role === 'admin');
+  return admin && !list.some(u => u.id === admin.id) ? [...list, admin] : list;
 }
 
 const STORAGE_KEYS = {
@@ -149,9 +167,9 @@ export class LocalStorageAdapter implements StorageAdapter {
 
       return {
         dealerships: loadedDeals,
-        users: JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || JSON.stringify(USERS)),
+        users: withAdmin(JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || JSON.stringify(USERS))),
         groups: JSON.parse(localStorage.getItem(STORAGE_KEYS.GROUPS) || JSON.stringify(DEALER_GROUPS)),
-        contacts: JSON.parse(localStorage.getItem(STORAGE_KEYS.CONTACTS) || JSON.stringify(INITIAL_CONTACTS)),
+        contacts: migrateContactTitles(JSON.parse(localStorage.getItem(STORAGE_KEYS.CONTACTS) || JSON.stringify(INITIAL_CONTACTS))),
         activities: JSON.parse(localStorage.getItem(STORAGE_KEYS.ACTIVITIES) || JSON.stringify(INITIAL_ACTIVITIES)),
         assists: JSON.parse(localStorage.getItem(STORAGE_KEYS.ASSISTS) || JSON.stringify(INITIAL_ASSISTS)),
         incentives: filteredIncentives,
@@ -254,6 +272,19 @@ export class LocalStorageAdapter implements StorageAdapter {
       list.unshift(incentive);
     }
     localStorage.setItem(STORAGE_KEYS.INCENTIVES, JSON.stringify(list));
+  }
+
+  async saveGroup(group: DealerGroup): Promise<void> {
+    const raw = localStorage.getItem(STORAGE_KEYS.GROUPS);
+    const list: DealerGroup[] = raw ? JSON.parse(raw) : DEALER_GROUPS;
+    const idx = list.findIndex(g => g.id === group.id);
+    if (idx >= 0) list[idx] = group;
+    else list.push(group);
+    localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(list));
+  }
+
+  async saveUsers(users: User[]): Promise<void> {
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   }
 
   async saveContact(contact: Contact): Promise<void> {

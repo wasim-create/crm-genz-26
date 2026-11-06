@@ -1,7 +1,7 @@
 // Form pieces shared by the Add flow and the Edit screen.
 
 import React, { useState } from 'react';
-import { Plus, UserPlus } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
 import { Contact, Dealership } from '../../../types/crm';
 import { HowType, PlanSlot, SlotTask, WorkType } from '../types';
 import { HOW_LABEL, TASK_BY_ID, tasksForWorkType } from '../engine/tasks';
@@ -9,8 +9,10 @@ import { addDays, formatDayShort, nextWeekday, relativeDayLabel } from '../engin
 import { hasKeyfetch } from '../services/suggestions';
 import { contactsFor } from '../data/seed';
 import { Button, Checkbox, ChoiceCard, HOW_ICON } from './primitives';
+import { ContactForm } from '../../../components/forms/ContactForm';
+import { isKeyDecisionMaker } from '../../../data/jobTitles';
 import { useMyPlan } from './context';
-import { defaultProducts, newId, productOptions } from './slotHelpers';
+import { defaultProducts, productOptions } from './slotHelpers';
 
 export const HOW_ORDER: HowType[] = ['in_person', 'phone', 'meet', 'email', 'text'];
 
@@ -125,9 +127,8 @@ export const ContactsEditor: React.FC<{
   onChange: (patch: Partial<PlanSlot>) => void;
   label?: string;
 }> = ({ slot, onChange, label = 'Who will you speak with?' }) => {
-  const { contacts, dealerships, groups, onAddContact } = useMyPlan();
+  const { contacts, dealerships, groups, onAddContact, user } = useMyPlan();
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ firstName: '', lastName: '', jobTitle: '', phone: '', email: '' });
 
   const isGroup = slot.target.kind === 'group';
   const group = isGroup ? groups.find(g => g.id === slot.target.id) : undefined;
@@ -153,24 +154,11 @@ export const ContactsEditor: React.FC<{
     onChange({ target: { ...slot.target, rooftopIds: [...set] } });
   };
 
-  const save = () => {
-    if (!form.firstName.trim()) return;
-    const dealershipId = isGroup ? slot.target.rooftopIds?.[0] ?? rooftops[0]?.id : slot.target.id;
-    if (!dealershipId) return;
-    const c: Contact = {
-      id: newId('cont'),
-      dealershipId,
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
-      jobTitle: form.jobTitle.trim() || 'Contact',
-      phone: form.phone.trim(),
-      email: form.email.trim(),
-      isDecisionMaker: false,
-      notes: 'Added from My Plan'
-    };
+  const addTo = isGroup ? slot.target.rooftopIds?.[0] ?? rooftops[0]?.id : slot.target.id;
+  const addToName = isGroup ? dealerships.find(d => d.id === addTo)?.dealershipName : slot.target.name;
+  const saved = (c: Contact) => {
     onAddContact(c);
     onChange({ contactIds: [...slot.contactIds, c.id], contactNames: [...slot.contactNames.filter(n => n !== group?.mainDecisionMaker), `${c.firstName} ${c.lastName}`] });
-    setForm({ firstName: '', lastName: '', jobTitle: '', phone: '', email: '' });
     setAdding(false);
   };
 
@@ -205,48 +193,17 @@ export const ContactsEditor: React.FC<{
               key={c.id}
               checked={selected.has(c.id)}
               onChange={() => toggleContact(c)}
-              label={`${c.firstName} ${c.lastName}`}
+              label={`${c.firstName} ${c.lastName}${c.isDecisionMaker || isKeyDecisionMaker(c.jobTitle) ? ' ★' : ''}`}
               hint={[c.jobTitle, c.phone].filter(Boolean).join(' · ')}
             />
           ))}
           {contactPool.length === 0 && !adding && <p className="text-[15px] text-slate-600">No contacts saved yet for this dealership.</p>}
         </div>
-        {adding ? (
-          <div className="mt-3 space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="text-[16px] font-bold text-slate-900">New contact</div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {(
-                [
-                  ['firstName', 'First name'],
-                  ['lastName', 'Last name'],
-                  ['jobTitle', 'Job title (e.g. GM)'],
-                  ['phone', 'Phone'],
-                  ['email', 'Email']
-                ] as const
-              ).map(([k, l]) => (
-                <label key={k} className="block">
-                  <span className="text-[14px] font-medium text-slate-600">{l}</span>
-                  <input
-                    className="mt-1 min-h-[48px] w-full rounded-xl border border-slate-300 px-3 text-[16px]"
-                    value={form[k]}
-                    onChange={e => setForm({ ...form, [k]: e.target.value })}
-                  />
-                </label>
-              ))}
-            </div>
-            <div className="flex gap-2 pt-1">
-              <Button variant="primary" onClick={save} disabled={!form.firstName.trim()} icon={<Plus className="h-5 w-5" />}>
-                Save contact
-              </Button>
-              <Button variant="ghost" onClick={() => setAdding(false)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <Button variant="soft" className="mt-3" onClick={() => setAdding(true)} icon={<UserPlus className="h-5 w-5" />}>
-            Add a new contact
-          </Button>
+        <Button variant="soft" className="mt-3" onClick={() => setAdding(true)} icon={<UserPlus className="h-5 w-5" />} disabled={!addTo}>
+          Add a new contact
+        </Button>
+        {adding && addTo && (
+          <ContactForm dealershipId={addTo} dealershipName={addToName} existingContacts={contacts} currentUser={user} onCancel={() => setAdding(false)} onSave={saved} />
         )}
       </div>
     </div>

@@ -5,7 +5,7 @@
 // Google Tasks through the connector interface.
 
 import { useSyncExternalStore } from 'react';
-import { ActionPoint, EditLogEntry, MyPlanSettings, PlanSlot } from '../types';
+import { ActionPoint, EditLogEntry, LunchSettings, MyPlanSettings, PlanSlot } from '../types';
 import { mockGoogleTasks, resetMockGoogle, TasksConnector } from '../connectors/googleConnectors';
 import { buildSeed, SeedInput } from './seed';
 import { moveByArrow, normalizeOrder, reorderDay } from '../engine/schedule';
@@ -31,6 +31,8 @@ export interface MyPlanState {
   slots: PlanSlot[];
   actionPoints: ActionPoint[];
   settings: Record<string, MyPlanSettings>;
+  /** Per-day changes, e.g. a different lunch on one day: dayOverrides[userId][date] */
+  dayOverrides: Record<string, Record<string, { lunch?: LunchSettings }>>;
   outbox: OutboxItem[];
   simulateOffline: boolean;
   seededOn?: string;
@@ -48,6 +50,9 @@ export const DEFAULT_SETTINGS: MyPlanSettings = {
   dayStart: '08:30',
   preferredFinish: '17:30',
   lunch: true,
+  lunchTime: '12:00',
+  lunchDurationMin: 30,
+  lunchFlexible: true,
   biggerText: false,
   reminder: { enabled: true, day: 0, time: '18:00' },
   reminderAsked: false,
@@ -60,6 +65,7 @@ function load(): MyPlanState {
     slots: [],
     actionPoints: [],
     settings: {},
+    dayOverrides: {},
     outbox: [],
     simulateOffline: false,
     syncing: false,
@@ -127,7 +133,7 @@ export function resetMyPlan() {
   }
   resetMockGoogle();
   undoSnapshot = null;
-  set({ slots: [], actionPoints: [], settings: {}, outbox: [], seededOn: undefined, simulateOffline: false });
+  set({ slots: [], actionPoints: [], settings: {}, dayOverrides: {}, outbox: [], seededOn: undefined, simulateOffline: false });
 }
 
 // ---------- settings ----------
@@ -136,6 +142,30 @@ export const getSettings = (userId: string): MyPlanSettings => ({ ...DEFAULT_SET
 
 export function updateSettings(userId: string, patch: Partial<MyPlanSettings>) {
   set({ settings: { ...state.settings, [userId]: { ...getSettings(userId), ...patch } } });
+}
+
+/** Lunch for one day: the day's own setting if changed, otherwise the default. */
+export function lunchFor(userId: string, date: string): LunchSettings {
+  const day = state.dayOverrides?.[userId]?.[date]?.lunch;
+  if (day) return day;
+  const s = getSettings(userId);
+  return { enabled: s.lunch, time: s.lunchTime, durationMin: s.lunchDurationMin, flexible: s.lunchFlexible };
+}
+
+export const hasDayLunchOverride = (userId: string, date: string) => !!state.dayOverrides?.[userId]?.[date]?.lunch;
+
+/** Change lunch for one or more days (null = back to the default). */
+export function setDayLunch(userId: string, dates: string[], lunch: LunchSettings | null, message?: string) {
+  const mine = { ...(state.dayOverrides?.[userId] ?? {}) };
+  dates.forEach(d => {
+    if (lunch) mine[d] = { ...(mine[d] ?? {}), lunch };
+    else if (mine[d]) {
+      const { lunch: _drop, ...rest } = mine[d];
+      mine[d] = rest;
+    }
+  });
+  set({ dayOverrides: { ...(state.dayOverrides ?? {}), [userId]: mine } });
+  if (message) showToast(message);
 }
 
 // ---------- toasts & undo ----------

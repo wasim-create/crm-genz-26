@@ -10,7 +10,9 @@ import {
   User
 } from '../../../types/crm';
 import { EngineSettings, HowType, LatLng, MyPlanSettings, PlanSlot } from '../types';
-import { DayLayout } from '../engine/schedule';
+import { DayLayout, LayoutContext } from '../engine/schedule';
+import { Activity } from '../../../types/crm';
+import type { ProspectFormResult } from '../../../components/forms/ProspectForm';
 import { Suggestion } from '../services/suggestions';
 
 export interface AddPreset {
@@ -22,6 +24,8 @@ export interface AddPreset {
   planLater?: boolean;
   /** Re-use an existing basket slot (from the basket / week planner). */
   basketSlotId?: string;
+  /** Insert at this position in the day (from "+ Add here"). */
+  insertIndex?: number;
   /** A manager suggesting something for a rep's basket. */
   priorityFrom?: string;
   /** Forces a fresh flow when re-opened with the same preset. */
@@ -36,7 +40,11 @@ export type SheetState =
   | { kind: 'todo' }
   | { kind: 'basket' }
   | { kind: 'settings' }
-  | { kind: 'walkthrough' }
+  | { kind: 'walkthrough'; start?: number }
+  | { kind: 'details'; dealershipId?: string; groupId?: string }
+  | { kind: 'time'; slotId: string }
+  | { kind: 'lunch'; date: string }
+  | { kind: 'replan'; date: string }
   | null;
 
 export interface MyPlanContextValue {
@@ -60,8 +68,16 @@ export interface MyPlanContextValue {
   engine: EngineSettings;
   home: LatLng;
   slots: PlanSlot[];
+  /** Everyone's slots (for "a teammate has this planned too"). */
+  allSlots: PlanSlot[];
   daySlots: (date: string) => PlanSlot[];
   layout: (date: string) => DayLayout;
+  /** Engine context for a date (that day's lunch, time zones). */
+  layoutCtx: (date: string) => LayoutContext;
+  /** Rep's time zone and the dealership-time difference for a slot on a date. */
+  repZone: string;
+  tzDiffFor: (slot: Pick<PlanSlot, 'target'>, date: string) => number;
+  activities: Activity[];
   basket: PlanSlot[];
   suggestions: Map<string, Suggestion>;
   date: string;
@@ -72,7 +88,7 @@ export interface MyPlanContextValue {
   openSheet: (s: SheetState) => void;
   closeSheet: () => void;
   onAddContact: (c: Contact) => void;
-  onAddDealership: (d: Dealership) => void;
+  onSaveProspect: (r: ProspectFormResult) => void;
   onClaimDealership: (d: Dealership) => void;
   onOpenDealership: (d: Dealership) => void;
 }

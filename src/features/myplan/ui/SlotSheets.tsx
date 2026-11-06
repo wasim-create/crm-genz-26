@@ -5,7 +5,8 @@ import { Inbox, Lock, Phone, SkipForward, Trash2 } from 'lucide-react';
 import { HowType, PlanSlot, TimeMode } from '../types';
 import { durationFor, HOW_LABEL, isMessage } from '../engine/tasks';
 import { format12h, formatDayShort, nextWeekday } from '../engine/time';
-import { indexForTime, insertAt, sendTimeAdvice } from '../engine/schedule';
+import { checkDuplicates, indexForTime, insertAt, layoutDay, sendTimeAdvice } from '../engine/schedule';
+import { toMin } from '../engine/time';
 import { addSlots, moveSlotToDay, removeSlot, reorderWithinDay, updateSlot, upsertSlots } from '../data/store';
 import { Button, Card, Checkbox, ChoiceCard, Segmented, Sheet } from './primitives';
 import { useMyPlan } from './context';
@@ -30,6 +31,16 @@ export const EditSlotSheet: React.FC<{ slotId: string; onClose: () => void }> = 
   const dealership = draft.target.kind === 'dealership' ? ctx.dealershipById.get(draft.target.id) : undefined;
   const message = isMessage(draft.how);
 
+  // Same dealership + same method at an overlapping time isn't allowed.
+  const dupes = (() => {
+    if (!draft.date || draft.target.kind === 'block') return [];
+    const day = ctx.daySlots(draft.date).filter(s => s.id !== draft.id);
+    const lay = layoutDay(day, ctx.layoutCtx(draft.date));
+    const start = draft.timeMode === 'exact' || draft.locked ? toMin(time) : ctx.layout(draft.date).timings[draft.id]?.start;
+    return checkDuplicates({ candidate: draft, start, date: draft.date, daySlots: day, layout: lay });
+  })();
+  const blocked = dupes.some(d => d.level === 'block');
+
   const save = () => {
     let final: PlanSlot = { ...draft };
     if (final.timeMode === 'exact' || final.locked) final.fixedTime = time;
@@ -42,7 +53,7 @@ export const EditSlotSheet: React.FC<{ slotId: string; onClose: () => void }> = 
     final.status = final.status === 'basket' ? 'planned' : final.status;
     if (final.date !== original.date || final.timeMode === 'exact') {
       const day = ctx.daySlots(final.date).filter(s => s.id !== final.id);
-      const index = final.timeMode === 'exact' ? indexForTime(day, { home: ctx.home, settings: ctx.engine }, time) : day.length;
+      const index = final.timeMode === 'exact' ? indexForTime(day, ctx.layoutCtx(final.date), time) : day.length;
       upsertSlots(insertAt(day, final, index), `Updated ${final.target.name}${final.date !== original.date ? ` — now on ${formatDayShort(final.date)}` : ''}`);
     } else {
       upsertSlots([final], `Updated ${final.target.name}. Times recalculated.`);
@@ -63,8 +74,14 @@ export const EditSlotSheet: React.FC<{ slotId: string; onClose: () => void }> = 
       onClose={onClose}
       summary={`${HOW_LABEL[draft.how]}${draft.date ? ` · ${formatDayShort(draft.date)}` : ' · In basket'}`}
       footer={
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button variant="primary" size="lg" className="flex-1" onClick={save}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          {dupes.map((d, i) => (
+            <div key={i} className={`w-full rounded-xl p-3 text-[15px] ${d.level === 'block' ? 'bg-rose-50 text-rose-900' : 'bg-amber-50 text-amber-950'}`}>
+              {d.message}
+              {d.level === 'block' ? ' Change the time or contact method to save.' : ''}
+            </div>
+          ))}
+          <Button variant="primary" size="lg" className="flex-1" onClick={save} disabled={blocked}>
             Save changes
           </Button>
           <Button

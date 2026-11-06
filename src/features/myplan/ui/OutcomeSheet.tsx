@@ -9,9 +9,9 @@ import { CheckCircle2, Clock, Lock, Mic, Plus, Trophy, WifiOff } from 'lucide-re
 import { PipelineStage } from '../../../types/crm';
 import { ActionPoint, InterestLevel, PlanSlot, SimpleResult, SlotTask, TaskOutcome, UpsellResult } from '../types';
 import { HOW_LABEL, isMessage, TASK_BY_ID } from '../engine/tasks';
-import { format12h, toHHMM } from '../engine/time';
-import { pastEditWindow } from '../engine/schedule';
-import { addActionPoints, dismissToast, isOffline, submitWriteback, updateActionPoint, updateSlot, useMyPlanState } from '../data/store';
+import { format12h, formatDuration, toHHMM } from '../engine/time';
+import { pastEditWindow, replanPreview } from '../engine/schedule';
+import { addActionPoints, dismissToast, isOffline, submitWriteback, updateActionPoint, updateSlot, upsertSlots, useMyPlanState } from '../data/store';
 import { buildWriteback, describeTask, suggestActionPoints, suggestStageChange } from '../services/writeback';
 import { Button, Card, Checkbox, Segmented, Sheet } from './primitives';
 import { useMyPlan } from './context';
@@ -86,6 +86,7 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
   const [correction, setCorrection] = useState('');
   const [result, setResult] = useState<{ points: number; queued: boolean } | null>(null);
   const [listening, setListening] = useState(false);
+  const [replanAnswered, setReplanAnswered] = useState(false);
 
   const preview: PlanSlot | undefined = slot ? { ...slot, tasks } : undefined;
   const dealership = slot?.target.kind === 'dealership' ? dealershipById.get(slot.target.id) : undefined;
@@ -229,8 +230,36 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
 
   // ---- Saved: celebration + next step ----
   if (result) {
+    // At the END of the appointment: offer to move the rest of today.
+    const rp = !wasDone && !replanAnswered && slot.date === ctx.today ? replanPreview(ctx.daySlots(slot.date), ctx.layoutCtx(slot.date)) : null;
+    const first = rp?.changes[0];
+    const shift = first ? first.to - first.from : 0;
     return (
       <Sheet title="Saved" onClose={onClose}>
+        {first && Math.abs(shift) >= 5 && (
+          <Card className="mb-4 space-y-3 border-blue-300 bg-blue-50 p-4">
+            <div className="text-[18px] font-bold text-blue-950">
+              {shift < 0 ? `You finished early — the rest of today can move ${formatDuration(Math.abs(shift))} earlier.` : `You ran over — the rest of today needs to move ${formatDuration(shift)} later.`}
+            </div>
+            <div className="text-[15px] text-blue-900">
+              {rp!.changes.length} stop{rp!.changes.length === 1 ? '' : 's'} would change. Locked appointments stay where they are.
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="primary"
+                onClick={() => {
+                  upsertSlots(rp!.slots, `Moved the rest of today ${shift < 0 ? 'earlier' : 'later'}`);
+                  setReplanAnswered(true);
+                }}
+              >
+                Yes, move them
+              </Button>
+              <Button variant="secondary" onClick={() => setReplanAnswered(true)}>
+                No, keep my times
+              </Button>
+            </div>
+          </Card>
+        )}
         <Card className="flex flex-col items-center p-6 text-center">
           {result.points > 0 ? <Trophy className="h-12 w-12 text-amber-500" /> : <CheckCircle2 className="h-12 w-12 text-emerald-600" />}
           <div className="mt-2 text-[22px] font-extrabold text-slate-900">{result.points > 0 ? `+${result.points} points` : wasDone ? 'Changes saved' : 'Saved'}</div>
