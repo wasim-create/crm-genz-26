@@ -1,6 +1,6 @@
 {
-  "summary": "Comprehensive implementation plan for ApexDrive CRM Improvement Pass v2 covering Sections 1–10, target file changes, data architecture, security/visibility controls, and verification steps.",
-  "updatedAt": "2026-11-03T18:59:03.397638184Z",
+  "summary": "Comprehensive specification and migration plan for the full rebuild of My Plan into a fresh, self-contained module (src/features/myplan/). Includes complete deletion list of legacy planner code, screen-by-screen architectural descriptions, and end-to-end walkthroughs for all 10 user test scenarios.",
+  "updatedAt": "2026-11-05T23:10:49.758679886Z",
   "requestFeedback": true,
   "userFacing": true
 }

@@ -1,0 +1,283 @@
+=====================================================================
+APEXDRIVE CRM: "MY PLAN" FULL REBUILD (fresh, from scratch)
+=====================================================================
+
+WHAT WENT WRONG
+The last change built the new My Plan ON TOP OF the old Planner. The result is a mess: old and new screens, controls and logic are mixed together. The old Planner was hard to navigate even for confident users. My Plan must be so simple that someone who finds technology very difficult can use it just by looking at it.
+
+WHAT TO DO
+1. DELETE the old Planner completely:
+   - PlannerView, the old day / week / month / agenda planner UI
+   - WorkDayMobileModal, the old "Work my day" screen
+   - the old route-first map layout
+   - the old "Plan Day with AI" logic
+   - any half-built My Plan components from the last change
+   Remove their imports, routes, unused state and helper code. Do NOT reuse any old Planner UI components or styling.
+2. BUILD My Plan as a NEW, self-contained module (e.g. src/features/myplan/) with its own components, its own scheduling engine (src/features/myplan/engine/) and its own unit tests.
+3. ONLY build the features listed in THIS prompt. Don't carry anything over from the old Planner unless it's listed here. Add something extra ONLY if it clearly makes the experience simpler or better; list any such additions in your plan, with the reason.
+4. KEEP everything OUTSIDE My Plan exactly as it is:
+   - left nav, gamification and the game strip, Manager Assist, Manager Priorities
+   - incentives (including amount visibility rules), the no-money rule, Workspace sync
+   - the Sheets / LocalStorage data layer, demo users
+   Reconnect the rest of the app to the new module: every "Add to my plan" button elsewhere, Manager Priorities, Manager Assist meetings and Google Calendar items must create plan items through the new module's API.
+
+BEFORE BUILDING:
+- List the old files and code you'll delete, and the new files you'll create.
+- Describe each new screen in words.
+- Walk through the 10 test scenarios in section 13 as a user would see them.
+- Wait for my go-ahead, then build.
+
+---------------------------------------------------------------------
+0. THE GOLDEN RULE: CODE CALCULATES, AI ADVISES
+---------------------------------------------------------------------
+All times, distances, durations, radius bands, availability, slot suggestions, reordering and recalculation are done by the deterministic SCHEDULING ENGINE (plain TypeScript, unit-tested).
+
+The AI (Gemini) NEVER calculates times, distances or whether something fits. The AI only:
+- suggests WHO to contact and why (one plain sentence)
+- suggests the method and purpose
+- drafts emails, texts and talking points
+- writes plain-English explanations
+
+The engine validates everything, and its numbers always win. With AI off, My Plan works fully.
+
+---------------------------------------------------------------------
+1. LOOK AND FEEL (new, calm, "anyone can use it")
+---------------------------------------------------------------------
+- Layout: ONE simple column (centered on desktop, max about 720px wide; full width on mobile). No side panels, no dense grids, no nested tabs.
+- Top: a large date title ("Tuesday, November 10"), simple ◀ ▶ arrows and a "Today" button, plus three big tabs: Day | Week | Month.
+- Below that, the DAY SUMMARY CARD:
+  - "Leave home by 9:15 AM"
+  - number of items
+  - drive time
+  - "How full is my day?" bar (Light / Good / Full / Too much)
+  - "Home around 5:30 PM"
+- Then the TIMELINE: one big card per slot, with travel shown between cards as a thin line ("🚗 25 min drive").
+- A large, fixed "+ Add" button that is always visible (bottom of the screen on mobile, below the summary on desktop).
+- Slot card design:
+  - a colored left edge by work type: New Prospect / Sign-up & Onboarding / Client Care (3 distinct, accessible colors, the same everywhere)
+  - time (large), activity icon + word ("In-person visit"), dealership name (large), city, distance band dot + miles, contact name
+  - a status chip (Planned / Done / Skipped)
+  - on the right: ▲ and ▼ arrow buttons and a drag handle (⋮⋮)
+  - tap the card for its actions
+- Typography and controls: body text at least 17px, buttons at least 48px tall, high contrast, icons ALWAYS paired with words, one primary button per screen. A "Bigger text" setting.
+- Plain English everywhere. No jargon: no "pipeline", "touchpoint", "cadence", "optimize", "sync".
+- No pop-ups on top of pop-ups. Steps open as full-screen panels with a big "← Back" button and a "Step 2 of 4" indicator.
+- Every change shows a short confirmation in plain words, with an Undo button (e.g. "Moved Smith Motors to 11:00 · Undo").
+- Gamification stays calm here: points shown small on each card, short celebrations, never cluttering the timeline.
+- Light and dark mode. It should feel fresh and modern, but consistent with the rest of ApexDrive.
+
+---------------------------------------------------------------------
+2. DISTANCE BANDS (from the rep's HOME, always)
+---------------------------------------------------------------------
+  🟢 HOME REGION   0–60 miles
+  🟡 EDGE          60–69 miles  (10–15% tolerance; allowed, with a gentle "Edge of your region" flag)
+  🔴 OUT OF TOWN   70+ miles    (a travel prospect; handled as a TRIP, section 3)
+
+- Straight-line distance decides the band. Drive time is used for scheduling.
+- Thresholds are editable in Settings.
+- The same engine function is used everywhere: My Plan, pool, claiming, suggestions, AI, map and reports.
+- Lists and suggestions show the home region first.
+
+---------------------------------------------------------------------
+3. OUT-OF-TOWN = TRIPS
+---------------------------------------------------------------------
+- Picking an out-of-town dealership shows: "This is about a [X]-hour round trip. Make it a trip day?" It suggests other prospects and clients within about 15 miles of it, to make the trip worthwhile.
+- Single-visit trips are discouraged in plain words, but allowed. Optional manager approval (a Settings toggle, off by default).
+- Trips show as a banner across the day(s) in Day / Week / Month.
+
+---------------------------------------------------------------------
+4. THE OPENING QUESTION
+---------------------------------------------------------------------
+- When the rep starts planning: "What are you planning?" [ Today ] [ Tomorrow ] [ This week ] [ Choose days ].
+- It remembers the last answer. Experienced users can skip straight in.
+- MONTH is an OVERVIEW, not slot-by-slot planning: goals, trips, repeats, priorities, and how full each week is. Tapping a week or day opens it for planning.
+
+---------------------------------------------------------------------
+5. ADDING: ONE "ADD" FLOW (dealership-first OR activity-first, same screens)
+---------------------------------------------------------------------
+Tap "+ Add". Step 1 is ONE screen with two clearly labelled parts:
+
+  "What do you want to do?" (optional; pick one)
+  [ In-person visit ] [ Phone call ] [ Google Meet ] [ Email ] [ Text message ]
+
+  "Who with?"
+  Tabs:   PROSPECTS (n) | SIGN-UP & ONBOARDING (n) | CLIENTS (n)
+  A search box. Quick buttons: Due now · Nearby · Hot · Manager priority · Not contacted lately.
+  [ More filters ] (all the existing filters; collapsed in Simple mode).
+  "Suggested for you" at the top (AI, with a one-line reason each).
+  The list shows the rep's BENCH by default.
+  [ Find more nearby ] opens the Prospect Pool (home region first; edge and out-of-town marked).
+  [ Add a new dealership ] opens a manual add.
+
+Selection rules:
+  | Activity         | Selection                 | Next steps                                              |
+  | In-person visit  | ONE dealership            | purpose → when                                          |
+  | Google Meet      | ONE dealership            | contact(s) to invite / add new contact → purpose → when |
+  | Phone call       | ONE (or a call list*)     | contact / add new contact → purpose → when              |
+  | Email            | MULTIPLE                  | contact per dealership → message (template / AI draft) → when to send |
+  | Text message     | MULTIPLE                  | contact per dealership → message (template / AI draft) → when to send |
+  *Call list: tick several dealerships to plan calls back to back.
+
+- If a DEALERSHIP is picked first, the next screen asks "How?" with the 5 activity buttons, the most sensible one pre-selected.
+- PURPOSE is pre-selected from the stage, and can be changed:
+  - Prospects: first visit, follow-up, product pitch, decision-maker meeting, Manager Assist meeting
+  - Sign-up & Onboarding: contract signing, onboarding training, setup check
+  - Clients: Keyfetch top-up (Keyfetch clients only), upsell, promotions / sales follow-up, check-in
+- WHEN (step 4): the engine offers the 2–3 best realistic slots, explained in plain words (e.g. "Tue 10:30 AM – right after Smith Motors, 12 min drive"). Also: Anytime that day / Morning / Afternoon, and a smaller [ Pick my own time ]. If a chosen time doesn't fit, the engine explains why and offers the nearest time that works.
+- After adding an in-person visit: "3 more dealerships within 10 miles. Add one?"
+
+ADD-FLOW UX RULES (fix the current issues):
+- One decision per screen. The rep always sees "Step X of Y", a big Back button, and what they've chosen so far (a small summary line at the top, e.g. "Phone call · Lone Star Ford").
+- A step that isn't needed is skipped automatically (e.g. no contact step if the dealership has only one contact; pre-selected).
+- Never lose choices when going Back. Never ask for the same thing twice.
+- A typical single item takes 4 taps or fewer.
+- The final confirmation says exactly what was added, in plain words, with Undo.
+- Search, tabs and filters keep their state while the rep moves through the flow.
+
+---------------------------------------------------------------------
+6. MULTIPLE SELECTION CREATES SEPARATE SLOTS
+---------------------------------------------------------------------
+Multiple selection is ONLY a shortcut for adding several items at once. Every selected dealership becomes its OWN SEPARATE SLOT, with its own:
+- dealership, contact, purpose
+- time (or send time)
+- duration
+- status
+- message (pre-filled from the shared template, editable per slot)
+- outcome / log
+- points
+
+Examples:
+- 8 emails selected → 8 separate email slots. Send times are staggered sensibly (e.g. a few minutes apart), within the recommended send window and Gmail limits.
+- A call list of 6 → 6 separate call slots, placed back to back (with a short gap) in the live window.
+- 5 texts → 5 separate text slots, each opening its own pre-filled message on the phone when it's time.
+
+Each slot can be moved, reordered, rescheduled, edited, skipped or removed individually.
+
+Optional visual grouping: consecutive slots created together can show a small header ("8 emails") that can be collapsed or expanded. Grouping is display-only; the slots stay separate underneath.
+
+Email is sent individually through Gmail (never one email with everyone on it). Text becomes a queue: each message opens in the phone's messaging app, pre-filled. No fake "Send all" button. Leave a marked hook for a future texting service.
+
+---------------------------------------------------------------------
+7. REARRANGING SLOTS (arrows AND drag and drop, everywhere)
+---------------------------------------------------------------------
+- Every slot card has ▲ / ▼ arrow buttons (always visible, large, labelled "Move up" / "Move down" for screen readers) AND a drag handle. The arrows are the main method for less confident users; drag and drop is for everyone else. Both work on mobile (touch) and desktop (mouse and keyboard).
+- When the order changes, the ENGINE immediately recalculates:
+  - times
+  - travel between items
+  - the leave-by time
+  - finish and home times
+  - how full the day is
+  Then it shows what changed in plain words (e.g. "Smith Motors is now 11:15. Your day ends 10 min later. · Undo").
+- LOCKED slots (🔒, e.g. a confirmed appointment or a Manager Assist meeting) keep their time. Other slots flow around them. Moving a slot across a locked one is allowed, and times adjust around the lock.
+- If the new order breaks a rule (e.g. a visit is pushed past 4 PM, or a drive can't be made in time), the move still happens. The engine shows a gentle warning with one-tap fixes: "Put it back", "Move to tomorrow", "Turn into a phone call".
+- Moving between days:
+  - In the Day view, the card's actions include "Move to another day" (big day buttons: Tomorrow / pick a day).
+  - In the Week view, cards can be dragged between days, and each card also has a "Move to…" button.
+  - Moved items get a fresh slot suggestion on their new day.
+- Unscheduled items live in a "Not scheduled yet" tray at the top of the Week view and the bottom of the Day view, and can be dragged or arrow-moved into a day.
+- Undo is available for every move.
+
+---------------------------------------------------------------------
+8. TIME RULES
+---------------------------------------------------------------------
+All times are in the DEALERSHIP'S local time zone. The rep's own time is also shown when it differs.
+
+- LIVE CONTACT WINDOW, 10:00 AM – 4:00 PM: for ALL person-to-person contact (in-person visits, phone calls, Google Meet and any other live meeting). The engine never SUGGESTS live contact outside the window. If the rep chooses it anyway, it's allowed with a gentle note ("Dealerships are usually busy before 10 AM").
+- NON-LIVE:
+  - Writing emails and texts, reading briefs, notes and admin are suggested OUTSIDE the live window (before 10, after 4, at lunch, in gaps).
+  - Sending happens at the recommended time: emails are sent automatically (Apps Script time-based trigger or a backend queue; the rep can see, edit or cancel them), and texts become a reminder that opens the pre-filled message.
+  - Editable defaults in Settings, learned from reply rates over time:
+    - Email: Tue–Thu, about 10:00–11:30 AM or 2:00–3:00 PM; avoid Monday mornings and Saturdays.
+    - Text: Tue–Fri, 10:30 AM–3:30 PM.
+    - Live contact: best Tue–Thu, then Mon / Fri. Saturday off by default. Working days are set in Settings.
+- LEAVE-BY: first in-person appointment − drive time from home − 10 min parking / walk-in − 10 min safety margin. It's shown at the top of the day, with an optional reminder 15 min before. Between visits, show "Leave by 11:40 to reach Lone Star Ford". The estimated arrival home is shown at the end of the day.
+
+---------------------------------------------------------------------
+9. DURATIONS AND TRAVEL (engine)
+---------------------------------------------------------------------
+- Defaults (editable in Settings and per slot; learned from actual logged times):
+  - First prospect visit 45 min · follow-up visit 30 · client care visit 30 · Keyfetch top-up visit 20
+  - Contract signing 45 · onboarding training 60
+  - Phone call 15 · Google Meet 30
+  - Email slot 5 min (prep) · text slot 2 min
+- Travel: Google Maps drive times when a key is set. Otherwise: straight-line distance × 1.3, at about 30 mph in metro areas and 50 mph rural, rounded up to the next 5 min, plus a 10 min parking / walk-in buffer. Shown between cards.
+- Other blocks the rep can add, so the day is never overbooked: Lunch (on by default, 30 min, flexible around noon), Admin, Team meeting, Personal, Office.
+
+---------------------------------------------------------------------
+10. WORKING THROUGH THE DAY
+---------------------------------------------------------------------
+- In the Day view for today, the next slot is highlighted as "NEXT", with ONE big button for the next step:
+  - In person: "Start driving" (opens Maps) → "I've arrived" → "Done – how did it go?"
+  - Phone call: "Call now" (tap to call) → "How did it go?"
+  - Google Meet: "Join meeting" → "How did it go?"
+  - Email: "Review & send" (or "Scheduled for 10:15 AM", with Edit / Cancel)
+  - Text: "Send text" (opens the pre-filled message) → "Done"
+- "How did it go?":
+  - big outcome buttons (Prospects: Interested / Not now / Needs follow-up / Hot; Clients: All good / Top-up done / Upsell interest / Issue to fix)
+  - a quantity box for a Keyfetch top-up
+  - a voice or text note
+  - "Plan the next step?", which reuses the Add flow pre-filled
+  Points are shown with a short celebration.
+- "I need more time" (+15 / +30) during a visit: the engine recalculates the rest of the day immediately and explains the effect. If something now breaks a rule, it offers: keep, move to tomorrow, turn into a call, or swap the order.
+- Can't do it? "Later today" / "Tomorrow" / "Pick a day" / "Turn into a call" / "Skip (with reason)". Skipped items go to "Not scheduled yet"; they're never lost.
+- On mobile, a full-screen "Today" mode shows the same thing with bigger controls.
+
+---------------------------------------------------------------------
+11. WEEK, MONTH, PAST DAYS, MANAGERS, SYNC
+---------------------------------------------------------------------
+- WEEK: day cards in a simple vertical list on mobile, or columns on desktop. Each shows the leave-by time, number of slots by work type, how full it is, the main area, and any trip banner. Plus the "Not scheduled yet" tray. Drag or arrow-move between days.
+- MONTH: the overview (section 4), with colored dots per day.
+- PAST DAYS: read-only diary showing planned vs done, outcomes, notes, synced Gmail / Meet / Chat activity and points, with a one-line summary. Late notes can be added.
+- MANAGERS / TEAM LEADS / OWNERS:
+  - can open any rep's My Plan (read-only)
+  - see the team's week at a glance
+  - push Manager Priorities into a rep's plan ("From Jason Scott" badge; the engine finds the slot; the rep accepts)
+  - suggest changes the rep can accept or decline
+  Manager Assist meetings appear on both plans, locked. Managers have their own My Plan too.
+- Two-way Google Calendar sync. Calendar events appear as locked blocks.
+- AI (advice only): "Suggested for you" in the Add flow, method suggestions, message drafts, and "Help me fill the gaps" (the AI suggests WHO; the engine decides WHERE; the rep accepts each one).
+- Simple mode is ON by default for new reps. Full mode (denser cards, keyboard shortcuts) is optional for veterans. A short first-time walkthrough (3–4 screens, replayable from Help).
+
+---------------------------------------------------------------------
+12. DATA
+---------------------------------------------------------------------
+- PlanSlot (ONE dealership per slot, always):
+  - id, userId, date, timeType (exact / morning / afternoon / anytime), startTime, durationMin, travelBeforeMin (calculated), orderIndex
+  - workType (prospect / signup_onboarding / client)
+  - activityType (in_person / phone / meet / email / text)
+  - purpose, dealershipId, contactId, distanceBand
+  - tripId, sendAt (email / text), message, locked
+  - source (manual / ai / manager_priority / assist / calendar / repeat)
+  - batchId (optional, display grouping only)
+  - status (planned / in_progress / done / skipped / not_scheduled), actualStart / actualEnd, outcome, activityId
+  - createdBy, updatedAt, version
+- DaySettings, Trip, SendQueue, RepeatRule, plus the Settings values above.
+- Migrate any existing plan data into PlanSlot (split any multi-dealership items into separate slots). Remove the old planner data structures.
+- Update the Sheets tabs, setup script, storage adapters and seed data:
+  - 4 weeks of past plans (with outcomes) and 2 weeks of future plans per rep
+  - a trip, edge and out-of-town prospects
+  - an email batch of separate slots and a call list of separate slots
+  - one over-full day and one visit that ran over
+- No money anywhere (except the existing incentive rules, which My Plan never shows).
+
+---------------------------------------------------------------------
+13. TEST SCENARIOS (walk through these first, and make sure they work)
+---------------------------------------------------------------------
+1. A rep who rarely uses apps adds an in-person visit for tomorrow in 4 taps or fewer, without help. They see "Leave home by 9:20 AM".
+2. The rep taps ▼ on the first visit. It swaps with the second; times, travel and the leave-by time update instantly, with a plain-English message and Undo.
+3. The rep drags a visit to after a locked Manager Assist meeting. The locked meeting doesn't move, and the other times adjust around it.
+4. Todd Bilius selects "Email" and ticks 8 prospects. 8 separate email slots are created, with staggered send times in the recommended window. He edits one message, and removes another, individually.
+5. Carlos makes a call list of 6 clients. 6 separate call slots are placed back to back inside 10–4. He moves the 4th call to tomorrow using "Move to another day".
+6. Kevin picks a dealership 65 miles away (edge flag shown), then one 110 miles away. He's prompted to make it a trip day and shown nearby prospects to add.
+7. Todd Kelly tries to book a call at 8:30 AM. He's gently told dealerships are busy before 10 and offered 10:15 AM, and can still keep 8:30 if he insists.
+8. A rep picks "Lone Star Ford" (a Keyfetch client) first. "How?" pre-selects an in-person visit with the purpose "Keyfetch top-up", and slots that fit between existing visits are offered.
+9. A visit overruns by 30 minutes ("I need more time"). The engine recalculates; a call now lands at 4:10 PM, and the rep turns it into a scheduled email or moves it to tomorrow with one tap.
+10. In the Week view, the rep drags an item from the "Not scheduled yet" tray onto Thursday, and uses the arrows to put it first. With AI switched off, everything still works.
+
+WHEN DONE, give me:
+- the list of deleted old files and code, and the new module structure
+- the engine rules and defaults
+- the unit test list and results
+- confirmation that all 10 scenarios work
+- confirmation that no old Planner UI remains, and that every "Add to my plan" entry point in the app uses the new module
+=====================================================================

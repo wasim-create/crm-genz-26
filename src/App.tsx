@@ -22,7 +22,8 @@ import {
 import { LocalStorageAdapter } from './services/storageAdapter';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar, ActiveView } from './components/layout/Sidebar';
-import { PlannerView } from './components/views/PlannerView';
+import { MyPlanModule } from './features/myplan/MyPlanModule';
+import { PlanItem, DaySettings, Trip, SendQueueItem } from './types/planner';
 import { PipelineView } from './components/views/PipelineView';
 import { ProspectPoolView } from './components/views/ProspectPoolView';
 import { ClientPortfolioView } from './components/views/ClientPortfolioView';
@@ -34,7 +35,6 @@ import { GameRulesConsoleView } from './components/views/GameRulesConsoleView';
 import { DealerGroupsView } from './components/views/DealerGroupsView';
 import { SettingsAdminView } from './components/views/SettingsAdminView';
 import { DealershipDetailModal } from './components/views/DealershipDetailModal';
-import { WorkDayMobileModal } from './components/views/WorkDayMobileModal';
 import { WorkspaceSyncView } from './components/views/WorkspaceSyncView';
 import { CommandPalette } from './components/command/CommandPalette';
 import { CheckCircle2, X, Sparkles, Flame } from 'lucide-react';
@@ -58,6 +58,10 @@ export default function App() {
   const [productBonuses, setProductBonuses] = useState<ProductBonus[]>([]);
   const [managerPriorities, setManagerPriorities] = useState<ManagerPriority[]>([]);
   const [pointsLedger, setPointsLedger] = useState<PointsLedgerEntry[]>([]);
+  const [planItems, setPlanItems] = useState<PlanItem[]>([]);
+  const [daySettings, setDaySettings] = useState<Record<string, DaySettings>>({});
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [sendQueue, setSendQueue] = useState<SendQueueItem[]>([]);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ActiveView>('planner');
@@ -65,8 +69,8 @@ export default function App() {
 
   // Modals state
   const [selectedDealership, setSelectedDealership] = useState<Dealership | null>(null);
+  const [addToPlanTarget, setAddToPlanTarget] = useState<Dealership | null>(null);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
-  const [isMobileWorkDayOpen, setIsMobileWorkDayOpen] = useState(false);
   const [isWorkspaceSyncOpen, setIsWorkspaceSyncOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; points?: number } | null>(null);
@@ -96,9 +100,13 @@ export default function App() {
       setProductBonuses(data.productBonuses);
       setManagerPriorities(data.managerPriorities);
       setPointsLedger(data.pointsLedger);
+      setPlanItems(data.planItems || []);
+      setDaySettings(data.daySettings || {});
+      setTrips(data.trips || []);
+      setSendQueue(data.sendQueue || []);
 
-      // Default to Kelley Koliopulos (Northeast Rep)
-      const defaultUser = data.users.find((u: User) => u.id === 'u_kelley') || data.users[0];
+      // Default to Carlos Martinez (New Rep, Texas) or Kelley
+      const defaultUser = data.users.find((u: User) => u.id === 'u_carlos') || data.users[0];
       setCurrentUser(defaultUser);
     };
 
@@ -496,7 +504,7 @@ export default function App() {
         allUsers={users}
         onSelectUser={handleSelectUser}
         onOpenCommand={() => setIsCommandOpen(true)}
-        onOpenMobileWorkDay={() => setIsMobileWorkDayOpen(true)}
+        onOpenMobileWorkDay={() => setCurrentView('planner')}
         onOpenWorkspaceSync={() => setIsWorkspaceSyncOpen(true)}
         syncState={{ isSyncing, lastSyncTime: 'Today, 11:30 AM' }}
         gamificationProfile={gamification[currentUser.id]}
@@ -520,27 +528,13 @@ export default function App() {
         {/* Viewport Content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar">
           {currentView === 'planner' && (
-            <PlannerView
-              dealerships={dealerships}
-              activities={activities}
-              priorities={managerPriorities}
-              bonuses={productBonuses}
+            <MyPlanModule
               currentUser={currentUser}
-              onOpenDealership={(d) => setSelectedDealership(d)}
-              onLogVisit={(d) => setSelectedDealership(d)}
-              onUpdateActivities={(acts) => {
-                setActivities(acts);
-                acts.forEach(a => storage.saveActivity(a));
-              }}
-              onUpdatePriority={(p) => {
-                const list = managerPriorities.map(m => m.id === p.id ? p : m);
-                setManagerPriorities(list);
-                storage.savePriority(p);
-                if (p.status === 'completed') {
-                  awardPoints('complete_priority', p.linkedDealershipId, p.linkedDealershipName, `Completed directive: ${p.title}`);
-                }
-              }}
-              onLaunchWorkDay={() => setIsMobileWorkDayOpen(true)}
+              dealerships={dealerships}
+              contacts={contacts}
+              users={users}
+              preselectedDealership={addToPlanTarget}
+              onClearPreselected={() => setAddToPlanTarget(null)}
             />
           )}
 
@@ -720,6 +714,11 @@ export default function App() {
             showToast(`Added contact ${c.firstName} ${c.lastName}`);
           }}
           onLogKeyfetchTopup={handleLogKeyfetchTopup}
+          onAddToPlan={(d) => {
+            setSelectedDealership(null);
+            setAddToPlanTarget(d);
+            setCurrentView('planner');
+          }}
         />
       )}
 
@@ -730,40 +729,6 @@ export default function App() {
         dealerships={dealerships}
         onSelectDealership={(d) => setSelectedDealership(d)}
       />
-
-      {/* Mobile Work My Day Modal */}
-      {isMobileWorkDayOpen && (
-        <WorkDayMobileModal
-          stops={dealerships.filter(d => d.assignedRepId === currentUser.id && d.stage !== 'Client').slice(0, 4)}
-          currentUser={currentUser}
-          gamificationProfile={gamification[currentUser.id]}
-          onClose={() => setIsMobileWorkDayOpen(false)}
-          onLogCompletedStop={(d, notes, isHot) => {
-            const now = new Date();
-            const time24 = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-            handleAddActivity({
-              id: `act_${Date.now()}`,
-              dealershipId: d.id,
-              dealershipName: d.dealershipName,
-              userId: currentUser.id,
-              userName: `${currentUser.firstName} ${currentUser.lastName}`,
-              activityType: 'In-Person Visit',
-              communicationType: 'In-Person',
-              status: 'completed',
-              completedAt: now.toISOString(),
-              plannedTime: time24,
-              notes: notes,
-              productsDiscussed: ['Keyfetch', 'Vehicle Service Contract (Extended Warranty)']
-            });
-
-            if (isHot) {
-              handleMoveStage(d, 'HOT');
-            } else {
-              handleMoveStage(d, 'Visited');
-            }
-          }}
-        />
-      )}
 
       {/* Google Workspace Sync Modal */}
       {isWorkspaceSyncOpen && (

@@ -1,0 +1,232 @@
+=====================================================================
+APEXDRIVE CRM: "MY PLAN" v2: PLANNING ASSISTANT (replaces the AI day-planner approach)
+=====================================================================
+
+This is an improvement to the existing "My Plan" (the Planner). Keep everything else in the app as it is.
+
+Where this conflicts with the previous My Plan prompt (especially its sections on setup, time and travel, and AI), THIS WINS. Keep everything from that prompt that this doesn't change, e.g.:
+- working through the day (Now / Next)
+- "I need more time" recalculation
+- the Day / Week / Month views and past-days diary
+- Simple mode and accessibility
+- manager visibility
+- Google Calendar sync
+- the no-money rule (incentive amounts stay visible only as already set up)
+
+WHAT'S WRONG TODAY
+1. AI mode produces illogical days: wrong distances, impossible timings, and the radius rule ignored.
+2. The planner tries to plan the whole day for the rep.
+
+We are changing approach. My Plan becomes a PLANNING ASSISTANT: it asks what the rep is planning, helps them pick who and how, and then suggests realistic time slots. The rep stays in control and builds their plan in pieces.
+
+BEFORE BUILDING:
+- Write a short plan: the screens (in words), the flows, the data and engine changes, and the files you'll change.
+- Walk through the test scenarios in section 12 step by step, showing what the user sees.
+- Then build.
+
+---------------------------------------------------------------------
+0. THE GOLDEN RULE: CODE CALCULATES, AI ADVISES
+---------------------------------------------------------------------
+All times, distances, durations, radius bands, availability and slot suggestions MUST be calculated by a deterministic SCHEDULING ENGINE written in ordinary TypeScript code, with unit tests. The AI (Gemini) must NEVER calculate or decide times, distances, drive durations or whether something fits.
+
+The AI is only used for:
+- choosing and ranking WHO is worth contacting, and why (one plain sentence)
+- suggesting the best contact METHOD and purpose
+- drafting emails, texts and talking points
+- writing plain-English summaries and explanations of what the engine decided
+
+If the AI suggests anything, the engine validates it. The engine's numbers always win. If AI is unavailable, My Plan still works fully.
+
+Write unit tests for the engine covering: the radius bands, drive time estimates, the live-contact window, the leave-by time, the slot finder, overruns and time zones.
+
+---------------------------------------------------------------------
+1. DISTANCE BANDS (from the rep's home)
+---------------------------------------------------------------------
+Measure from the rep's HOME address / ZIP, always (even when the rep is out on the road). Use straight-line distance to decide the band, so a dealership's band never changes. Use real drive time (Google Maps if a key is set, otherwise the estimate in section 6) for scheduling.
+
+  🟢 HOME REGION   0–60 miles   Normal. Reps are encouraged to work here.
+  🟡 EDGE          60–69 miles  Allowed (the 10–15% tolerance), with a gentle flag: "Edge of your region".
+  🔴 OUT OF TOWN   70+ miles    A "travel prospect". It takes much more time, and it's handled as a TRIP (section 2).
+
+- The thresholds (60 / 69 / 70) are editable in Settings by owners.
+- Show the band color and the miles on every dealership row, card and plan item.
+- The pool, suggestions and the AI default to the home region first. Edge and out-of-town are shown, but clearly marked and listed after.
+- This replaces any existing radius logic that ignores these bands. Make sure ALL places use the same engine function: pool, claiming, suggestions, AI, the map and reports.
+
+---------------------------------------------------------------------
+2. OUT-OF-TOWN = TRIPS
+---------------------------------------------------------------------
+- An out-of-town item can't be dropped into a normal day as a single stop. Instead, the rep plans a TRIP: a day (or days) dedicated to one area, with travel each way shown.
+- When the rep picks an out-of-town dealership, show: "This is about a [X]-hour round trip. Make it a trip day?" Then suggest other prospects and clients within about 15 miles of it, to make the trip worthwhile.
+- Discourage single-visit trips in plain words, but allow them. A Settings option (off by default) requires manager approval for trips.
+- Show trips clearly in Week and Month views (a trip banner across the day).
+- Reports: home region vs edge vs out-of-town activity per rep.
+
+---------------------------------------------------------------------
+3. THE OPENING QUESTION
+---------------------------------------------------------------------
+When the rep opens My Plan to plan, ask ONE simple question with big buttons:
+
+  "What are you planning?"   [ Today ]  [ Tomorrow ]  [ This week ]  [ Choose days ]
+
+- Remember the last answer and pre-select it. Experienced users can skip straight to the planning screen.
+- MONTH is NOT slot-by-slot planning. The Month view is an OVERVIEW: goals and targets, trips booked, repeat items, priorities, and how full each week is getting. Detailed planning happens per day or week. From the Month view, a rep can tap a week or day to plan it.
+- After the question, show the PLANNING SCREEN: the chosen day(s), with existing items, free time, and a big "+ Add" button. For a week, show each day as a column or card with free time visible.
+
+---------------------------------------------------------------------
+4. ONE PICKER SCREEN (dealership-first OR activity-first, same screen)
+---------------------------------------------------------------------
+Don't build two separate flows. Build ONE picker screen where the order doesn't matter.
+
+TOP ROW (optional): the activity buttons, big icons with labels:
+  [ In-person visit ] [ Phone call ] [ Google Meet ] [ Email ] [ Text message ]
+Picking one first changes how the list below works (see the table).
+
+DEALERSHIP LIST:
+- Three clear tabs, each with a count:
+    PROSPECTS | SIGN-UP & ONBOARDING | CLIENTS
+- Default source: the rep's BENCH (their claimed and assigned dealerships and their clients).
+- At the bottom: [ Find more nearby ] opens the Prospect Pool, home region first, edge and out-of-town marked. Claiming works as usual. [ Add a new dealership ] opens a manual add.
+- Search box, plus big quick-filter buttons: Due now · Nearby · Hot · Manager priority · Not contacted lately.
+- [ More filters ] opens ALL the existing filters and search options (keep every one of them). In Simple mode they're collapsed by default.
+- Each row shows: name, city, distance band color + miles, stage, contact names, and a "why" hint (e.g. "Follow-up due today", "Keyfetch top-up due", "From Jason Scott").
+
+SELECTION RULES BY ACTIVITY:
+  | Activity        | Selection       | Next step                                                                 |
+  | In-person visit | ONE dealership  | purpose → when (slot suggestions)                                         |
+  | Google Meet     | ONE dealership  | contact(s) to invite (or add a new contact) → purpose → when              |
+  | Phone call      | ONE dealership  | which contact (or add a new contact, name + number) → purpose → when      |
+  | Email           | MULTIPLE        | contact(s) per dealership → template / AI draft → when to send            |
+  | Text message    | MULTIPLE        | contact(s) per dealership → template / AI draft → when to send            |
+
+- If the rep picks a DEALERSHIP first, the next screen asks "How?" with the 5 activity buttons. The most sensible one is pre-selected, based on stage and history (e.g. a first visit for a new prospect; a call for a routine client check-in). Then it continues as above.
+- CALL SESSIONS (optional, recommended): the rep can also tick several dealerships for calls ("Make a call list"). The engine books one "Calls" block. During the day it works through the list one by one: Call now → How did it go? → Next. Each call is logged separately on its own dealership.
+- EMAIL / TEXT BATCHES: one plan block, e.g. "Emails – 8 dealerships – about 25 min". Each message is personalised (name fields filled in, optional AI personalisation), sent individually, and logged on each dealership.
+  - Email: sent individually through Gmail (never one email with everyone on it). Cap the batch size to respect Gmail sending limits.
+  - Text: a web app cannot bulk-send texts from the rep's own phone. Build a TEXT QUEUE: each message opens in the phone's messaging app, pre-filled; the rep taps send, and the queue moves to the next one. Leave a clearly marked hook for a texting service later (e.g. Twilio / Google Voice), but do NOT build a fake "Send all" button.
+
+PURPOSE: suggested automatically from the dealership's stage, and changeable.
+- Prospects: first visit, follow-up, product pitch, decision-maker meeting, Manager Assist meeting.
+- Sign-up & Onboarding: contract signing, onboarding training, setup check.
+- Clients: Keyfetch top-up (Keyfetch clients only), upsell, promotions / sales follow-up, check-in.
+
+AFTER ADDING an in-person visit, offer: "3 more dealerships within 10 miles of here. Add one?" This is the easy way to build an efficient day without thinking about routes.
+
+---------------------------------------------------------------------
+5. TIME RULES: WHEN EACH KIND OF ACTIVITY SHOULD HAPPEN
+---------------------------------------------------------------------
+All times are in the DEALERSHIP'S local time zone. Show the rep's own time too when they differ.
+
+LIVE CONTACT WINDOW: 10:00 AM – 4:00 PM
+- Applies to ALL person-to-person contact: in-person visits, phone calls, Google Meet / online meetings, and any other live meeting.
+- Before 10 AM and after 4 PM, dealerships are usually very busy. The engine never SUGGESTS live contact outside the window.
+- If the rep chooses a time outside it anyway, allow it, with a gentle flag ("Dealerships are usually busy before 10 AM").
+
+NON-LIVE ACTIVITIES (emails, texts, prep, admin):
+- PREPARATION (writing emails and texts, reviewing briefs, CRM notes, planning) is suggested OUTSIDE the live window (before 10 AM, after 4 PM, at lunch, or in gaps), so the live window is kept free for live contact.
+- SENDING is scheduled for the best time to reach the dealership. The rep writes the message when convenient and the system sends it (email) or reminds them to send it (text) at the recommended time.
+- Recommended send times are per channel, with day-of-week defaults. Owners can edit them in Settings, and the system learns from actual reply rates over time and suggests updated defaults. Sensible starting defaults:
+    - Email: Tue–Thu, about 10:00–11:30 AM or about 2:00–3:00 PM, dealership local time. Avoid Monday mornings (catching up after the weekend) and Saturdays (the busiest sales day).
+    - Text: Tue–Fri, about 10:30 AM–3:30 PM. Never early morning or evening.
+    - Live contact (visits, calls, Meet): best days default to Tue–Thu, then Mon / Fri. Saturday off by default. Rep working days are set in Settings.
+  Label these as editable defaults, not facts.
+- Scheduled email sending: use a Google Apps Script time-based trigger, or a backend queue, since the Gmail API has no built-in "schedule send". The rep can see, edit or cancel queued sends. Texts become a reminder at the recommended time that opens the pre-filled message.
+
+THE REP'S DAY STARTS EARLIER THAN 10 AM:
+- The engine calculates a "LEAVE BY" time for the first in-person visit:
+  first appointment time − drive time from home − parking / walk-in buffer (10 min) − a small safety margin (default 10 min).
+  Show it clearly at the top of the day, e.g. "🚗 Leave home by 9:15 AM to arrive at Smith Motors for 10:00".
+- Send an optional reminder before the leave-by time (default 15 min).
+- Before leaving, the morning is suggested for prep: emails to write, briefs to read, calls to prepare.
+- The same goes for the end of the day: the estimated arrival home, plus suggested after-4 PM prep and admin (log notes, write tomorrow's emails).
+- When moving between visits, the engine includes the drive time and shows when to leave each stop to make the next one on time.
+
+---------------------------------------------------------------------
+6. DURATIONS AND TRAVEL (calculated by the engine)
+---------------------------------------------------------------------
+- Default durations (editable in Settings and per item; learned from the rep's actual logged times over time):
+    - First in-person prospect visit 45 min · Follow-up visit 30 · Client care visit 30 · Keyfetch top-up visit 20
+    - Contract signing 45 · Onboarding training 60
+    - Phone call 15 (a call session = number of calls × 12 min + 5 min)
+    - Google Meet 30
+    - Email: 5 min setup + 3 min per dealership (less with templates / AI drafts)
+    - Text: 2 min setup + 1 min per dealership
+- Travel: Google Maps drive times when a key is set. Otherwise: straight-line distance × 1.3 road factor, at about 30 mph in metro areas and 50 mph rural, rounded up to the next 5 minutes, plus a 10-minute parking / walk-in buffer.
+- Show travel as its own visible block in the timeline ("🚗 25 min").
+- Block types the rep can add (so the engine never overbooks): Admin, Lunch, Team meeting, Manager Assist meeting, Personal, Office. Lunch is on by default (30 min, flexible around noon).
+
+---------------------------------------------------------------------
+7. SLOT SUGGESTIONS INSTEAD OF A TIME PICKER
+---------------------------------------------------------------------
+After WHO and HOW are chosen, don't make the rep pick a time. The engine offers the 2–3 BEST realistic slots, explained in plain words. For example:
+
+   ✅ Tue 10:30 AM – right after Smith Motors, 12 min drive
+      Tue 2:15 PM – fits before Lone Star Ford
+      Wed 11:00 AM – you're in that area on Wednesday
+
+- Slots respect: the live window, drive times from the previous item, durations, buffers, lunch, existing items, locked items, the finish time, working days, time zones and trips.
+- Email / text batches get their recommended SEND time plus a suggested PREP slot outside the live window.
+- [ Pick my own time ] is always available as a smaller option. If the chosen time doesn't fit, the engine explains why and offers the nearest slot that works.
+- Flexible options remain: "Anytime that day" / Morning / Afternoon. The engine places these in the best free gap.
+- A one-tap "Repeat this" (e.g. every 4 weeks for Keyfetch top-up checks).
+
+---------------------------------------------------------------------
+8. HOW THE AI ASSISTS (advice only, see section 0)
+---------------------------------------------------------------------
+- Shows "Suggested for you" at the top of the picker: who to contact today or this week, and why. It respects the home region first, follow-ups due, top-ups due, hot deals, Manager Priorities, relationship temperature, active product bonuses, and the rep's choice of focus (Prospects / Clients / Mix).
+- Suggests the method ("A call is enough for this check-in, which saves a 40-min drive") and drafts messages.
+- "Help me fill the gaps": the AI suggests WHO might fill a free gap. The ENGINE decides whether it fits and where. The rep accepts each suggestion individually.
+- The AI never builds a whole day by itself, and never changes locked or manual items.
+
+---------------------------------------------------------------------
+9. THE SUMMARY ("Your day" / "Your week")
+---------------------------------------------------------------------
+After adding items (or anytime), show a simple summary card:
+- leave-by time
+- number of items by type (prospects / sign-up / clients; live / non-live)
+- drive time
+- "How full is my day?" (Light / Good / Full / Too much)
+- estimated time home
+- any warnings, with one-tap fixes
+- a big [ Looks good ] button
+For a week: each day's summary, plus trips and a home-region vs out-of-town split.
+
+---------------------------------------------------------------------
+10. SIMPLICITY RULES (unchanged, restated because they matter most)
+---------------------------------------------------------------------
+- One question per screen, big buttons, icons always with words, plain English, Undo everywhere, autosave.
+- A typical item takes 4 taps or fewer: (activity or dealership) → (the other one) → slot → done.
+- Simple mode on by default for new reps; Full mode for veterans (dense views, drag and drop, keyboard shortcuts).
+- The first-time walkthrough is updated for this new flow.
+
+---------------------------------------------------------------------
+11. DATA MODEL ADDITIONS
+---------------------------------------------------------------------
+- PlanItem gets: activityType, purpose, dealershipIds (an array, for email / text / call batches), contactIds, distanceBand, tripId, sendAt (for email / text), prepSlot, leaveBy (calculated), isLiveContact (bool).
+- New: Trip (id, userId, dates, area, dealershipIds, approval status).
+- New: SendQueue (emails / texts queued for their send time, with status).
+- Settings: radius thresholds; the live-contact window; recommended send-time rules per channel and day; durations; travel assumptions; buffers; working days; the trip approval toggle.
+- Update the Sheets tabs, the setup script, the storage adapters and the seed data:
+  - include out-of-town prospects for each rep, one planned trip and one edge-of-region dealership
+  - include a call session, an email batch and a text queue
+  - include days with leave-by times, showing everything working
+
+---------------------------------------------------------------------
+12. TEST SCENARIOS (walk through these first, and make sure they work)
+---------------------------------------------------------------------
+1. Kelley opens My Plan and taps "Tomorrow", then "In-person visit", then Smith Motors (22 mi, home region). She's offered 3 slots inside 10–4, taps the first, and sees "Leave home by 9:20 AM".
+2. Kevin picks a dealership 65 miles away (edge). It's added with a gentle "Edge of your region" flag. He then picks one 110 miles away. He's prompted to make it a trip day and shown 3 nearby prospects to add.
+3. Todd Bilius selects "Email", ticks 8 prospects, and uses an AI draft. He's given a prep slot at 8:30 AM and a recommended send time of Tue 10:15 AM (dealership time). Each email is sent individually and logged on each dealership.
+4. Carlos makes a call list of 6 clients. One "Calls – 6 clients – about 77 min" block is booked inside 10–4. During the day he works through them one by one, and each is logged separately.
+5. Todd Kelly tries to book a phone call at 8:30 AM. He's gently told dealerships are busy before 10, and is offered 10:15 AM instead. He can still keep 8:30 if he insists.
+6. A rep picks a dealership first ("Lone Star Ford", a client). The app asks "How?", pre-selects "Keyfetch top-up visit", and offers slots that fit between existing visits, with drive times.
+7. A visit overruns by 30 minutes. The engine recalculates, a later call now lands at 4:10 PM, and it offers: move it earlier into a gap, move it to tomorrow, or keep it.
+8. With AI switched off, all of the above still works. Only "Suggested for you" and the message drafts are missing.
+
+WHEN DONE, give me:
+- a changelog
+- the engine's rules and default values
+- the unit test list and results
+- confirmation that all 8 scenarios work
+- confirmation that the radius bands are used consistently everywhere (pool, claiming, suggestions, AI, map, reports)
+=====================================================================

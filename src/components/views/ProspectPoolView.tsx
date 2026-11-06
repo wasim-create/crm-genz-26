@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Dealership, User } from '../../types/crm';
-import { calculateDistanceMiles, isWithinTerritory } from '../../utils/territory';
+import { calculateDistanceMiles, isWithinTerritory, getDistanceBand } from '../../utils/territory';
 import { RouteMap } from '../common/RouteMap';
 import {
   Compass,
@@ -78,7 +78,8 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
       d.coordinates.lat,
       d.coordinates.lng
     );
-    return { dealership: d, distance: dist, withinTerritory: isWithinTerritory(dist) };
+    const band = getDistanceBand(dist);
+    return { dealership: d, distance: dist, withinTerritory: isWithinTerritory(dist), band };
   });
 
   // Check duplicates when typing manual search

@@ -1,3 +1,5 @@
+import type { DistanceBand } from './planner';
+
 export type UserRole = 
   | 'new_rep' 
   | 'veteran_rep' 
@@ -18,6 +20,7 @@ export interface User {
   region: USRegion;
   managerId: string | null;
   homeZipCode: string;
+  homeZip?: string;
   homeCoords: { lat: number; lng: number };
   phone: string;
   avatarUrl?: string;
@@ -166,6 +169,10 @@ export interface Dealership {
   upsells: UpsellOpportunity[];
   onboardingTasks?: OnboardingTask[];
   clientHealthScore?: number; // 0-100
+  distanceMiles?: number;
+  distanceBand?: DistanceBand;
+  primaryContactName?: string;
+  zip?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -427,3 +434,5 @@ export interface AuditLogRecord {
   action: string;
   details: string;
 }
+
+export * from './planner';

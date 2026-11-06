@@ -56,6 +56,7 @@ interface DealershipDetailModalProps {
   onRequestAssist: (dealership: Dealership, managerId: string, assistType: AssistType, proposedDate: string, proposedTime: string, brief: string) => void;
   onAddContact: (contact: Contact) => void;
   onLogKeyfetchTopup: (dealershipId: string, quantity: number, notes?: string) => void;
+  onAddToPlan?: (dealership: Dealership) => void;
 }
 
 export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
@@ -72,7 +73,8 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
   onAddActivity,
   onRequestAssist,
   onAddContact,
-  onLogKeyfetchTopup
+  onLogKeyfetchTopup,
+  onAddToPlan
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'visit_log' | 'products' | 'assist' | 'contacts' | 'audit'>('overview');
 
@@ -223,6 +225,19 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onAddToPlan && (
+              <button
+                type="button"
+                onClick={() => {
+                  onAddToPlan(dealership);
+                  onClose();
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add to My Plan</span>
+              </button>
+            )}
             {!isClient && (
               <button
                 type="button"

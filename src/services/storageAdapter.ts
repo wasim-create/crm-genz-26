@@ -13,7 +13,13 @@ import {
   GameRule,
   ProductBonus,
   ManagerPriority,
-  PointsLedgerEntry
+  PointsLedgerEntry,
+  PlanItem,
+  DaySettings,
+  RepeatRule,
+  DayTemplate,
+  Trip,
+  SendQueueItem
 } from '../types/crm';
 import {
   USERS,
@@ -33,6 +39,14 @@ import {
   INITIAL_MANAGER_PRIORITIES,
   INITIAL_POINTS_LEDGER
 } from '../data/seedData';
+import {
+  INITIAL_PLAN_ITEMS,
+  INITIAL_DAY_SETTINGS,
+  INITIAL_REPEAT_RULES,
+  INITIAL_DAY_TEMPLATES,
+  INITIAL_TRIPS,
+  INITIAL_SEND_QUEUE
+} from '../data/plannerSeedData';
 
 export type StorageMode = 'local_storage' | 'google_sheets' | 'cloud_sql';
 
@@ -55,6 +69,12 @@ export interface StorageAdapter {
     productBonuses: ProductBonus[];
     managerPriorities: ManagerPriority[];
     pointsLedger: PointsLedgerEntry[];
+    planItems: PlanItem[];
+    daySettings: Record<string, DaySettings>;
+    repeatRules: RepeatRule[];
+    dayTemplates: DayTemplate[];
+    trips: Trip[];
+    sendQueue: SendQueueItem[];
   }>;
   saveDealership(dealership: Dealership): Promise<void>;
   saveDealerships(dealerships: Dealership[]): Promise<void>;
@@ -68,6 +88,17 @@ export interface StorageAdapter {
   saveProductBonus(bonus: ProductBonus): Promise<void>;
   savePriority(priority: ManagerPriority): Promise<void>;
   addPointsLedgerEntry(entry: PointsLedgerEntry): Promise<void>;
+  savePlanItem(item: PlanItem): Promise<void>;
+  savePlanItems(items: PlanItem[]): Promise<void>;
+  deletePlanItem(itemId: string): Promise<void>;
+  saveDaySettings(settings: DaySettings): Promise<void>;
+  saveRepeatRule(rule: RepeatRule): Promise<void>;
+  saveDayTemplate(template: DayTemplate): Promise<void>;
+  saveTrip(trip: Trip): Promise<void>;
+  saveTrips(trips: Trip[]): Promise<void>;
+  saveSendQueueItem(item: SendQueueItem): Promise<void>;
+  saveSendQueue(items: SendQueueItem[]): Promise<void>;
+  deleteSendQueueItem(id: string): Promise<void>;
   transferOwnership(dealershipId: string, toRepId: string, managerId: string, managerName: string, reason: string): Promise<void>;
   resetToSeed(): Promise<void>;
 }
@@ -89,7 +120,13 @@ const STORAGE_KEYS = {
   GAME_RULES: 'apexdrive_game_rules',
   PRODUCT_BONUSES: 'apexdrive_product_bonuses',
   PRIORITIES: 'apexdrive_priorities',
-  POINTS_LEDGER: 'apexdrive_points_ledger'
+  POINTS_LEDGER: 'apexdrive_points_ledger',
+  PLAN_ITEMS: 'apexdrive_plan_items',
+  DAY_SETTINGS: 'apexdrive_day_settings',
+  REPEAT_RULES: 'apexdrive_repeat_rules',
+  DAY_TEMPLATES: 'apexdrive_day_templates',
+  TRIPS: 'apexdrive_trips',
+  SEND_QUEUE: 'apexdrive_send_queue'
 };
 
 export class LocalStorageAdapter implements StorageAdapter {
@@ -163,7 +200,13 @@ export class LocalStorageAdapter implements StorageAdapter {
         gameRules: JSON.parse(localStorage.getItem(STORAGE_KEYS.GAME_RULES) || JSON.stringify(INITIAL_GAME_RULES)),
         productBonuses: JSON.parse(localStorage.getItem(STORAGE_KEYS.PRODUCT_BONUSES) || JSON.stringify(INITIAL_PRODUCT_BONUSES)),
         managerPriorities: JSON.parse(localStorage.getItem(STORAGE_KEYS.PRIORITIES) || JSON.stringify(INITIAL_MANAGER_PRIORITIES)),
-        pointsLedger: JSON.parse(localStorage.getItem(STORAGE_KEYS.POINTS_LEDGER) || JSON.stringify(INITIAL_POINTS_LEDGER))
+        pointsLedger: JSON.parse(localStorage.getItem(STORAGE_KEYS.POINTS_LEDGER) || JSON.stringify(INITIAL_POINTS_LEDGER)),
+        planItems: JSON.parse(localStorage.getItem(STORAGE_KEYS.PLAN_ITEMS) || JSON.stringify(INITIAL_PLAN_ITEMS)),
+        daySettings: JSON.parse(localStorage.getItem(STORAGE_KEYS.DAY_SETTINGS) || JSON.stringify(INITIAL_DAY_SETTINGS)),
+        repeatRules: JSON.parse(localStorage.getItem(STORAGE_KEYS.REPEAT_RULES) || JSON.stringify(INITIAL_REPEAT_RULES)),
+        dayTemplates: JSON.parse(localStorage.getItem(STORAGE_KEYS.DAY_TEMPLATES) || JSON.stringify(INITIAL_DAY_TEMPLATES)),
+        trips: JSON.parse(localStorage.getItem(STORAGE_KEYS.TRIPS) || JSON.stringify(INITIAL_TRIPS)),
+        sendQueue: JSON.parse(localStorage.getItem(STORAGE_KEYS.SEND_QUEUE) || JSON.stringify(INITIAL_SEND_QUEUE))
       };
     } catch {
       return {
@@ -182,7 +225,13 @@ export class LocalStorageAdapter implements StorageAdapter {
         gameRules: INITIAL_GAME_RULES,
         productBonuses: INITIAL_PRODUCT_BONUSES,
         managerPriorities: INITIAL_MANAGER_PRIORITIES,
-        pointsLedger: INITIAL_POINTS_LEDGER
+        pointsLedger: INITIAL_POINTS_LEDGER,
+        planItems: INITIAL_PLAN_ITEMS,
+        daySettings: INITIAL_DAY_SETTINGS,
+        repeatRules: INITIAL_REPEAT_RULES,
+        dayTemplates: INITIAL_DAY_TEMPLATES,
+        trips: INITIAL_TRIPS,
+        sendQueue: INITIAL_SEND_QUEUE
       };
     }
   }
@@ -374,6 +423,99 @@ export class LocalStorageAdapter implements StorageAdapter {
     }
   }
 
+  async savePlanItem(item: PlanItem): Promise<void> {
+    const raw = localStorage.getItem(STORAGE_KEYS.PLAN_ITEMS);
+    const list: PlanItem[] = raw ? JSON.parse(raw) : INITIAL_PLAN_ITEMS;
+    const idx = list.findIndex(p => p.id === item.id);
+    if (idx >= 0) {
+      list[idx] = { ...item, updatedAt: new Date().toISOString() };
+    } else {
+      list.push({ ...item, updatedAt: new Date().toISOString() });
+    }
+    localStorage.setItem(STORAGE_KEYS.PLAN_ITEMS, JSON.stringify(list));
+  }
+
+  async savePlanItems(items: PlanItem[]): Promise<void> {
+    localStorage.setItem(STORAGE_KEYS.PLAN_ITEMS, JSON.stringify(items));
+  }
+
+  async deletePlanItem(itemId: string): Promise<void> {
+    const raw = localStorage.getItem(STORAGE_KEYS.PLAN_ITEMS);
+    const list: PlanItem[] = raw ? JSON.parse(raw) : INITIAL_PLAN_ITEMS;
+    const filtered = list.filter(p => p.id !== itemId);
+    localStorage.setItem(STORAGE_KEYS.PLAN_ITEMS, JSON.stringify(filtered));
+  }
+
+  async saveDaySettings(settings: DaySettings): Promise<void> {
+    const raw = localStorage.getItem(STORAGE_KEYS.DAY_SETTINGS);
+    const map: Record<string, DaySettings> = raw ? JSON.parse(raw) : INITIAL_DAY_SETTINGS;
+    map[settings.userId] = settings;
+    localStorage.setItem(STORAGE_KEYS.DAY_SETTINGS, JSON.stringify(map));
+  }
+
+  async saveRepeatRule(rule: RepeatRule): Promise<void> {
+    const raw = localStorage.getItem(STORAGE_KEYS.REPEAT_RULES);
+    const list: RepeatRule[] = raw ? JSON.parse(raw) : INITIAL_REPEAT_RULES;
+    const idx = list.findIndex(r => r.id === rule.id);
+    if (idx >= 0) {
+      list[idx] = rule;
+    } else {
+      list.push(rule);
+    }
+    localStorage.setItem(STORAGE_KEYS.REPEAT_RULES, JSON.stringify(list));
+  }
+
+  async saveDayTemplate(template: DayTemplate): Promise<void> {
+    const raw = localStorage.getItem(STORAGE_KEYS.DAY_TEMPLATES);
+    const list: DayTemplate[] = raw ? JSON.parse(raw) : INITIAL_DAY_TEMPLATES;
+    const idx = list.findIndex(t => t.id === template.id);
+    if (idx >= 0) {
+      list[idx] = template;
+    } else {
+      list.push(template);
+    }
+    localStorage.setItem(STORAGE_KEYS.DAY_TEMPLATES, JSON.stringify(list));
+  }
+
+  async saveTrip(trip: Trip): Promise<void> {
+    const raw = localStorage.getItem(STORAGE_KEYS.TRIPS);
+    const list: Trip[] = raw ? JSON.parse(raw) : INITIAL_TRIPS;
+    const idx = list.findIndex(t => t.id === trip.id);
+    if (idx >= 0) {
+      list[idx] = trip;
+    } else {
+      list.push(trip);
+    }
+    localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(list));
+  }
+
+  async saveTrips(trips: Trip[]): Promise<void> {
+    localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(trips));
+  }
+
+  async saveSendQueueItem(item: SendQueueItem): Promise<void> {
+    const raw = localStorage.getItem(STORAGE_KEYS.SEND_QUEUE);
+    const list: SendQueueItem[] = raw ? JSON.parse(raw) : INITIAL_SEND_QUEUE;
+    const idx = list.findIndex(s => s.id === item.id);
+    if (idx >= 0) {
+      list[idx] = item;
+    } else {
+      list.push(item);
+    }
+    localStorage.setItem(STORAGE_KEYS.SEND_QUEUE, JSON.stringify(list));
+  }
+
+  async saveSendQueue(items: SendQueueItem[]): Promise<void> {
+    localStorage.setItem(STORAGE_KEYS.SEND_QUEUE, JSON.stringify(items));
+  }
+
+  async deleteSendQueueItem(id: string): Promise<void> {
+    const raw = localStorage.getItem(STORAGE_KEYS.SEND_QUEUE);
+    const list: SendQueueItem[] = raw ? JSON.parse(raw) : INITIAL_SEND_QUEUE;
+    const filtered = list.filter(s => s.id !== id);
+    localStorage.setItem(STORAGE_KEYS.SEND_QUEUE, JSON.stringify(filtered));
+  }
+
   async resetToSeed(): Promise<void> {
     localStorage.setItem(STORAGE_KEYS.DEALERSHIPS, JSON.stringify(INITIAL_DEALERSHIPS));
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(USERS));
@@ -391,5 +533,11 @@ export class LocalStorageAdapter implements StorageAdapter {
     localStorage.setItem(STORAGE_KEYS.PRODUCT_BONUSES, JSON.stringify(INITIAL_PRODUCT_BONUSES));
     localStorage.setItem(STORAGE_KEYS.PRIORITIES, JSON.stringify(INITIAL_MANAGER_PRIORITIES));
     localStorage.setItem(STORAGE_KEYS.POINTS_LEDGER, JSON.stringify(INITIAL_POINTS_LEDGER));
+    localStorage.setItem(STORAGE_KEYS.PLAN_ITEMS, JSON.stringify(INITIAL_PLAN_ITEMS));
+    localStorage.setItem(STORAGE_KEYS.DAY_SETTINGS, JSON.stringify(INITIAL_DAY_SETTINGS));
+    localStorage.setItem(STORAGE_KEYS.REPEAT_RULES, JSON.stringify(INITIAL_REPEAT_RULES));
+    localStorage.setItem(STORAGE_KEYS.DAY_TEMPLATES, JSON.stringify(INITIAL_DAY_TEMPLATES));
+    localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(INITIAL_TRIPS));
+    localStorage.setItem(STORAGE_KEYS.SEND_QUEUE, JSON.stringify(INITIAL_SEND_QUEUE));
   }
 }

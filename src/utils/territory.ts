@@ -21,6 +21,15 @@ export function calculateDistanceMiles(
 }
 
 export const TERRITORY_DEFAULT_RADIUS_MILES = 60;
+export const TERRITORY_EDGE_RADIUS_MILES = 69;
+
+export type DistanceBand = 'home' | 'edge' | 'out_of_town';
+
+export function getDistanceBand(miles: number): DistanceBand {
+  if (miles <= TERRITORY_DEFAULT_RADIUS_MILES) return 'home';
+  if (miles <= TERRITORY_EDGE_RADIUS_MILES) return 'edge';
+  return 'out_of_town';
+}
 
 export function isWithinTerritory(distanceMiles: number, radiusLimit = TERRITORY_DEFAULT_RADIUS_MILES): boolean {
   return distanceMiles <= radiusLimit;

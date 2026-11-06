@@ -73,9 +73,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const getNavSections = (): { title: string; items: NavItem[] }[] => {
     const plannerItem: NavItem = {
       id: 'planner',
-      label: role === 'new_rep' ? 'My Today & Route' : 'Planner & Calendar',
+      label: 'My Plan',
       icon: <CalendarDays className="w-4 h-4" />,
-      description: 'Day plan, locked stops & priorities'
+      description: 'Today, this week, contacts & travel'
     };
 
     const pipelineItem: NavItem = {

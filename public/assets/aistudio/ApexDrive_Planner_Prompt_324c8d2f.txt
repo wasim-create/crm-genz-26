@@ -1,0 +1,233 @@
+=====================================================================
+APEXDRIVE CRM: PLANNER REDESIGN ("My Plan")
+=====================================================================
+
+This prompt is ONLY about the Planner, the most important part of the system. It is where a sales rep sets up their day, week or month and then works through it.
+
+KEEP: everything else in the app as it is (left nav, gamification, Manager Assist, Manager Priorities, AI coach rules, the no-money rule, Workspace sync, Google Sheets data layer, demo users and data). The Planner must keep working with all of them.
+
+THE PROBLEM
+The current Planner thinks of a rep's day as a driving route. That is the wrong model.
+
+A rep's work is a list of CONTACTS with dealerships, by different methods. Only some of those involve driving. The Planner must be redesigned from scratch: new name, new look and feel, new way of interacting. It must be so simple that someone who finds technology very difficult can set up and use it just by looking at it.
+
+BEFORE BUILDING:
+- Write a short plan: the new screens (described in words), the user flows, the data model changes and the files you'll change.
+- Then walk through the 5 test scenarios in section 10 step by step, as a user would experience them.
+- Then build.
+
+---------------------------------------------------------------------
+1. NEW NAME AND CORE IDEA
+---------------------------------------------------------------------
+- Rename the "Planner" / "Route planner" to "My Plan" everywhere (nav, headings, buttons, AI text). Use plain words everywhere: "Today", "This week", "This month", "Add to my plan", "What's next".
+- Everything in My Plan is a PLAN ITEM: one contact with one dealership.
+- Every plan item answers 4 simple questions:
+  1. WHAT KIND OF WORK?
+     - New Prospect (finding and winning new dealerships)
+     - Client Care (servicing existing clients)
+     These two must always be visually distinct (each has its own color and icon) across Day, Week and Month.
+  2. WHO? The dealership, and optionally the contact person.
+  3. HOW? One of 5 contact methods, each a large icon with a label:
+     - In person
+     - Phone call
+     - Text message
+     - Email
+     - Google Meet
+     All 5 methods apply to BOTH New Prospects and Client Care.
+  4. WHEN? A day, and optionally a time. Flexible times are allowed (see section 3).
+- The purpose of each item is suggested automatically from the dealership's situation, and the rep can change it. For example:
+  - Prospects: first visit, follow-up, product pitch, decision-maker meeting, Manager Assist meeting.
+  - Clients: Keyfetch top-up (only for Keyfetch clients), upsell, promotions / sales follow-up, check-in, onboarding.
+- A rep can mix both kinds of work in a day, or focus on just one. At the top of each day, a simple "What's today about?" choice: New Prospects / Client Care / A mix. This guides suggestions but never blocks anything.
+
+---------------------------------------------------------------------
+2. SETUP MUST BE EFFORTLESS (in bits and pieces, any way they like)
+---------------------------------------------------------------------
+A rep can build their plan in any of these ways, and mix them freely:
+
+a) ONE ITEM AT A TIME: a big, always-visible "+ Add to my plan" button. A guided, one-question-per-screen flow:
+   Step 1: "Who?" Search by name, or pick from short lists: Suggested for you / Recently contacted / Due for follow-up / Clients due for care / Nearby on the map.
+   Step 2: "How?" The 5 big method buttons. The most likely one is pre-selected, e.g. In person for a first visit.
+   Step 3: "When?" Big buttons: Today / Tomorrow / Pick a day. Then a time: Morning / Afternoon / Anytime that day / Exact time.
+   Step 4: A plain-English confirmation, e.g. "Visit Smith Motors in person, tomorrow morning. Added ✓", with an Undo button.
+   Smart defaults mean a typical item takes 3–4 taps and under 30 seconds.
+
+b) "NOT SCHEDULED YET" TRAY: reps can collect dealerships they want to contact this week without choosing a time. Later they tap "Find a time" (or let the AI place them).
+
+c) ADD FROM ANYWHERE: an "Add to my plan" button on every dealership record, in the prospect pool, in the client list, on map pins, and on Manager Priorities.
+
+d) PICK SEVERAL AT ONCE: tick multiple dealerships in a list or on the map → "Add these to Thursday".
+
+e) "HELP ME FILL MY DAY / WEEK" (AI, optional): it proposes a realistic plan respecting everything in section 3, and the rep accepts all, accepts some, or changes items. Locked items and Manager Priorities are always kept.
+
+f) REPEATS AND TEMPLATES:
+   - "Repeat this", e.g. "Call this client every 2nd Tuesday" or "Keyfetch top-up check every 4 weeks".
+   - "Copy last week".
+   - Saved day templates, e.g. "Prospecting day", "Client Care day".
+
+g) VOICE: tap the microphone and say "Visit Lone Star Ford tomorrow afternoon". It shows a confirmation before saving.
+
+Changing things must be just as easy:
+- Tap any item to get big, clear buttons: Move to another time, Move to tomorrow, Change how (e.g. turn a visit into a phone call), Remove, Lock this.
+- Drag and drop is a bonus for confident users, never the only way.
+- All changes save automatically. Nothing is lost if the rep closes the app halfway through planning.
+
+---------------------------------------------------------------------
+3. REALISTIC TIME AND TRAVEL (the plan must be doable)
+---------------------------------------------------------------------
+Build a "day engine" that checks every day plan is realistic and keeps it realistic as the day goes on.
+
+DAY SETTINGS:
+- Each rep sets these once, with defaults; they can be changed for any single day:
+  - start location (default: home ZIP / address)
+  - end location (default: home)
+  - start time
+  - preferred finish time
+  - lunch break (on/off, length)
+  - default buffer between visits
+- The good in-person visit window is 10:00 AM–4:00 PM in the dealership's local time zone. In-person visits are scheduled inside it, and anything outside it is flagged gently in plain words.
+
+TRAVEL:
+- In-person items include realistic travel time:
+  - from the start location to the first visit
+  - between visits
+  - from the last visit back to the end location
+- Use Google Maps drive times (Distance Matrix / Routes) when an API key is set.
+- Otherwise use a sensible estimate: straight-line distance × 1.3 road factor, at about 30 mph in metro areas and 50 mph rural, rounded up. Add 10 minutes for parking and walking in.
+- Show travel as its own visible block between items ("🚗 25 min drive"), so the rep understands the shape of the day.
+- Remote items (phone, text, email, Meet) need no travel. The engine places them in natural gaps: before 10 AM, after 4 PM, at lunch, and in the gaps between visits. The rep chooses whether to do calls in the car (parked) or at home.
+
+DURATIONS:
+- Default durations per method and purpose, editable in Settings and per item. Starting defaults:
+  - first in-person prospect visit 45 min
+  - follow-up visit 30 min
+  - client care visit 30 min
+  - Keyfetch top-up visit 20 min
+  - phone call 15 min
+  - Google Meet 30 min
+  - email 10 min
+  - text 5 min
+- Learn from the rep's actual logged durations over time, and suggest updated defaults.
+
+FEASIBILITY CHECK (always visible, in plain words):
+- A simple "How full is my day?" bar (Light / Good / Full / Too much), with total visit time, total drive time and finish time, e.g. "You'll be home around 5:40 PM".
+- Warnings explained simply, with one-tap fixes, e.g.:
+  - "This day has 4 hours of driving. Move Smith Motors to Thursday, when you're in that area?"
+  - "You can't reach Dallas Auto by 10:30. Start at 10:45 instead?"
+- The engine NEVER silently creates an impossible day. It warns, explains and offers a fix, and the rep decides.
+- Realistic caps: suggest a sensible maximum number of in-person visits per day, based on drive times and durations, and explain if the plan exceeds it.
+
+FLEXIBILITY DURING THE DAY (visits run over):
+- During a visit the rep can tap "I need more time" (+15 / +30 min), or simply check out later.
+- The engine then recalculates the rest of the day immediately and shows what changed in plain words, e.g. "Everything after this is now 25 min later. Your 3:30 visit now ends at 4:20, after the good window."
+- It then offers simple choices:
+  - Keep as is
+  - Move the last visit to tomorrow
+  - Turn it into a phone call
+  - Swap the order
+- Optional: a pre-written "Running about 20 minutes late, sorry!" text or email to the next dealership, which the rep sends with one tap.
+- If a visit ends early, it offers: "You have 25 free minutes. Make the 2 calls due today?"
+- Skipped or missed items are never lost. They go back to the "Not scheduled yet" tray, with a prompt to reschedule.
+
+---------------------------------------------------------------------
+4. WORKING THROUGH THE DAY (as simple as possible)
+---------------------------------------------------------------------
+- The Today screen opens on a big "NOW / NEXT" card showing what to do now, then a simple timeline of the rest of the day (items + travel blocks).
+- Each item has ONE obvious big button for the next step:
+  - In person:
+    1. "Start driving" (opens Google Maps / Apple Maps navigation)
+    2. "I've arrived" (checks in)
+    3. "Done – how did it go?"
+  - Phone call: "Call now" (tap-to-call), then "How did it go?"
+  - Text message: "Send text" (opens the phone's messages, with an optional suggested message), then "Done".
+  - Email: "Write email" (opens Gmail compose, with an optional AI draft), then "Done".
+  - Google Meet: "Join meeting" (opens the Meet link), then "How did it go?"
+- "How did it go?" is quick and friendly:
+  - Big outcome buttons, e.g. Interested / Not now / Needs follow-up / Hot (for prospects); All good / Top-up done / Upsell interest / Issue to fix (for clients).
+  - A voice or text note.
+  - For a Keyfetch top-up, a quantity box.
+  - A next step with a suggested date. One tap adds that next step straight back into My Plan.
+  Points earned are shown with a small celebration.
+- Can't do it? Big buttons: "Later today" / "Tomorrow" / "Pick a day" / "Turn into a call" / "Skip (with reason)".
+- On mobile, all of this works one-handed with large tap targets. "Work my day" mode is simply this Today screen in full screen.
+
+---------------------------------------------------------------------
+5. DAY, WEEK AND MONTH VIEWS (and the past)
+---------------------------------------------------------------------
+- Switch with three large, clearly labelled tabs: Today / This week / This month. Plus a "Go to date" button and simple arrows.
+- DAY: the timeline (items + travel + gaps + lunch), the "How full is my day?" bar, and the map as an OPTIONAL toggle ("Show on map"). The map is not the main view.
+- WEEK: 5–7 day cards, each showing a count of New Prospect vs Client Care items, the in-person vs remote count, how full the day is, and the main area or city for that day. Tap a day to open it. The "Not scheduled yet" tray sits alongside, so items can be placed onto days.
+- MONTH: a clean calendar with colored dots per day (prospect / client), plus a summary of the month's goals vs plan. Tap a day to open it.
+- PAST DAYS work like a diary: what was planned vs what was done, outcomes, notes, synced Gmail / Meet / Chat activity, and points earned, with a short plain-English summary. Past days are read-only, except for adding late notes.
+- FUTURE: planned items, Manager Priorities (with a "From [manager]" badge), Manager Assist meetings, repeats, Google Calendar events and personal blocks.
+- Two-way Google Calendar sync stays.
+- Remove the hardcoded planner date. My Plan always opens on TODAY.
+
+---------------------------------------------------------------------
+6. DESIGNED FOR PEOPLE WHO FIND TECHNOLOGY DIFFICULT
+---------------------------------------------------------------------
+Treat these as hard requirements, not nice-to-haves:
+- One main action per screen. There must be an obvious "what do I tap now?" at all times.
+- Large text (with a "Bigger text" setting), large tap targets (at least 48px), high contrast, and icons ALWAYS paired with words.
+- Plain English everywhere. No jargon (no "pipeline stage", "cadence", "touchpoint", "optimize", "sync conflict"). Use "visit", "call", "follow up", "client", "new dealership".
+- No hidden gestures, no hover-only actions, and no tiny icons without labels.
+- Everything can be undone. Every change is confirmed in plain words. Nothing is ever deleted without a clear "Are you sure?".
+- A friendly first-time walkthrough (3–4 screens, skippable, replayable from Help): "This is your day", "Tap + to add", "Tap Next to start".
+- Every empty state says what to do next, with one big button. For example, an empty day shows "Nothing planned yet" with two buttons: "Add to my plan" and "Help me fill my day".
+- A "Simple mode" toggle (on by default for new reps) hides advanced options. Veterans can switch to "Full mode": denser views, drag and drop, bulk actions, keyboard shortcuts.
+- Gamification stays visible but calm: points shown subtly, celebrations short, never cluttering the plan.
+
+---------------------------------------------------------------------
+7. AI IN MY PLAN (helper, never in charge)
+---------------------------------------------------------------------
+- AI is optional and always explains itself in one plain sentence, e.g. "I put Smith Motors first because it's closest and the manager marked it urgent".
+- AI uses: the rep's choice for the day (prospects / clients / mix), due follow-ups, Keyfetch top-ups due, upsell opportunities and active product bonuses, Manager Priorities, Manager Assist meetings, relationship temperature, the 60-mile radius, real drive times and the feasibility rules.
+- It suggests the best contact METHOD too, e.g. "A call is enough for this check-in, which saves a 40-min drive", or "This prospect hasn't replied to 2 emails, so try an in-person visit".
+- Area grouping: suggest putting in-person visits that are near each other on the same day ("You have 4 dealerships near Plano. Make Thursday your Plano day?").
+- It never overrides locked items or manual changes without asking. With AI switched off, My Plan works fully by hand.
+- Business value first: the AI must never push points over an important client, deal or communication.
+
+---------------------------------------------------------------------
+8. MANAGERS AND TRANSPARENCY
+---------------------------------------------------------------------
+- Managers, team leads and owners can open any rep's My Plan (read-only by default), see the team's week at a glance (who is where, prospect vs client mix, how full each day is), push Manager Priorities into a rep's plan, and suggest changes the rep can accept or decline.
+- Manager Assist meetings appear on both the rep's and the manager's plans.
+- Managers have their own My Plan too (they also work prospects and clients).
+
+---------------------------------------------------------------------
+9. DATA MODEL
+---------------------------------------------------------------------
+- PlanItem:
+  - id, userId, date, timeType (exact / morning / afternoon / anytime), startTime (optional)
+  - estimatedDurationMin, travelBeforeMin (calculated)
+  - workType (new_prospect / client_care)
+  - method (in_person / phone / text / email / meet)
+  - dealershipId, contactId (optional), purpose
+  - status (planned / in_progress / done / skipped / moved / not_scheduled)
+  - locked (bool)
+  - source (manual / ai / manager_priority / assist / repeat / template / calendar)
+  - repeatRuleId (optional), notes, actualStart / actualEnd, outcome
+  - activityId (the logged Activity it created)
+  - createdBy, updatedAt, version
+- DaySettings (per user, plus per-day overrides): start and end locations, start and finish times, lunch, buffer, focus (prospects / clients / mix).
+- RepeatRules and DayTemplates.
+- Add the Sheets tabs Plan_Items, Day_Settings, Repeat_Rules and Day_Templates (CRM_Activity spreadsheet). Update the storage adapters, setup script and seed data.
+- Seed realistic plans for every rep for the past 4 weeks (with outcomes) and the next 2 weeks, mixing both work types and all 5 methods. Include one day that is over-full and one with a visit that ran over, to demo the warnings and the recalculation.
+- No money anywhere (keep the existing rule).
+
+---------------------------------------------------------------------
+10. TEST SCENARIOS (walk through these in your plan, and make sure they work)
+---------------------------------------------------------------------
+1. A rep who rarely uses apps opens My Plan for the first time, follows the walkthrough, and adds one in-person visit for tomorrow morning in 4 taps or fewer, without help.
+2. A rep plans a mixed day in pieces: on Monday evening they add 3 visits and 2 calls; on Tuesday morning they add a client text and an email. The day stays realistic, with travel from home, the 10–4 window and a sensible finish time.
+3. A rep spends the whole of Wednesday on Client Care only, by phone and email from home. No travel is shown, and items fill the day sensibly.
+4. A visit runs 40 minutes over. The rest of the day updates instantly, the rep is warned that the last visit now falls after 4 PM, and they turn it into a phone call with one tap.
+5. A manager pushes an urgent priority into a rep's Thursday. It appears with a "From Jason Scott" badge, the AI fits it in, and the rep accepts it.
+
+WHEN DONE, give me:
+- a changelog
+- the final names and labels used in My Plan
+- the default durations and travel assumptions
+- confirmation that all 5 scenarios work
+- confirmation that every previous Planner feature still exists in the new My Plan, in improved form (Day / Week / Month / Agenda, AI plan, map, Work my day, Google Calendar sync)
+=====================================================================

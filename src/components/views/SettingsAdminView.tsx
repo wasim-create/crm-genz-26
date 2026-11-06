@@ -39,13 +39,21 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   onUpdateFISystems,
   onNavigateToGameRules
 }) => {
-  const [activeTab, setActiveTab] = useState<'storage' | 'catalog' | 'fi_systems'>('catalog');
+  const [activeTab, setActiveTab] = useState<'storage' | 'catalog' | 'fi_systems' | 'territory'>('catalog');
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [newProductName, setNewProductName] = useState('');
   const [newProductCategory, setNewProductCategory] = useState('Ancillary');
   const [newProductDesc, setNewProductDesc] = useState('');
   const [newProductRequiresTopup, setNewProductRequiresTopup] = useState(false);
   const [newProductIsLaunch, setNewProductIsLaunch] = useState(false);
+
+  // Territory & Planning Settings
+  const [homeRadius, setHomeRadius] = useState<number>(60);
+  const [edgeRadius, setEdgeRadius] = useState<number>(69);
+  const [outOfTownRadius, setOutOfTownRadius] = useState<number>(70);
+  const [requireTripApproval, setRequireTripApproval] = useState<boolean>(false);
+  const [safetyMarginMin, setSafetyMarginMin] = useState<number>(10);
+  const [savedTerritoryNotice, setSavedTerritoryNotice] = useState<boolean>(false);
 
   const canManageCatalog = ['owner', 'executive', 'manager'].includes(currentUser.role);
 
@@ -108,6 +116,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
       <div className="flex border-b border-slate-200 gap-2 text-xs font-bold">
         {[
           { id: 'catalog', label: `Product Catalog (${catalog.length} Products)` },
+          { id: 'territory', label: 'Territory & Planning Rules' },
           { id: 'storage', label: 'Data Storage Adapters' },
           { id: 'fi_systems', label: 'F&I Systems List' }
         ].map(tab => (
@@ -229,6 +238,124 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                 {s}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: TERRITORY & PLANNING RULES */}
+      {activeTab === 'territory' && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-5 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900">Territory Distance Bands & Scheduling Policies</h3>
+              <p className="text-slate-500 mt-0.5">
+                Configure territorial thresholds measured from each sales representative's home ZIP code.
+              </p>
+            </div>
+            {savedTerritoryNotice && (
+              <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Saved
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/40 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-emerald-900 text-xs">🟢 Home Region Radius</span>
+                <span className="text-xs font-bold text-emerald-700">0–{homeRadius} mi</span>
+              </div>
+              <p className="text-[11px] text-emerald-800">Normal working territory. Standard travel calculations apply.</p>
+              <input
+                type="number"
+                value={homeRadius}
+                onChange={e => setHomeRadius(Number(e.target.value))}
+                className="w-full bg-white border border-emerald-300 rounded-lg p-2 text-xs font-bold text-slate-800"
+              />
+            </div>
+
+            <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/40 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-amber-900 text-xs">🟡 Edge Tolerance</span>
+                <span className="text-xs font-bold text-amber-700">{homeRadius}–{edgeRadius} mi</span>
+              </div>
+              <p className="text-[11px] text-amber-800">10–15% buffer. Flagged gently as "Edge of region".</p>
+              <input
+                type="number"
+                value={edgeRadius}
+                onChange={e => setEdgeRadius(Number(e.target.value))}
+                className="w-full bg-white border border-amber-300 rounded-lg p-2 text-xs font-bold text-slate-800"
+              />
+            </div>
+
+            <div className="p-4 rounded-xl border border-rose-200 bg-rose-50/40 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-rose-900 text-xs">🔴 Out-of-Town Threshold</span>
+                <span className="text-xs font-bold text-rose-700">{outOfTownRadius}+ mi</span>
+              </div>
+              <p className="text-[11px] text-rose-800">Triggers Trip Planning with 15-mile proximity clusters.</p>
+              <input
+                type="number"
+                value={outOfTownRadius}
+                onChange={e => setOutOfTownRadius(Number(e.target.value))}
+                className="w-full bg-white border border-rose-300 rounded-lg p-2 text-xs font-bold text-slate-800"
+              />
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+            <h4 className="font-bold text-slate-800 text-xs">Live Contact Golden Window & Trip Approvals</h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-slate-800">Golden Window for In-Person & Calls</p>
+                  <p className="text-[11px] text-slate-500">10:00 AM – 4:00 PM local time of dealership.</p>
+                </div>
+                <span className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg font-mono font-bold">10:00 - 16:00</span>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                <div>
+                  <p className="font-semibold text-slate-800">Require Trip Approval for Out-of-Town (70+ mi)</p>
+                  <p className="text-[11px] text-slate-500">Requires manager sign-off on travel days over 70 miles from home.</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={requireTripApproval}
+                    onChange={e => setRequireTripApproval(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                <div>
+                  <p className="font-semibold text-slate-800">Leave-By Safety Margin (minutes)</p>
+                  <p className="text-[11px] text-slate-500">Buffer added before first appointment (on top of drive + 10m parking).</p>
+                </div>
+                <input
+                  type="number"
+                  value={safetyMarginMin}
+                  onChange={e => setSafetyMarginMin(Number(e.target.value))}
+                  className="w-20 bg-white border border-slate-300 rounded-lg p-1.5 text-xs font-bold text-center text-slate-800"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setSavedTerritoryNotice(true);
+                  setTimeout(() => setSavedTerritoryNotice(false), 3000);
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs"
+              >
+                Save Territory Policies
+              </button>
+            </div>
           </div>
         </div>
       )}
