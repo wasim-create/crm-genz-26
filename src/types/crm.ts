@@ -1,4 +1,4 @@
-import type { DistanceBand } from './planner';
+import type { DistanceBand } from '../utils/territory';
 
 export type UserRole = 
   | 'new_rep' 
@@ -211,7 +211,7 @@ export interface Activity {
   userName: string;
   contactId?: string;
   contactName?: string;
-  activityType: 'In-Person Visit' | 'Phone Call' | 'Email' | 'Google Meet' | 'Chat' | 'System Note' | 'Keyfetch Top-up';
+  activityType: 'In-Person Visit' | 'Phone Call' | 'Email' | 'Text Message' | 'Google Meet' | 'Chat' | 'System Note' | 'Keyfetch Top-up';
   communicationType: 'In-Person' | 'Virtual' | 'Phone' | 'Email' | 'System';
   status: 'pending' | 'completed' | 'cancelled';
   plannedDate?: string; // YYYY-MM-DD
@@ -435,4 +435,4 @@ export interface AuditLogRecord {
   details: string;
 }
 
-export * from './planner';
+export type { DistanceBand };

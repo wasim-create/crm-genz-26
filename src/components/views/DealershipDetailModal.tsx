@@ -57,6 +57,9 @@ interface DealershipDetailModalProps {
   onAddContact: (contact: Contact) => void;
   onLogKeyfetchTopup: (dealershipId: string, quantity: number, notes?: string) => void;
   onAddToPlan?: (dealership: Dealership) => void;
+  onPlanLater?: (dealership: Dealership) => void;
+  /** My Plan panel: what's planned and the open action points for this dealership. */
+  planPanel?: React.ReactNode;
 }
 
 export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
@@ -74,7 +77,9 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
   onRequestAssist,
   onAddContact,
   onLogKeyfetchTopup,
-  onAddToPlan
+  onAddToPlan,
+  onPlanLater,
+  planPanel
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'visit_log' | 'products' | 'assist' | 'contacts' | 'audit'>('overview');
 
@@ -238,6 +243,18 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                 <span>Add to My Plan</span>
               </button>
             )}
+            {onPlanLater && (
+              <button
+                type="button"
+                onClick={() => {
+                  onPlanLater(dealership);
+                  onClose();
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-white border border-blue-300 hover:bg-blue-50 text-blue-700 font-bold text-xs shadow-xs cursor-pointer"
+              >
+                Plan later
+              </button>
+            )}
             {!isClient && (
               <button
                 type="button"
@@ -286,6 +303,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
           {/* TAB 1: OVERVIEW & RELATIONSHIP TEMPERATURE */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {planPanel}
               {/* Relationship Temperature Card (Section 7) */}
               {dealership.relationshipTemperature && (
                 <div className="bg-linear-to-r from-indigo-50/80 via-white to-purple-50/80 p-4 rounded-2xl border border-indigo-200/80 space-y-3">

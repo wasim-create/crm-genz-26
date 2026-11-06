@@ -1087,6 +1087,17 @@ function buildInitialDealerships(): Dealership[] {
     });
   });
 
+  // A few dealerships in sign-up / onboarding stages per region, so every
+  // My Plan tab (Prospects / Sign-up & Onboarding / Clients) has real data.
+  const stageOverrides: Record<number, Dealership['stage']> = {
+    8: 'Onboarding', 9: 'Signed', 24: 'Onboarding', 38: 'Onboarding',
+    53: 'Won', 67: 'Onboarding', 68: 'Contract'
+  };
+  Object.entries(stageOverrides).forEach(([i, stage]) => {
+    const t = templates[Number(i)];
+    if (t && t.repId) { t.stage = stage; t.heat = 'Warm'; }
+  });
+
   const now = new Date('2026-11-02T12:00:00Z').getTime();
 
   return templates.map((t, index) => {
@@ -1095,6 +1106,7 @@ function buildInitialDealerships(): Dealership[] {
     const createdDate = new Date(now - t.daysAgoCreated * 86400000).toISOString();
     const touchDate = t.daysAgoTouch ? new Date(now - t.daysAgoTouch * 86400000).toISOString() : null;
     const isClient = t.stage === 'Client';
+    const hasSignedUp = isClient || t.stage === 'Onboarding' || t.stage === 'Signed';
 
     // Scouting product interests
     const productInterests = [
@@ -1118,7 +1130,7 @@ function buildInitialDealerships(): Dealership[] {
 
     // Signed products for client
     const signedProducts: string[] = [];
-    if (isClient) {
+    if (hasSignedUp) {
       signedProducts.push('prod_3'); // Keyfetch
       if (index % 2 === 0) signedProducts.push('prod_1'); // VSC
       if (index % 4 === 0) signedProducts.push('prod_4'); // GAP

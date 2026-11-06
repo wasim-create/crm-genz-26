@@ -99,7 +99,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       {profile && (
         <div 
           onClick={onOpenGamification}
-          className="flex items-center gap-2 md:gap-3 px-2.5 py-1 bg-linear-to-r from-amber-50/80 via-indigo-50/50 to-blue-50/80 rounded-xl border border-amber-200/70 shadow-2xs cursor-pointer hover:border-amber-300 transition-all text-xs overflow-x-auto no-scrollbar"
+          className="flex min-w-0 flex-1 md:flex-none items-center gap-2 md:gap-3 px-2.5 py-1 bg-linear-to-r from-amber-50/80 via-indigo-50/50 to-blue-50/80 rounded-xl border border-amber-200/70 shadow-2xs cursor-pointer hover:border-amber-300 transition-all text-xs overflow-x-auto no-scrollbar"
           title="Click to view full Game Day Scorecard & Leaderboards"
         >
           {/* Level Title */}
@@ -181,7 +181,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <button
           type="button"
           onClick={onOpenWorkspaceSync}
-          className="flex items-center gap-1 text-xs text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-slate-100 px-2 py-1.5 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+          className="hidden sm:flex items-center gap-1 text-xs text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-slate-100 px-2 py-1.5 rounded-lg border border-slate-200 transition-colors cursor-pointer"
           title="Google Workspace weekly data sync"
         >
           <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${syncState.isSyncing ? 'animate-spin' : ''}`} />
@@ -209,7 +209,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               const u = allUsers.find(x => x.id === e.target.value);
               if (u) onSelectUser(u);
             }}
-            className="text-xs bg-white text-slate-800 font-semibold px-2 py-1 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs"
+            className="max-w-[110px] sm:max-w-none text-xs bg-white text-slate-800 font-semibold px-2 py-1 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs"
             aria-label="Switch Role Persona"
           >
             <optgroup label="Sales Reps">

@@ -23,7 +23,9 @@ import { LocalStorageAdapter } from './services/storageAdapter';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar, ActiveView } from './components/layout/Sidebar';
 import { MyPlanModule } from './features/myplan/MyPlanModule';
-import { PlanItem, DaySettings, Trip, SendQueueItem } from './types/planner';
+import { DealershipPlanPanel } from './features/myplan/DealershipPlanPanel';
+import { resetMyPlan, setCrmBridge } from './features/myplan/data/store';
+import type { WritebackResult } from './features/myplan/services/writeback';
 import { PipelineView } from './components/views/PipelineView';
 import { ProspectPoolView } from './components/views/ProspectPoolView';
 import { ClientPortfolioView } from './components/views/ClientPortfolioView';
@@ -58,18 +60,14 @@ export default function App() {
   const [productBonuses, setProductBonuses] = useState<ProductBonus[]>([]);
   const [managerPriorities, setManagerPriorities] = useState<ManagerPriority[]>([]);
   const [pointsLedger, setPointsLedger] = useState<PointsLedgerEntry[]>([]);
-  const [planItems, setPlanItems] = useState<PlanItem[]>([]);
-  const [daySettings, setDaySettings] = useState<Record<string, DaySettings>>({});
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [sendQueue, setSendQueue] = useState<SendQueueItem[]>([]);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ActiveView>('planner');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
 
   // Modals state
   const [selectedDealership, setSelectedDealership] = useState<Dealership | null>(null);
-  const [addToPlanTarget, setAddToPlanTarget] = useState<Dealership | null>(null);
+  const [planRequest, setPlanRequest] = useState<{ dealershipId: string; planLater?: boolean; nonce: number } | null>(null);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isWorkspaceSyncOpen, setIsWorkspaceSyncOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -100,10 +98,6 @@ export default function App() {
       setProductBonuses(data.productBonuses);
       setManagerPriorities(data.managerPriorities);
       setPointsLedger(data.pointsLedger);
-      setPlanItems(data.planItems || []);
-      setDaySettings(data.daySettings || {});
-      setTrips(data.trips || []);
-      setSendQueue(data.sendQueue || []);
 
       // Default to Carlos Martinez (New Rep, Texas) or Kelley
       const defaultUser = data.users.find((u: User) => u.id === 'u_carlos') || data.users[0];
@@ -111,6 +105,45 @@ export default function App() {
     };
 
     loadData();
+  }, []);
+
+  // My Plan → CRM write-back ("records fill themselves"). Uses functional
+  // updates so several write-backs in a row never overwrite each other.
+  useEffect(() => {
+    const applyWriteback = (r: WritebackResult) => {
+      if (r.dealershipUpdates.length) {
+        const byId = new Map(r.dealershipUpdates.map(d => [d.id, d]));
+        setDealerships(prev => prev.map(d => byId.get(d.id) ?? d));
+        setSelectedDealership(sel => (sel ? byId.get(sel.id) ?? sel : sel));
+        r.dealershipUpdates.forEach(d => storage.saveDealership(d));
+      }
+      if (r.activities.length) {
+        setActivities(prev => [...r.activities, ...prev]);
+        r.activities.forEach(a => storage.saveActivity(a));
+      }
+      if (r.newContacts.length) {
+        setContacts(prev => [...r.newContacts, ...prev]);
+        r.newContacts.forEach(c => storage.saveContact(c));
+      }
+      if (r.audit.length) {
+        setAuditLogs(prev => [...r.audit, ...prev]);
+        r.audit.forEach(a => storage.saveAuditLog(a));
+      }
+      if (r.points.length) {
+        setPointsLedger(prev => [...r.points, ...prev]);
+        r.points.forEach(p => storage.addPointsLedgerEntry(p));
+        setGamification(prev => {
+          const next = { ...prev };
+          r.points.forEach(p => {
+            const prof = next[p.userId];
+            if (prof) next[p.userId] = { ...prof, points: prof.points + p.pointsAwarded, pointsToday: prof.pointsToday + p.pointsAwarded };
+          });
+          return next;
+        });
+      }
+    };
+    setCrmBridge({ applyWriteback });
+    return () => setCrmBridge(null);
   }, []);
 
   // Section 4: Data-layer privacy re-filtering when persona changes
@@ -461,7 +494,9 @@ export default function App() {
   const handleResetDemoData = async () => {
     if (confirm('Reset all CRM data back to the clean Improvement Pass v2 seed state?')) {
       await storage.resetToSeed();
+      resetMyPlan();
       const fresh = await storage.loadAll(currentUser);
+      setContacts(fresh.contacts);
       setDealerships(fresh.dealerships);
       setActivities(fresh.activities);
       setAssists(fresh.assists);
@@ -530,11 +565,26 @@ export default function App() {
           {currentView === 'planner' && (
             <MyPlanModule
               currentUser={currentUser}
+              users={users}
               dealerships={dealerships}
               contacts={contacts}
-              users={users}
-              preselectedDealership={addToPlanTarget}
-              onClearPreselected={() => setAddToPlanTarget(null)}
+              groups={groups}
+              catalog={catalog}
+              gameRules={gameRules}
+              productBonuses={productBonuses}
+              priorities={managerPriorities}
+              request={planRequest}
+              onRequestHandled={() => setPlanRequest(null)}
+              onAddContact={(c) => {
+                setContacts(prev => [c, ...prev]);
+                storage.saveContact(c);
+              }}
+              onAddDealership={(d) => {
+                setDealerships(prev => [d, ...prev]);
+                storage.saveDealership(d);
+              }}
+              onClaimDealership={(d) => handleClaimDealership(d, 'Planned from My Plan')}
+              onOpenDealership={(d) => setSelectedDealership(d)}
             />
           )}
 
@@ -716,9 +766,15 @@ export default function App() {
           onLogKeyfetchTopup={handleLogKeyfetchTopup}
           onAddToPlan={(d) => {
             setSelectedDealership(null);
-            setAddToPlanTarget(d);
+            setPlanRequest({ dealershipId: d.id, nonce: Date.now() });
             setCurrentView('planner');
           }}
+          onPlanLater={(d) => {
+            setSelectedDealership(null);
+            setPlanRequest({ dealershipId: d.id, planLater: true, nonce: Date.now() });
+            setCurrentView('planner');
+          }}
+          planPanel={<DealershipPlanPanel dealership={selectedDealership} user={currentUser} />}
         />
       )}
 
