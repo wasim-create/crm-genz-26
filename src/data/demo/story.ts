@@ -284,7 +284,7 @@ const INCENTIVES: IncentiveSpec[] = [
   { key: 'mw_ls_ford', state: 'Paid', amount: 425, rule: 'Dealer-group rooftop • 3 products', comments: 'Paid with the payroll run.' },
   { key: 'se_pd_nissan', state: 'Verified', amount: 350, rule: 'Group sister rooftop with assist', comments: 'Verified with Bobby Sanders. Ready for approval.' },
   { key: 'se_pd_toyota', state: 'Rejected', amount: 0, rule: 'Sister rooftop under existing group agreement', comments: 'Not a new introduction — Piedmont Toyota joined under the group agreement Todd already earned on Piedmont Honda.' },
-  { key: 'w_cl_hyundai', state: 'Disputed', amount: 400, rule: 'Dealer-group rooftop with assist', comments: 'On hold until first-contact date is confirmed.', conflicts: ['Michael Sena logged a call with Elaine Park about Cerritos 3 weeks before Todd Kelly claimed the store.', 'Gmail shows Michael’s thread with the group F&I director started first.'] },
+  { key: 'w_cl_hyundai', state: 'Disputed', amount: 400, rule: 'Dealer-group rooftop with assist', comments: 'On hold until first-contact date is confirmed.', conflicts: ['Michael Ballero logged a call with Elaine Park about Cerritos 3 weeks before Todd Kelly claimed the store.', 'Gmail shows Michael’s thread with the group F&I director started first.'] },
   { key: 'tx_tr_honda', state: 'Eligible', amount: 350, rule: 'Introduction with manager assist • 3 products', comments: undefined }
 ];
 
@@ -307,16 +307,16 @@ export function buildDemoData(users: User[], gameRules: GameRule[], now: Date = 
   // Product catalog — Ceramic Pro launched ~5 weeks ago.
   const ceramicLaunch = bd(-27);
   const products: ProductCatalogItem[] = [
-    { id: 'prod_1', name: PRODUCT_NAME.prod_1, category: 'Warranty & Protection', description: 'Mechanical breakdown coverage for pre-owned inventory with fast claims.', isActive: true, requiresInventoryTopups: false, dateAdded: '2023-01-15', addedBy: 'David Sterling' },
-    { id: 'prod_2', name: PRODUCT_NAME.prod_2, category: 'Warranty & Protection', description: 'Dealership-branded powertrain warranty that builds pre-owned buyer confidence.', isActive: true, requiresInventoryTopups: false, dateAdded: '2023-01-15', addedBy: 'David Sterling' },
-    { id: 'prod_3', name: PRODUCT_NAME.prod_3, category: 'Hardware & Lot Tracking', description: 'Smart key tags and cabinets with real-time lot key tracking.', isActive: true, requiresInventoryTopups: true, dateAdded: '2023-01-15', addedBy: 'David Sterling' },
-    { id: 'prod_4', name: PRODUCT_NAME.prod_4, category: 'F&I Ancillary', description: 'Guaranteed Asset Protection for financed vehicles.', isActive: true, requiresInventoryTopups: false, dateAdded: '2023-02-01', addedBy: 'David Sterling' },
-    { id: 'prod_5', name: PRODUCT_NAME.prod_5, category: 'F&I Ancillary', description: 'Road-hazard tire, wheel and cosmetic rim repair coverage.', isActive: true, requiresInventoryTopups: false, dateAdded: '2023-02-01', addedBy: 'David Sterling' },
-    { id: 'prod_6', name: PRODUCT_NAME.prod_6, category: 'Service Dept', description: 'Pre-paid oil, filter, rotation and scheduled service packages.', isActive: true, requiresInventoryTopups: false, dateAdded: '2023-03-01', addedBy: 'David Sterling' },
+    { id: 'prod_1', name: PRODUCT_NAME.prod_1, category: 'Warranty & Protection', description: 'Mechanical breakdown coverage for pre-owned inventory with fast claims.', isActive: true, requiresInventoryTopups: false, dateAdded: '2023-01-15', addedBy: 'John Candillier' },
+    { id: 'prod_2', name: PRODUCT_NAME.prod_2, category: 'Warranty & Protection', description: 'Dealership-branded powertrain warranty that builds pre-owned buyer confidence.', isActive: true, requiresInventoryTopups: false, dateAdded: '2023-01-15', addedBy: 'John Candillier' },
+    { id: 'prod_3', name: PRODUCT_NAME.prod_3, category: 'Hardware & Lot Tracking', description: 'Smart key tags and cabinets with real-time lot key tracking.', isActive: true, requiresInventoryTopups: true, dateAdded: '2023-01-15', addedBy: 'John Candillier' },
+    { id: 'prod_4', name: PRODUCT_NAME.prod_4, category: 'F&I Ancillary', description: 'Guaranteed Asset Protection for financed vehicles.', isActive: true, requiresInventoryTopups: false, dateAdded: '2023-02-01', addedBy: 'John Candillier' },
+    { id: 'prod_5', name: PRODUCT_NAME.prod_5, category: 'F&I Ancillary', description: 'Road-hazard tire, wheel and cosmetic rim repair coverage.', isActive: true, requiresInventoryTopups: false, dateAdded: '2023-02-01', addedBy: 'John Candillier' },
+    { id: 'prod_6', name: PRODUCT_NAME.prod_6, category: 'Service Dept', description: 'Pre-paid oil, filter, rotation and scheduled service packages.', isActive: true, requiresInventoryTopups: false, dateAdded: '2023-03-01', addedBy: 'John Candillier' },
     { id: 'prod_7', name: PRODUCT_NAME.prod_7, category: 'Telematics & Digital', description: 'OBD-II lot tracking, low-battery alerts and instant vehicle history.', isActive: true, requiresInventoryTopups: false, dateAdded: '2023-06-10', addedBy: 'Jason Scott' },
     { id: 'prod_8', name: PRODUCT_NAME.prod_8, category: 'EV Infrastructure', description: 'Zero-capex EV fast chargers and a customer charging network.', isActive: true, requiresInventoryTopups: false, dateAdded: '2024-01-10', addedBy: 'Jason Scott' },
     { id: 'prod_9', name: PRODUCT_NAME.prod_9, category: 'EV Infrastructure', description: 'High-voltage toolkits, battery health diagnostics and EV service readiness.', isActive: true, requiresInventoryTopups: false, dateAdded: '2024-04-15', addedBy: 'Jason Scott' },
-    { id: 'prod_10', name: PRODUCT_NAME.prod_10, category: 'Appearance & Protection', description: 'Ceramic nano-coating and interior protection, sold at delivery.', isActive: true, requiresInventoryTopups: false, isNewLaunch: true, dateAdded: ceramicLaunch, addedBy: 'David Sterling' }
+    { id: 'prod_10', name: PRODUCT_NAME.prod_10, category: 'Appearance & Protection', description: 'Ceramic nano-coating and interior protection, sold at delivery.', isActive: true, requiresInventoryTopups: false, isNewLaunch: true, dateAdded: ceramicLaunch, addedBy: 'John Candillier' }
   ];
 
   const monthStart = `${today.slice(0, 8)}01`;
@@ -1217,7 +1217,7 @@ export function buildDemoData(users: User[], gameRules: GameRule[], now: Date = 
   const workspace: WorkspaceItem[] = wsRaw.map(ws);
 
   // ── system-level audit entries ──
-  const david = users.find(u => u.role === 'owner');
+  const david = users.find(u => u.id === 'u_john') ?? users.find(u => u.role === 'owner');
   addAudit(stampAt(ceramicLaunch, '09:00', 'America/New_York'), david, undefined, 'Product Added', 'Added Ceramic Pro to the catalog and flagged it as a new launch.');
   addAudit(stampAt(ceramicLaunch, '09:05', 'America/New_York'), david, undefined, 'Product Bonus Created', 'Ceramic Pro launch bonus: +150 pts per sign-up or upsell for 90 days.');
   addAudit(stampAt(monthStart < today ? monthStart : today, '08:00', 'America/New_York'), david, undefined, 'Product Bonus Created', 'GAP double points for sign-ups this month.');

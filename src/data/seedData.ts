@@ -26,7 +26,7 @@ import {
 import { buildDemoData, DemoData } from './demo/story';
 
 /** Bump when the demo story changes so saved browser data is refreshed. */
-export const SEED_VERSION = 'story-2026-11-v3';
+export const SEED_VERSION = 'story-2026-11-v4';
 
 export const USERS: User[] = [
   {
@@ -128,8 +128,8 @@ export const USERS: User[] = [
   {
     id: 'u_michael',
     firstName: 'Michael',
-    lastName: 'Sena',
-    email: 'michael.sena@example.com',
+    lastName: 'Ballero',
+    email: 'michael.ballero@example.com',
     role: 'manager',
     region: 'West',
     managerId: 'u_john',
@@ -141,21 +141,21 @@ export const USERS: User[] = [
   {
     id: 'u_john',
     firstName: 'John',
-    lastName: 'Katsikas',
-    email: 'john.katsikas@example.com',
-    role: 'executive',
+    lastName: 'Candillier',
+    email: 'john.candillier@example.com',
+    role: 'owner',
     region: 'Northeast',
-    managerId: 'u_david',
+    managerId: null,
     homeZipCode: '02110',
     homeCoords: { lat: 42.3557, lng: -71.0505 },
     phone: '(617) 555-0111',
     hireDate: '2018-01-01'
   },
   {
-    id: 'u_david',
-    firstName: 'David',
-    lastName: 'Sterling',
-    email: 'david.sterling@example.com',
+    id: 'u_cristian',
+    firstName: 'Cristian',
+    lastName: 'Stenstrom',
+    email: 'cristian.stenstrom@example.com',
     role: 'owner',
     region: 'Northeast',
     managerId: null,

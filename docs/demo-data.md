@@ -34,7 +34,7 @@ leaderboard, the Executive Desk and the incentive trail.
 | Feature | Where to look |
 | --- | --- |
 | Every pipeline stage | Pipeline — Pool through Client, plus Lost, Not Now and Disqualified |
-| Manager Assist in every state | Jason (Pending, Accepted, Completed), Jose (Reschedule Proposed), Michael (Declined) |
+| Manager Assist in every state | Jason (Pending, Accepted, Completed), Jose (Reschedule Proposed), Michael Ballero (Declined) |
 | Incentives in every state | Donna's queue — Eligible, Pending verification, Verified (amount changed), Approved, Paid, Rejected (sister rooftop), Disputed (conflicts) |
 | Ownership transfer | Trinity Toyota of Irving and Big Tex Chevrolet — handed from Jose to Carlos; origin stays with Jose |
 | Dealer groups + placeholders | Trinity Motor Group has two "details needed" rooftops |
