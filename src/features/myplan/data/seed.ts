@@ -319,28 +319,10 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
           );
         });
 
-      // 4) Plan-later basket: Not Now nurture dates, fresh claims, upsell ideas, low health
-      const basket: { d: Dealership; note: string }[] = [];
-      book.forEach(d => {
-        if (thisWeek.has(d.id)) return;
-        if (d.stage === 'Not Now' && d.nurtureFollowUpDate) basket.push({ d, note: `Nurture follow-up due ${d.nurtureFollowUpDate}` });
-        else if (d.stage === 'Client' && (d.clientHealthScore ?? 100) < 70) basket.push({ d, note: 'Health is low — book a proper visit with the owner' });
-        else if (d.stage === 'Client' && d.upsells.some(u => u.stage === 'Interested' || u.stage === 'Identified')) {
-          const u = d.upsells.find(x => x.stage === 'Interested' || x.stage === 'Identified')!;
-          basket.push({ d, note: `${u.productName}: ${u.nextStep}` });
-        } else if (['Visited', 'Follow-up'].includes(d.stage) && !latestByDealer.get(d.id)?.nextActionDate) basket.push({ d, note: 'Second visit — bring the claims sample' });
-      });
-      if (basket.length < 2) {
-        local.filter(d => d.stage === 'Client' && !thisWeek.has(d.id) && !basket.some(b => b.d === d)).slice(0, 2 - basket.length).forEach(d => basket.push({ d, note: 'Drop off refreshed menu cards' }));
-      }
-      const inBasket = new Set(basket.map(b => b.d.id));
-      basket.slice(0, 6).forEach(({ d, note }, j) => {
-        const work = workTypeForStage(d.stage)!;
-        slots.push(make(user, d, undefined, j, 'in_person', defaultTaskIds(d.stage, work, hasKeyfetch(d, catalog)).map(t => plannedTask(t, d)), { basketNote: note }));
-      });
+      const inBasket = new Set<string>();
       const booked = new Set([...latestByDealer.values()].filter(a => a.nextActionDate && a.nextActionDate >= today).map(a => a.dealershipId));
 
-      // 5) Fill each plan day with sensible stops (each dealership once a week)
+      // 4) Fill each plan day with sensible stops (each dealership once a week)
       const fill = (date: string, wanted: number, pool: Dealership[], startIdx: number, allowRepeat = false) => {
         const count = () => slots.filter(s => s.userId === user.id && s.date === date && s.how !== 'email' && s.how !== 'text' && s.target.kind !== 'block').length;
         let i = 0;
@@ -355,7 +337,36 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
         }
       };
       const mixed = [...clientsDue, ...live].filter((d, i, a) => a.indexOf(d) === i);
-      planDays.forEach((date, k) => fill(date, k === 0 && !isWeekend(today) ? 3 : 2, k % 2 === 0 ? mixed : [...live, ...clientsDue], k * 2));
+      // Today comes first, so the day the demo is opened is always a real working day
+      if (!isWeekend(today)) {
+        fill(today, 3, mixed, 0);
+        fill(today, 3, local.filter(d => d.stage !== 'Not Now'), 0, true); // small book: reuse a dealership booked later in the week
+      }
+
+      // 5) Plan-later basket: Not Now nurture dates, fresh claims, upsell ideas, low health
+      const basket: { d: Dealership; note: string }[] = [];
+      book.forEach(d => {
+        if (thisWeek.has(d.id)) return;
+        if (d.stage === 'Not Now' && d.nurtureFollowUpDate) basket.push({ d, note: `Nurture follow-up due ${d.nurtureFollowUpDate}` });
+        else if (d.stage === 'Client' && (d.clientHealthScore ?? 100) < 70) basket.push({ d, note: 'Health is low — book a proper visit with the owner' });
+        else if (d.stage === 'Client' && d.upsells.some(u => u.stage === 'Interested' || u.stage === 'Identified')) {
+          const u = d.upsells.find(x => x.stage === 'Interested' || x.stage === 'Identified')!;
+          basket.push({ d, note: `${u.productName}: ${u.nextStep}` });
+        } else if (['Visited', 'Follow-up'].includes(d.stage) && !latestByDealer.get(d.id)?.nextActionDate) basket.push({ d, note: 'Second visit — bring the claims sample' });
+      });
+      if (basket.length < 2) {
+        local.filter(d => d.stage === 'Client' && !thisWeek.has(d.id) && !basket.some(b => b.d === d)).slice(0, 2 - basket.length).forEach(d => basket.push({ d, note: 'Drop off refreshed menu cards' }));
+      }
+      basket.forEach(b => inBasket.add(b.d.id));
+      basket.slice(0, 6).forEach(({ d, note }, j) => {
+        const work = workTypeForStage(d.stage)!;
+        slots.push(make(user, d, undefined, j, 'in_person', defaultTaskIds(d.stage, work, hasKeyfetch(d, catalog)).map(t => plannedTask(t, d)), { basketNote: note }));
+      });
+
+      planDays.forEach((date, k) => {
+        if (k === 0 && !isWeekend(today)) return; // today was filled first
+        fill(date, 2, k % 2 === 0 ? mixed : [...live, ...clientsDue], k * 2);
+      });
 
       const [p1, , p3, p4, p5] = planDays;
       // Weekly team call (Google Calendar) on the first plan day

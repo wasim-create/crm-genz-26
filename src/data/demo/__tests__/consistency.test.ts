@@ -159,6 +159,12 @@ for (const iso of DATES) {
     for (const s of seed.slots.filter(x => x.status === 'done' && x.target.kind === 'dealership' && x.source !== 'assist')) {
       assert.ok(D.activities.some(a => a.dealershipId === s.target.id && a.plannedDate === s.date && a.userId === s.userId), 'history slot is a CRM activity');
     }
+    const weekday = ![0, 6].includes(new Date(`${today}T12:00:00Z`).getUTCDay());
+    if (weekday)
+      for (const rep of USERS.filter(u => u.role.endsWith('_rep'))) {
+        const todays = seed.slots.filter(s => s.userId === rep.id && s.date === today && s.target.kind === 'dealership' && s.how !== 'email' && s.how !== 'text');
+        assert.ok(todays.length >= 3, `${rep.firstName} has a real day today (${todays.length} stops)`);
+      }
     const byUserDay = new Map<string, typeof seed.slots>();
     seed.slots.filter(s => s.date && s.date >= today && s.status === 'planned').forEach(s => {
       const k = `${s.userId}|${s.date}`;
