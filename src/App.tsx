@@ -365,16 +365,16 @@ export default function App() {
       dealershipId: deal.id,
       dealershipName: deal.dealershipName,
       originRepId: deal.originRepId || currentUser.id,
-      originRepName: `${currentUser.firstName} ${currentUser.lastName}`,
+      originRepName: (() => { const o = users.find(u => u.id === (deal.originRepId || currentUser.id)); return o ? `${o.firstName} ${o.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`; })(),
       assignedManagerId: manager.id,
       assignedManagerName: `${manager.firstName} ${manager.lastName}`,
       assistType,
       proposedDate,
       proposedTime,
       requestDate: new Date().toISOString(),
-      decisionMakerName: 'General Manager',
-      decisionMakerTitle: 'GM / Partner',
-      objections: 'Terms confirmation and claims turnaround SLA.',
+      decisionMakerName: (() => { const dm = contacts.find(c => c.dealershipId === deal.id && c.isDecisionMaker); return dm ? `${dm.firstName} ${dm.lastName}` : 'Decision maker not on file'; })(),
+      decisionMakerTitle: contacts.find(c => c.dealershipId === deal.id && c.isDecisionMaker)?.jobTitle ?? '—',
+      objections: deal.relationshipTemperature?.hesitationPhrases?.join('; ') || 'None recorded yet.',
       productsOfInterest: (deal.productInterests || []).map(p => p.productName),
       aiBriefing: brief,
       status: 'Pending'
@@ -426,7 +426,7 @@ export default function App() {
       dealershipId: deal.id,
       dealershipName: deal.dealershipName,
       originRepId: deal.originRepId || currentUser.id,
-      originRepName: `${currentUser.firstName} ${currentUser.lastName}`,
+      originRepName: (() => { const o = users.find(u => u.id === (deal.originRepId || currentUser.id)); return o ? `${o.firstName} ${o.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`; })(),
       closedByUserId: currentUser.id,
       closedByUserName: `${currentUser.firstName} ${currentUser.lastName}`,
       signedByUserId: currentUser.id,
@@ -434,16 +434,22 @@ export default function App() {
       assistInvolved: true,
       assistManagerId: managerUser.id,
       assistManagerName: `${managerUser.firstName} ${managerUser.lastName}`,
-      triggerEvent: 'Contract Signed with Assist',
-      state: 'Verified',
-      amount: 450.00,
-      reviewDate: new Date().toISOString().split('T')[0],
-      reviewedBy: 'Donna Clark',
+      triggerEvent: 'Agreement signed',
+      state: 'Eligible',
+      amount: 350.0,
+      calculatedRule: 'Introduction with manager assist',
       trail: [
-        { step: 'Claimed from Pool', date: '2026-10-15', actor: `${currentUser.firstName} ${currentUser.lastName}`, details: 'Claimed within territory radius' },
-        { step: 'Scouting Lot Visit', date: '2026-10-20', actor: `${currentUser.firstName} ${currentUser.lastName}`, details: 'Discovery inside Golden Window', isGoodWindow: true },
-        { step: 'Manager Assist Requested', date: '2026-10-28', actor: `${currentUser.firstName} ${currentUser.lastName}`, details: `Coordinated with ${managerUser.firstName} ${managerUser.lastName}` },
-        { step: 'Contract Executed & Signed', date: new Date().toISOString().split('T')[0], actor: `${currentUser.firstName} & ${managerUser.firstName}`, details: 'Signed and placed in origin rep portfolio' }
+        ...activities
+          .filter(a => a.dealershipId === deal.id && a.status === 'completed' && (a.tags?.some(t => ['claim', 'lot', 'assist_req', 'assist_meet'].includes(t)) || a.activityType === 'Google Meet'))
+          .sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''))
+          .map(a => ({
+            step: a.tags?.includes('claim') ? 'Claimed' : a.tags?.includes('lot') ? 'Scouting visit' : a.tags?.includes('assist_req') ? 'Manager Assist requested' : a.tags?.includes('assist_meet') ? 'Manager Assist completed' : 'Product demo',
+            date: (a.completedAt ?? '').slice(0, 10),
+            actor: a.userName,
+            details: a.notes.length > 140 ? `${a.notes.slice(0, 137)}…` : a.notes,
+            isGoodWindow: a.isGoodWindow
+          })),
+        { step: 'Agreement signed', date: new Date().toISOString().split('T')[0], actor: `${currentUser.firstName} & ${managerUser.firstName}`, details: 'Signed and kept in the origin rep’s portfolio' }
       ]
     };
     setIncentives([newIncentive, ...incentives]);
@@ -618,6 +624,8 @@ export default function App() {
               productBonuses={productBonuses}
               priorities={managerPriorities}
               activities={activities}
+              assists={assists}
+              workspaceItems={workspaceItems}
               request={planRequest}
               onRequestHandled={() => setPlanRequest(null)}
               onAddContact={saveContact}
@@ -634,6 +642,7 @@ export default function App() {
             <PipelineView
               dealerships={dealerships}
               currentUser={currentUser}
+              allUsers={users}
               onOpenDealership={(d) => setSelectedDealership(d)}
               onMoveStage={handleMoveStage}
               onInitiateAssist={(d) => setSelectedDealership(d)}
@@ -736,6 +745,9 @@ export default function App() {
               productBonuses={productBonuses}
               catalog={catalog}
               currentUser={currentUser}
+              users={users}
+              gamification={gamification}
+              pointsLedger={pointsLedger}
               onUpdateRule={(r) => {
                 const list = gameRules.map(x => x.id === r.id ? r : x);
                 setGameRules(list);
@@ -841,6 +853,7 @@ export default function App() {
       {isWorkspaceSyncOpen && (
         <WorkspaceSyncView
           items={workspaceItems}
+          allUsers={users}
           dealerships={dealerships}
           currentUser={currentUser}
           onClose={() => setIsWorkspaceSyncOpen(false)}

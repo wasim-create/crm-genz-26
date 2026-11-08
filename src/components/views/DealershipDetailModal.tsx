@@ -16,6 +16,7 @@ import {
   isGoodVisitWindow 
 } from '../../utils/territory';
 import { AIService, PreVisitBrief } from '../../services/aiService';
+import { AccountStatusBanner, ActivityTimeline, AuditList, LotHistory, OnboardingChecklist } from './DealershipHistory';
 import {
   Building2,
   MapPin,
@@ -92,7 +93,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
 
   // Visit log form
   const [logPurpose, setLogPurpose] = useState('In-Person Discovery');
-  const [logContactId, setLogContactId] = useState(contacts?.[0]?.id || '');
+  const [logContactId, setLogContactId] = useState((contacts || []).find(c => c.dealershipId === dealership?.id)?.id || '');
   const [logNotes, setLogNotes] = useState('');
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
 
@@ -100,7 +101,11 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
   const repManager = (allUsers || []).find(u => u.id === currentUser?.managerId) || (allUsers || []).find(u => u.role === 'manager');
   const [assistManagerId, setAssistManagerId] = useState<string>(repManager?.id || '');
   const [assistType, setAssistType] = useState<AssistType>('terms_approval');
-  const [assistDate, setAssistDate] = useState('2026-11-04');
+  const [assistDate, setAssistDate] = useState(() => {
+    const d = new Date();
+    do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [assistTime, setAssistTime] = useState('11:00');
   const [assistBrief, setAssistBrief] = useState<string>(() => 
     dealership ? AIService.generateManagerAssistBrief(dealership, currentUser?.firstName || 'Rep') : ''
@@ -130,7 +135,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
   const handleSimulateVoiceInput = () => {
     setIsVoiceRecording(true);
     setTimeout(() => {
-      setLogNotes('Met GSM on lot. Counted 85 used cars. Walked through key tracking workflow. Very impressed by claims turnaround SLA.');
+      setLogNotes(`Met ${(contacts || []).find(c => c.dealershipId === dealership.id)?.firstName ?? 'the GSM'} on the lot. Counted ${dealership.usedCarsOnLot} used cars. Walked through the key tracking workflow; good questions on claims turnaround.`);
       setIsVoiceRecording(false);
     }, 800);
   };
@@ -306,6 +311,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
           {/* TAB 1: OVERVIEW & RELATIONSHIP TEMPERATURE */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              <AccountStatusBanner dealership={dealership} users={allUsers || []} />
               {planPanel}
               {/* Relationship Temperature Card (Section 7) */}
               {dealership.relationshipTemperature && (
@@ -373,7 +379,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                 </div>
 
                 {preVisitBrief && (
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs" data-brief>
                     <p className="font-medium text-slate-800">{preVisitBrief.summary}</p>
                     <div>
                       <strong className="text-slate-900 block mb-0.5">Key Talking Points:</strong>
@@ -386,6 +392,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                   </div>
                 )}
               </div>
+              <ActivityTimeline dealership={dealership} activities={dealActivities} />
             </div>
           )}
 
@@ -431,6 +438,8 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
           {/* TAB 3: PRODUCTS & SCOUTING (Section 2) */}
           {activeTab === 'products' && (
             <div className="space-y-6">
+              <OnboardingChecklist dealership={dealership} users={allUsers || []} />
+              <LotHistory dealership={dealership} users={allUsers || []} />
               {!isClient ? (
                 /* Scouting 2-column checklist */
                 <div className="space-y-3">
@@ -652,7 +661,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
               <h4 className="font-bold text-sm text-slate-900">Dealership Audit Log & Ownership Trail</h4>
               <div className="space-y-2">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <span className="font-bold text-slate-900 block">Origin Rep: {dealership.originRepId || 'Assigned'}</span>
+                  <span className="font-bold text-slate-900 block">Origin rep: {(() => { const o = (allUsers || []).find(u => u.id === dealership.originRepId); return o ? `${o.firstName} ${o.lastName}` : 'Not claimed yet'; })()}</span>
                   <p className="text-slate-600 text-[11px] mt-0.5">
                     Attribution is permanently locked. All introduction and closing rewards flow to origin rep.
                   </p>
@@ -662,10 +671,11 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                   <div key={tx.id} className="p-3 bg-purple-50 rounded-xl border border-purple-200">
                     <span className="font-bold text-purple-900 block">Ownership Reassigned</span>
                     <p className="text-[11px] text-purple-800 mt-0.5">
-                      Transferred by manager {tx.transferredByManagerName}. Reason: "{tx.reason}"
+                      {(() => { const f = (allUsers || []).find(u => u.id === tx.fromRepId); const t = (allUsers || []).find(u => u.id === tx.toRepId); return `${f ? `${f.firstName} ${f.lastName}` : tx.fromRepId} → ${t ? `${t.firstName} ${t.lastName}` : tx.toRepId}`; })()} on {new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, by {tx.transferredByManagerName}. Reason: “{tx.reason}”
                     </p>
                   </div>
                 ))}
+                <AuditList logs={(auditLogs || []).filter(l => l.dealershipId === dealership.id)} timeZone={dealership.timeZone} />
               </div>
             </div>
           )}

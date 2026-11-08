@@ -45,7 +45,11 @@ export const ManagerAssistView: React.FC<ManagerAssistViewProps> = ({
   const [transferToRepId, setTransferToRepId] = useState('');
   const [transferReason, setTransferReason] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('14:00');
-  const [rescheduleDate, setRescheduleDate] = useState('2026-11-04');
+  const [rescheduleDate, setRescheduleDate] = useState(() => {
+    const d = new Date();
+    do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [showRescheduleInput, setShowRescheduleInput] = useState(false);
 
   const isManager = ['manager', 'owner', 'executive'].includes(currentUser.role);

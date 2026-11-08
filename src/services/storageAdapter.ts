@@ -32,8 +32,10 @@ import {
   INITIAL_GAME_RULES,
   INITIAL_PRODUCT_BONUSES,
   INITIAL_MANAGER_PRIORITIES,
-  INITIAL_POINTS_LEDGER
+  INITIAL_POINTS_LEDGER,
+  SEED_VERSION
 } from '../data/seedData';
+import { MYPLAN_STORAGE_KEY } from '../features/myplan/data/store';
 
 export type StorageMode = 'local_storage' | 'google_sheets' | 'cloud_sql';
 
@@ -107,7 +109,8 @@ const STORAGE_KEYS = {
   GAME_RULES: 'apexdrive_game_rules',
   PRODUCT_BONUSES: 'apexdrive_product_bonuses',
   PRIORITIES: 'apexdrive_priorities',
-  POINTS_LEDGER: 'apexdrive_points_ledger'
+  POINTS_LEDGER: 'apexdrive_points_ledger',
+  SEED_VERSION: 'apexdrive_seed_version'
 };
 
 export class LocalStorageAdapter implements StorageAdapter {
@@ -118,7 +121,8 @@ export class LocalStorageAdapter implements StorageAdapter {
   async loadAll(currentUser?: User) {
     try {
       const storedDeals = localStorage.getItem(STORAGE_KEYS.DEALERSHIPS);
-      if (!storedDeals) {
+      // Saved data from an older demo story is replaced with the current one.
+      if (!storedDeals || localStorage.getItem(STORAGE_KEYS.SEED_VERSION) !== SEED_VERSION) {
         await this.resetToSeed();
       }
 
@@ -422,6 +426,8 @@ export class LocalStorageAdapter implements StorageAdapter {
     localStorage.setItem(STORAGE_KEYS.PRODUCT_BONUSES, JSON.stringify(INITIAL_PRODUCT_BONUSES));
     localStorage.setItem(STORAGE_KEYS.PRIORITIES, JSON.stringify(INITIAL_MANAGER_PRIORITIES));
     localStorage.setItem(STORAGE_KEYS.POINTS_LEDGER, JSON.stringify(INITIAL_POINTS_LEDGER));
+    localStorage.setItem(STORAGE_KEYS.SEED_VERSION, SEED_VERSION);
     localStorage.removeItem('apexdrive_myplan_v4');
+    localStorage.removeItem(MYPLAN_STORAGE_KEY);
   }
 }

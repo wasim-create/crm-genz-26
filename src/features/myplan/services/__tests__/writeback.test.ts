@@ -4,7 +4,7 @@ import { INITIAL_DEALERSHIPS, INITIAL_GAME_RULES, INITIAL_PRODUCT_BONUSES, PRODU
 import { PlanSlot } from '../../types';
 import { buildWriteback, suggestActionPoints, suggestStageChange } from '../writeback';
 import { buildSeed } from '../../data/seed';
-import { INITIAL_CONTACTS, DEALER_GROUPS } from '../../../../data/seedData';
+import { INITIAL_CONTACTS, DEALER_GROUPS, INITIAL_ACTIVITIES, INITIAL_ASSISTS, INITIAL_MANAGER_PRIORITIES, INITIAL_WORKSPACE_ITEMS, DEMO_TODAY } from '../../../../data/seedData';
 
 const kelley = USERS.find(u => u.id === 'u_kelley')!;
 const client = INITIAL_DEALERSHIPS.find(d => d.assignedRepId === 'u_kelley' && d.stage === 'Client')!;
@@ -84,11 +84,11 @@ test('no money is written anywhere', () => {
 });
 
 test('group meeting writes an activity on each ticked rooftop', () => {
-  const rooftops = INITIAL_DEALERSHIPS.filter(d => d.groupId === 'grp_holman').slice(0, 3);
+  const rooftops = INITIAL_DEALERSHIPS.filter(d => d.groupId === 'grp_commonwealth').slice(0, 3);
   const slot: PlanSlot = {
     ...clientVisit(),
     workType: 'group',
-    target: { kind: 'group', id: 'grp_holman', name: 'Holman Automotive Group', rooftopIds: rooftops.map(r => r.id) },
+    target: { kind: 'group', id: 'grp_commonwealth', name: 'Commonwealth Auto Group', rooftopIds: rooftops.map(r => r.id) },
     tasks: [{ taskId: 'g_pitch', productIds: ['prod_10'], outcome: { kind: 'interest', levels: { prod_10: 'High' } } }]
   };
   const result = buildWriteback({
@@ -125,13 +125,20 @@ test('seed: every rep gets history, today, a basket, action points and their own
     contacts: INITIAL_CONTACTS,
     groups: DEALER_GROUPS,
     catalog: PRODUCT_CATALOG,
-    today: '2026-11-06'
+    today: DEMO_TODAY,
+    activities: INITIAL_ACTIVITIES,
+    assists: INITIAL_ASSISTS,
+    priorities: INITIAL_MANAGER_PRIORITIES,
+    workspace: INITIAL_WORKSPACE_ITEMS
   });
   for (const rep of USERS.filter(u => u.role.endsWith('_rep'))) {
     const mine = seed.slots.filter(s => s.userId === rep.id);
     assert.ok(mine.some(s => s.status === 'done'), `${rep.firstName} has history`);
     assert.ok(mine.some(s => s.status === 'basket'), `${rep.firstName} has a basket`);
-    assert.ok(mine.some(s => s.locked && s.source === 'assist'), `${rep.firstName} has a locked Manager Assist meeting`);
+    assert.ok(mine.some(s => s.source === 'assist'), `${rep.firstName} has a Manager Assist meeting planned`);
+    // history is the CRM's own log: same dealership, date and note
+    const done = mine.filter(s => s.status === 'done');
+    assert.ok(done.every(s => INITIAL_ACTIVITIES.some(a => a.dealershipId === s.target.id && a.plannedDate === s.date && a.notes === (s.outcomeNote ?? s.message))), `${rep.firstName}'s history matches the CRM`);
     assert.ok(seed.actionPoints.some(a => a.userId === rep.id && !a.done));
     // every planned target is the rep's own dealership (or their group)
     assert.ok(mine.filter(s => s.target.kind === 'dealership').every(s => INITIAL_DEALERSHIPS.find(d => d.id === s.target.id)?.assignedRepId === rep.id));

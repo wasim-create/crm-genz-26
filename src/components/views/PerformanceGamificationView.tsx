@@ -239,14 +239,7 @@ export const PerformanceGamificationView: React.FC<PerformanceGamificationViewPr
       {/* TAB 2: BADGES & ACHIEVEMENTS */}
       {activeTab === 'badges' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            { name: 'Ceramic Pro Pioneer', cat: 'Upselling', desc: 'First 3 Ceramic Pro upsells closed', icon: '✨', prog: 1, target: 3, unlocked: false },
-            { name: 'Golden Window Master', cat: 'Visits', desc: '10 consecutive visits within 10 AM-4 PM', icon: '⏱️', prog: 10, target: 10, unlocked: true },
-            { name: 'Key Master', cat: 'Servicing', desc: 'Topped up 1,000+ Keyfetch fobs on clients', icon: '🔑', prog: 850, target: 1000, unlocked: false },
-            { name: 'Territory Hawk', cat: 'Scouting', desc: 'Scouted 25+ qualified dealerships', icon: '🦅', prog: 28, target: 25, unlocked: true },
-            { name: 'The Closer', cat: 'Closing', desc: 'Converted 5 assists into won contracts', icon: '🎯', prog: 4, target: 5, unlocked: false },
-            { name: 'Shield of Trust', cat: 'Relationships', desc: 'Maintained 90%+ client health score', icon: '🛡️', prog: 94, target: 90, unlocked: true }
-          ].map((b, i) => (
+          {(myProfile.badges.length ? myProfile.badges : []).map(x => ({ name: x.name, cat: x.category, desc: x.description, icon: x.icon, prog: x.currentProgress, target: x.targetProgress, unlocked: x.unlocked, earned: x.earnedDate })).map((b, i) => (
             <div key={i} className={`p-4 rounded-2xl border text-xs space-y-2 ${
               b.unlocked ? 'bg-white border-slate-200 shadow-2xs' : 'bg-slate-50 border-slate-200/80 opacity-75'
             }`}>

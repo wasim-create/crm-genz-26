@@ -8,10 +8,13 @@ import { useSyncExternalStore } from 'react';
 import { ActionPoint, EditLogEntry, LunchSettings, MyPlanSettings, PlanSlot } from '../types';
 import { mockGoogleTasks, resetMockGoogle, TasksConnector } from '../connectors/googleConnectors';
 import { buildSeed, SeedInput } from './seed';
+import { SEED_VERSION } from '../../../data/seedData';
 import { moveByArrow, normalizeOrder, reorderDay } from '../engine/schedule';
 import type { WritebackResult } from '../services/writeback';
 
-const STORAGE_KEY = 'apexdrive_myplan_v4';
+// Tied to the demo story version, so a new story starts with a fresh plan.
+export const MYPLAN_STORAGE_KEY = `apexdrive_myplan_v5_${SEED_VERSION}`;
+const STORAGE_KEY = MYPLAN_STORAGE_KEY;
 
 export interface Toast {
   id: number;

@@ -23,6 +23,7 @@ interface PipelineViewProps {
   onOpenDealership: (dealership: Dealership) => void;
   onMoveStage: (dealership: Dealership, newStage: PipelineStage, note?: string) => void;
   onInitiateAssist: (dealership: Dealership) => void;
+  allUsers?: User[];
 }
 
 // Section 3: "Handed Off" is removed as a stage. Assist is a badge across HOT, Negotiation, or Contract.
@@ -43,7 +44,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   currentUser,
   onOpenDealership,
   onMoveStage,
-  onInitiateAssist
+  onInitiateAssist,
+  allUsers = []
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRep, setSelectedRep] = useState<string>('all');
@@ -284,7 +286,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                     {d.relationshipTemperature?.score || 50}°
                   </td>
                   <td className="p-3 text-slate-500 text-[11px]">
-                    Origin: {d.originRepId || 'Assigned Rep'}
+                    Origin: {(() => { const o = allUsers.find(u => u.id === d.originRepId); return o ? `${o.firstName} ${o.lastName}` : '—'; })()}
                   </td>
                   <td className="p-3 text-right">
                     <button

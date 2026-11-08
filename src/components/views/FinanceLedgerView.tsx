@@ -286,6 +286,16 @@ export const FinanceLedgerView: React.FC<FinanceLedgerViewProps> = ({
                   <span>Introduction Timeline & Verification Trail</span>
                 </div>
 
+                {selectedIncentive.conflicts && selectedIncentive.conflicts.length > 0 && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-[11px] text-rose-900">
+                    <span className="mb-1 block font-bold">Conflicts to resolve before paying</span>
+                    <ul className="list-disc space-y-0.5 pl-4">
+                      {selectedIncentive.conflicts.map((c, i) => (
+                        <li key={i}>{c}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="relative pl-6 border-l-2 border-slate-200 space-y-4">
                   {selectedIncentive.trail.map((step, idx) => (
                     <div key={idx} className="relative text-xs">

@@ -11,7 +11,9 @@ import {
   ManagerPriority,
   ProductBonus,
   ProductCatalogItem,
-  User
+  User,
+  ManagerAssist,
+  WorkspaceItem
 } from '../../types/crm';
 import { DEFAULT_ENGINE_SETTINGS } from './engine/geo';
 import { layoutDay } from './engine/schedule';
@@ -45,6 +47,8 @@ export interface MyPlanModuleProps {
   productBonuses: ProductBonus[];
   priorities: ManagerPriority[];
   activities: Activity[];
+  assists?: ManagerAssist[];
+  workspaceItems?: WorkspaceItem[];
   /** Opened from elsewhere in the CRM ("Add to my plan" / "Plan later"). */
   request?: { dealershipId: string; planLater?: boolean; nonce: number } | null;
   onRequestHandled?: () => void;
@@ -74,7 +78,8 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
   useEffect(() => setViewUserId(currentUser.id), [currentUser.id]);
 
   useEffect(() => {
-    if (dealerships.length > 0) ensureSeeded({ users, dealerships, contacts, groups, catalog, today });
+    if (dealerships.length > 0)
+      ensureSeeded({ users, dealerships, contacts, groups, catalog, today, activities: props.activities, assists: props.assists, priorities: props.priorities, workspace: props.workspaceItems });
   }, [dealerships.length, state.seededOn, users, contacts, groups, catalog, today]);
 
   useEffect(() => setActiveUser(currentUser.id), [currentUser.id]);

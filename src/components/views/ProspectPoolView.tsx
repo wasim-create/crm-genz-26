@@ -72,7 +72,10 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
     );
     const band = getDistanceBand(dist);
     return { dealership: d, distance: dist, withinTerritory: isWithinTerritory(dist), band };
-  });
+  })
+    // Reps see their own area (territory, tolerance band and a little beyond), nearest first.
+    .filter(x => !isPoolOnly || !['new_rep', 'veteran_rep', 'team_lead'].includes(currentUser.role) || x.distance <= 100 || !!searchTerm)
+    .sort((a, b) => (isPoolOnly ? a.distance - b.distance : 0));
 
   const handleClaim = (d: Dealership) => {
     const dist = calculateDistanceMiles(

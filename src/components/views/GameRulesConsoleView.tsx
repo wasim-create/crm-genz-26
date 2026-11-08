@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GameRule, ProductBonus, ProductCatalogItem, User } from '../../types/crm';
+import { GameRule, GamificationProfile, PointsLedgerEntry, ProductBonus, ProductCatalogItem, User } from '../../types/crm';
 import {
   Gamepad2,
   Sparkles,
@@ -25,6 +25,9 @@ interface GameRulesConsoleViewProps {
   onUpdateRule: (rule: GameRule) => void;
   onAddProductBonus: (bonus: ProductBonus) => void;
   onToggleBonus: (bonusId: string) => void;
+  users?: User[];
+  gamification?: Record<string, GamificationProfile>;
+  pointsLedger?: PointsLedgerEntry[];
 }
 
 export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
@@ -32,6 +35,9 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
   productBonuses,
   catalog,
   currentUser,
+  users = [],
+  gamification = {},
+  pointsLedger = [],
   onUpdateRule,
   onAddProductBonus,
   onToggleBonus
@@ -58,8 +64,8 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
       bonusPoints: bonusMultiplier > 1 ? 0 : bonusPoints,
       multiplier: bonusMultiplier > 1 ? bonusMultiplier : undefined,
       actionTypes: [bonusActionType],
-      startDate: '2026-11-01',
-      endDate: '2026-12-31',
+      startDate: new Date().toISOString().slice(0, 10),
+      endDate: new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10),
       targetType: bonusTargetType,
       isActive: true
     };
@@ -246,7 +252,16 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
           <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-200 space-y-2">
             <span className="font-bold text-indigo-900">Simulated Change: +150 Ceramic Pro Upsell Bonus</span>
             <p className="text-indigo-800 text-[11px]">
-              Projected shift: Kevin Houk (+300 pts) retains #1, Kelley Koliopulos moves within 80 pts of top spot.
+              {(() => {
+                const reps = users.filter(u => ['new_rep', 'veteran_rep', 'team_lead'].includes(u.role) && gamification[u.id]);
+                const extra = (id: string) => pointsLedger.filter(l => l.userId === id && /Ceramic Pro/.test(l.description)).length * 150;
+                const now = [...reps].sort((a, b) => gamification[b.id].points - gamification[a.id].points);
+                const then = [...reps].sort((a, b) => gamification[b.id].points + extra(b.id) - (gamification[a.id].points + extra(a.id)));
+                if (!now.length) return 'No reps to simulate yet.';
+                const moved = then.filter((u, i) => now.indexOf(u) !== i);
+                const lead = then[0];
+                return `Projected: ${lead.firstName} ${lead.lastName} ${now[0] === lead ? 'stays' : 'moves to'} #1 (+${extra(lead.id)} pts). ${moved.length ? `${moved.length} rep${moved.length > 1 ? 's' : ''} change position: ${moved.map(u => `${u.firstName} ${u.lastName} → #${then.indexOf(u) + 1}`).join(', ')}.` : 'No other positions change.'}`;
+              })()}
             </p>
           </div>
         </div>

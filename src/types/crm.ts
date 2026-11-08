@@ -267,6 +267,12 @@ export interface Activity {
   checkInLocation?: { lat: number; lng: number; verified: boolean };
   isLocked?: boolean; // Manual stop locking in Planner
   pointsEarned?: number;
+  /** My Plan task ids this activity covered (e.g. c_keyfetch, p_dm). */
+  taskIds?: string[];
+  /** Local time agreed for the next action (HH:mm), when one was booked. */
+  nextActionTime?: string;
+  /** Machine tags for the story (claim, signed, voicemail, topup…). */
+  tags?: string[];
 }
 
 export type AssistType = 
