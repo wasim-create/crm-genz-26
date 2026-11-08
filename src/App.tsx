@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Dealership, 
   User, 
@@ -23,7 +23,11 @@ import { LocalStorageAdapter } from './services/storageAdapter';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar, ActiveView } from './components/layout/Sidebar';
 import { MyPlanModule } from './features/myplan/MyPlanModule';
-import { PlanItem, DaySettings, Trip, SendQueueItem } from './types/planner';
+import { DealershipPlanPanel } from './features/myplan/DealershipPlanPanel';
+import { resetMyPlan, setCrmBridge } from './features/myplan/data/store';
+import type { WritebackResult } from './features/myplan/services/writeback';
+import { ProspectForm, ProspectFormResult } from './components/forms/ProspectForm';
+import { ContactForm } from './components/forms/ContactForm';
 import { PipelineView } from './components/views/PipelineView';
 import { ProspectPoolView } from './components/views/ProspectPoolView';
 import { ClientPortfolioView } from './components/views/ClientPortfolioView';
@@ -37,6 +41,10 @@ import { SettingsAdminView } from './components/views/SettingsAdminView';
 import { DealershipDetailModal } from './components/views/DealershipDetailModal';
 import { WorkspaceSyncView } from './components/views/WorkspaceSyncView';
 import { CommandPalette } from './components/command/CommandPalette';
+import { ensureSeeded, useMyPlanState } from './features/myplan/data/store';
+import { HOW_SHORT, TASK_BY_ID } from './features/myplan/engine/tasks';
+import { todayISO } from './features/myplan/engine/time';
+import { computeNextSteps, PlannedRef } from './utils/nextStepStatus';
 import { CheckCircle2, X, Sparkles, Flame } from 'lucide-react';
 
 const storage = new LocalStorageAdapter();
@@ -58,18 +66,17 @@ export default function App() {
   const [productBonuses, setProductBonuses] = useState<ProductBonus[]>([]);
   const [managerPriorities, setManagerPriorities] = useState<ManagerPriority[]>([]);
   const [pointsLedger, setPointsLedger] = useState<PointsLedgerEntry[]>([]);
-  const [planItems, setPlanItems] = useState<PlanItem[]>([]);
-  const [daySettings, setDaySettings] = useState<Record<string, DaySettings>>({});
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [sendQueue, setSendQueue] = useState<SendQueueItem[]>([]);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ActiveView>('planner');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
 
   // Modals state
   const [selectedDealership, setSelectedDealership] = useState<Dealership | null>(null);
-  const [addToPlanTarget, setAddToPlanTarget] = useState<Dealership | null>(null);
+  // Shared "Add New Prospect / Client" and "Add Contact" forms (used everywhere)
+  const [prospectForm, setProspectForm] = useState<{ mode: 'prospect' | 'client'; radar?: boolean } | null>(null);
+  const [contactFormFor, setContactFormFor] = useState<Dealership | null>(null);
+  const [planRequest, setPlanRequest] = useState<{ dealershipId: string; planLater?: boolean; nextStep?: boolean; nonce: number } | null>(null);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isWorkspaceSyncOpen, setIsWorkspaceSyncOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -100,10 +107,8 @@ export default function App() {
       setProductBonuses(data.productBonuses);
       setManagerPriorities(data.managerPriorities);
       setPointsLedger(data.pointsLedger);
-      setPlanItems(data.planItems || []);
-      setDaySettings(data.daySettings || {});
-      setTrips(data.trips || []);
-      setSendQueue(data.sendQueue || []);
+      // Seed My Plan straight away, so next-step status is right on every screen.
+      ensureSeeded({ users: data.users, dealerships: data.dealerships, contacts: data.contacts, groups: data.groups, catalog: data.products, today: todayISO(), activities: data.activities, assists: data.assists, priorities: data.managerPriorities, workspace: data.workspaceItems });
 
       // Default to Carlos Martinez (New Rep, Texas) or Kelley
       const defaultUser = data.users.find((u: User) => u.id === 'u_carlos') || data.users[0];
@@ -111,6 +116,106 @@ export default function App() {
     };
 
     loadData();
+  }, []);
+
+  // What happens next with each dealership (My Plan + assists + CRM history).
+  const planState = useMyPlanState();
+  const plannedRefs: PlannedRef[] = useMemo(
+    () =>
+      planState.slots
+        .filter(s => (s.status === 'planned' || s.status === 'basket') && s.target.kind !== 'block')
+        .map(s => ({
+          targetId: s.target.id,
+          rooftopIds: s.target.rooftopIds,
+          date: s.date,
+          time: s.timeMode === 'exact' ? s.fixedTime : undefined,
+          status: s.status,
+          label: `${HOW_SHORT[s.how]}${s.tasks[0] ? `: ${TASK_BY_ID[s.tasks[0].taskId]?.label ?? ''}` : ''}`
+        })),
+    [planState.slots]
+  );
+  const nextSteps = useMemo(() => computeNextSteps(dealerships, activities, plannedRefs, assists, todayISO()), [dealerships, activities, plannedRefs, assists]);
+  const planNextStep = (d: Dealership) => {
+    setSelectedDealership(null);
+    setPlanRequest({ dealershipId: d.id, nextStep: true, nonce: Date.now() });
+    setCurrentView('planner');
+  };
+
+  // Saving from the shared prospect form: the dealership, any new / updated
+  // dealer group, and placeholder rooftops for a new group.
+  const saveProspectResult = (r: ProspectFormResult, who: User) => {
+    const added = [r.dealership, ...r.placeholders];
+    setDealerships(prev => [...added, ...prev]);
+    added.forEach(d => storage.saveDealership(d));
+    const g = r.newGroup ?? r.updatedGroup;
+    if (g) {
+      setGroups(prev => (prev.some(x => x.id === g.id) ? prev.map(x => (x.id === g.id ? g : x)) : [g, ...prev]));
+      storage.saveGroup(g);
+    }
+    const ref = r.dealership.referral;
+    const audit: AuditLogRecord = {
+      id: `aud_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      userId: who.id,
+      userName: `${who.firstName} ${who.lastName}`,
+      dealershipId: r.dealership.id,
+      dealershipName: r.dealership.dealershipName,
+      action: r.dealership.stage === 'Client' ? 'Client added directly' : 'Prospect added',
+      details: [
+        `Source: ${r.dealership.source}`,
+        ref?.internalName ? `Internal referral: ${ref.internalName}` : '',
+        ref?.externalName ? `External referral: ${ref.externalName}${ref.externalCompany ? ` (${ref.externalCompany})` : ''}${ref.relationship ? ` · ${ref.relationship}` : ''}` : '',
+        r.newGroup ? `New dealer group: ${r.newGroup.name} (${r.placeholders.length} placeholder rooftop${r.placeholders.length === 1 ? '' : 's'})` : ''
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    };
+    setAuditLogs(prev => [audit, ...prev]);
+    storage.saveAuditLog(audit);
+  };
+
+  const saveContact = (c: Contact) => {
+    setContacts(prev => (prev.some(x => x.id === c.id) ? prev.map(x => (x.id === c.id ? c : x)) : [c, ...prev]));
+    storage.saveContact(c);
+  };
+
+  // My Plan → CRM write-back ("records fill themselves"). Uses functional
+  // updates so several write-backs in a row never overwrite each other.
+  useEffect(() => {
+    const applyWriteback = (r: WritebackResult) => {
+      if (r.dealershipUpdates.length) {
+        const byId = new Map(r.dealershipUpdates.map(d => [d.id, d]));
+        setDealerships(prev => prev.map(d => byId.get(d.id) ?? d));
+        setSelectedDealership(sel => (sel ? byId.get(sel.id) ?? sel : sel));
+        r.dealershipUpdates.forEach(d => storage.saveDealership(d));
+      }
+      if (r.activities.length) {
+        setActivities(prev => [...r.activities, ...prev]);
+        r.activities.forEach(a => storage.saveActivity(a));
+      }
+      if (r.newContacts.length) {
+        setContacts(prev => [...r.newContacts, ...prev]);
+        r.newContacts.forEach(c => storage.saveContact(c));
+      }
+      if (r.audit.length) {
+        setAuditLogs(prev => [...r.audit, ...prev]);
+        r.audit.forEach(a => storage.saveAuditLog(a));
+      }
+      if (r.points.length) {
+        setPointsLedger(prev => [...r.points, ...prev]);
+        r.points.forEach(p => storage.addPointsLedgerEntry(p));
+        setGamification(prev => {
+          const next = { ...prev };
+          r.points.forEach(p => {
+            const prof = next[p.userId];
+            if (prof) next[p.userId] = { ...prof, points: prof.points + p.pointsAwarded, pointsToday: prof.pointsToday + p.pointsAwarded };
+          });
+          return next;
+        });
+      }
+    };
+    setCrmBridge({ applyWriteback });
+    return () => setCrmBridge(null);
   }, []);
 
   // Section 4: Data-layer privacy re-filtering when persona changes
@@ -123,6 +228,7 @@ export default function App() {
     if (u.role === 'finance') setCurrentView('finance');
     else if (u.role === 'manager') setCurrentView('assists');
     else if (u.role === 'executive' || u.role === 'owner') setCurrentView('executive_desk');
+    else if (u.role === 'admin') setCurrentView('settings');
     
     showToast(`Switched persona to ${u.firstName} ${u.lastName} (${u.role})`);
   };
@@ -288,16 +394,16 @@ export default function App() {
       dealershipId: deal.id,
       dealershipName: deal.dealershipName,
       originRepId: deal.originRepId || currentUser.id,
-      originRepName: `${currentUser.firstName} ${currentUser.lastName}`,
+      originRepName: (() => { const o = users.find(u => u.id === (deal.originRepId || currentUser.id)); return o ? `${o.firstName} ${o.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`; })(),
       assignedManagerId: manager.id,
       assignedManagerName: `${manager.firstName} ${manager.lastName}`,
       assistType,
       proposedDate,
       proposedTime,
       requestDate: new Date().toISOString(),
-      decisionMakerName: 'General Manager',
-      decisionMakerTitle: 'GM / Partner',
-      objections: 'Terms confirmation and claims turnaround SLA.',
+      decisionMakerName: (() => { const dm = contacts.find(c => c.dealershipId === deal.id && c.isDecisionMaker); return dm ? `${dm.firstName} ${dm.lastName}` : 'Decision maker not on file'; })(),
+      decisionMakerTitle: contacts.find(c => c.dealershipId === deal.id && c.isDecisionMaker)?.jobTitle ?? '—',
+      objections: deal.relationshipTemperature?.hesitationPhrases?.join('; ') || 'None recorded yet.',
       productsOfInterest: (deal.productInterests || []).map(p => p.productName),
       aiBriefing: brief,
       status: 'Pending'
@@ -349,7 +455,7 @@ export default function App() {
       dealershipId: deal.id,
       dealershipName: deal.dealershipName,
       originRepId: deal.originRepId || currentUser.id,
-      originRepName: `${currentUser.firstName} ${currentUser.lastName}`,
+      originRepName: (() => { const o = users.find(u => u.id === (deal.originRepId || currentUser.id)); return o ? `${o.firstName} ${o.lastName}` : `${currentUser.firstName} ${currentUser.lastName}`; })(),
       closedByUserId: currentUser.id,
       closedByUserName: `${currentUser.firstName} ${currentUser.lastName}`,
       signedByUserId: currentUser.id,
@@ -357,16 +463,22 @@ export default function App() {
       assistInvolved: true,
       assistManagerId: managerUser.id,
       assistManagerName: `${managerUser.firstName} ${managerUser.lastName}`,
-      triggerEvent: 'Contract Signed with Assist',
-      state: 'Verified',
-      amount: 450.00,
-      reviewDate: new Date().toISOString().split('T')[0],
-      reviewedBy: 'Donna Clark',
+      triggerEvent: 'Agreement signed',
+      state: 'Eligible',
+      amount: 350.0,
+      calculatedRule: 'Introduction with manager assist',
       trail: [
-        { step: 'Claimed from Pool', date: '2026-10-15', actor: `${currentUser.firstName} ${currentUser.lastName}`, details: 'Claimed within territory radius' },
-        { step: 'Scouting Lot Visit', date: '2026-10-20', actor: `${currentUser.firstName} ${currentUser.lastName}`, details: 'Discovery inside Golden Window', isGoodWindow: true },
-        { step: 'Manager Assist Requested', date: '2026-10-28', actor: `${currentUser.firstName} ${currentUser.lastName}`, details: `Coordinated with ${managerUser.firstName} ${managerUser.lastName}` },
-        { step: 'Contract Executed & Signed', date: new Date().toISOString().split('T')[0], actor: `${currentUser.firstName} & ${managerUser.firstName}`, details: 'Signed and placed in origin rep portfolio' }
+        ...activities
+          .filter(a => a.dealershipId === deal.id && a.status === 'completed' && (a.tags?.some(t => ['claim', 'lot', 'assist_req', 'assist_meet'].includes(t)) || a.activityType === 'Google Meet'))
+          .sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''))
+          .map(a => ({
+            step: a.tags?.includes('claim') ? 'Claimed' : a.tags?.includes('lot') ? 'Scouting visit' : a.tags?.includes('assist_req') ? 'Manager Assist requested' : a.tags?.includes('assist_meet') ? 'Manager Assist completed' : 'Product demo',
+            date: (a.completedAt ?? '').slice(0, 10),
+            actor: a.userName,
+            details: a.notes.length > 140 ? `${a.notes.slice(0, 137)}…` : a.notes,
+            isGoodWindow: a.isGoodWindow
+          })),
+        { step: 'Agreement signed', date: new Date().toISOString().split('T')[0], actor: `${currentUser.firstName} & ${managerUser.firstName}`, details: 'Signed and kept in the origin rep’s portfolio' }
       ]
     };
     setIncentives([newIncentive, ...incentives]);
@@ -461,7 +573,9 @@ export default function App() {
   const handleResetDemoData = async () => {
     if (confirm('Reset all CRM data back to the clean Improvement Pass v2 seed state?')) {
       await storage.resetToSeed();
+      resetMyPlan();
       const fresh = await storage.loadAll(currentUser);
+      setContacts(fresh.contacts);
       setDealerships(fresh.dealerships);
       setActivities(fresh.activities);
       setAssists(fresh.assists);
@@ -501,7 +615,7 @@ export default function App() {
       {/* Top Navbar with Persistent Game Strip */}
       <Navbar
         currentUser={currentUser}
-        allUsers={users}
+        allUsers={users.filter(u => u.active !== false)}
         onSelectUser={handleSelectUser}
         onOpenCommand={() => setIsCommandOpen(true)}
         onOpenMobileWorkDay={() => setCurrentView('planner')}
@@ -530,11 +644,26 @@ export default function App() {
           {currentView === 'planner' && (
             <MyPlanModule
               currentUser={currentUser}
+              users={users}
               dealerships={dealerships}
               contacts={contacts}
-              users={users}
-              preselectedDealership={addToPlanTarget}
-              onClearPreselected={() => setAddToPlanTarget(null)}
+              groups={groups}
+              catalog={catalog}
+              gameRules={gameRules}
+              productBonuses={productBonuses}
+              priorities={managerPriorities}
+              activities={activities}
+              assists={assists}
+              workspaceItems={workspaceItems}
+              request={planRequest}
+              onRequestHandled={() => setPlanRequest(null)}
+              onAddContact={saveContact}
+              onSaveProspect={(r) => {
+                saveProspectResult(r, currentUser);
+                showToast(`Added ${r.dealership.dealershipName}`);
+              }}
+              onClaimDealership={(d) => handleClaimDealership(d, 'Planned from My Plan')}
+              onOpenDealership={(d) => setSelectedDealership(d)}
             />
           )}
 
@@ -542,6 +671,9 @@ export default function App() {
             <PipelineView
               dealerships={dealerships}
               currentUser={currentUser}
+              allUsers={users}
+              nextSteps={nextSteps}
+              onPlanNextStep={planNextStep}
               onOpenDealership={(d) => setSelectedDealership(d)}
               onMoveStage={handleMoveStage}
               onInitiateAssist={(d) => setSelectedDealership(d)}
@@ -554,8 +686,10 @@ export default function App() {
               currentUser={currentUser}
               onClaimDealership={handleClaimDealership}
               onOpenDealership={(d) => setSelectedDealership(d)}
-              onAddNewProspect={(newDeal) => {}}
+              onAddNewProspect={(opts) => setProspectForm({ mode: 'prospect', radar: opts?.radar })}
               isPoolOnly={false}
+              nextSteps={nextSteps}
+              onPlanNextStep={planNextStep}
             />
           )}
 
@@ -565,7 +699,7 @@ export default function App() {
               currentUser={currentUser}
               onClaimDealership={handleClaimDealership}
               onOpenDealership={(d) => setSelectedDealership(d)}
-              onAddNewProspect={(newDeal) => {}}
+              onAddNewProspect={(opts) => setProspectForm({ mode: 'prospect', radar: opts?.radar })}
               isPoolOnly={true}
             />
           )}
@@ -579,6 +713,8 @@ export default function App() {
               onLogKeyfetchTopup={handleLogKeyfetchTopup}
               onUpdateUpsell={(did, up) => {}}
               onCreateUpsell={handleCreateUpsell}
+              onAddClient={() => setProspectForm({ mode: 'client' })}
+              allUsers={users}
             />
           )}
 
@@ -590,6 +726,7 @@ export default function App() {
               incentives={incentives}
               users={users}
               onOpenDealership={(d) => setSelectedDealership(d)}
+              nextSteps={nextSteps}
             />
           )}
 
@@ -642,6 +779,9 @@ export default function App() {
               productBonuses={productBonuses}
               catalog={catalog}
               currentUser={currentUser}
+              users={users}
+              gamification={gamification}
+              pointsLedger={pointsLedger}
               onUpdateRule={(r) => {
                 const list = gameRules.map(x => x.id === r.id ? r : x);
                 setGameRules(list);
@@ -687,6 +827,12 @@ export default function App() {
               }}
               onUpdateFISystems={setFiSystems}
               onNavigateToGameRules={() => setCurrentView('game_rules')}
+              onUpdateUsers={(list, message) => {
+                setUsers(list);
+                storage.saveUsers(list);
+                showToast(message);
+              }}
+              knownLocations={dealerships}
             />
           )}
         </main>
@@ -716,9 +862,18 @@ export default function App() {
           onLogKeyfetchTopup={handleLogKeyfetchTopup}
           onAddToPlan={(d) => {
             setSelectedDealership(null);
-            setAddToPlanTarget(d);
+            setPlanRequest({ dealershipId: d.id, nonce: Date.now() });
             setCurrentView('planner');
           }}
+          onPlanLater={(d) => {
+            setSelectedDealership(null);
+            setPlanRequest({ dealershipId: d.id, planLater: true, nonce: Date.now() });
+            setCurrentView('planner');
+          }}
+          planPanel={<DealershipPlanPanel dealership={selectedDealership} user={currentUser} />}
+          onRequestAddContact={(d) => setContactFormFor(d)}
+          nextStep={nextSteps.get(selectedDealership.id)}
+          onPlanNextStep={planNextStep}
         />
       )}
 
@@ -734,6 +889,7 @@ export default function App() {
       {isWorkspaceSyncOpen && (
         <WorkspaceSyncView
           items={workspaceItems}
+          allUsers={users}
           dealerships={dealerships}
           currentUser={currentUser}
           onClose={() => setIsWorkspaceSyncOpen(false)}
@@ -745,6 +901,45 @@ export default function App() {
             }, 1000);
           }}
           isSyncing={isSyncing}
+        />
+      )}
+      {prospectForm && (
+        <ProspectForm
+          mode={prospectForm.mode}
+          startWithRadar={prospectForm.radar}
+          currentUser={currentUser}
+          users={users}
+          dealerships={dealerships}
+          groups={groups}
+          catalog={catalog}
+          onCancel={() => setProspectForm(null)}
+          onOpenExisting={(d) => {
+            setProspectForm(null);
+            setSelectedDealership(d);
+          }}
+          onSave={(r) => {
+            saveProspectResult(r, currentUser);
+            setProspectForm(null);
+            setSelectedDealership(r.dealership);
+            showToast(
+              `${r.dealership.stage === 'Client' ? 'Client' : 'Prospect'} added: ${r.dealership.dealershipName}${r.placeholders.length ? ` + ${r.placeholders.length} placeholder rooftop${r.placeholders.length === 1 ? '' : 's'}` : ''}. Add the first contact from the Contacts tab.`
+            );
+          }}
+        />
+      )}
+
+      {contactFormFor && (
+        <ContactForm
+          dealershipId={contactFormFor.id}
+          dealershipName={contactFormFor.dealershipName}
+          existingContacts={contacts}
+          currentUser={currentUser}
+          onCancel={() => setContactFormFor(null)}
+          onSave={(c) => {
+            saveContact(c);
+            setContactFormFor(null);
+            showToast(`Contact added: ${c.firstName} ${c.lastName}`);
+          }}
         />
       )}
     </div>

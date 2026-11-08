@@ -19,6 +19,7 @@ import {
 
 interface WorkspaceSyncViewProps {
   items: WorkspaceItem[];
+  allUsers?: User[];
   dealerships: Dealership[];
   currentUser: User;
   onClose: () => void;
@@ -27,7 +28,8 @@ interface WorkspaceSyncViewProps {
 }
 
 export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
-  items,
+  items: allItems,
+  allUsers = [],
   dealerships,
   currentUser,
   onClose,
@@ -36,6 +38,10 @@ export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'feed' | 'unmatched' | 'settings'>('feed');
 
+  // Reps see their own Google items; managers also see their team's; owners, executives, finance and admin see everything.
+  const team = new Set([currentUser.id, ...allUsers.filter(u => u.managerId === currentUser.id).map(u => u.id)]);
+  const seesAll = ['owner', 'executive', 'finance', 'admin'].includes(currentUser.role);
+  const items = seesAll ? allItems : allItems.filter(i => team.has(i.userId));
   const matchedItems = items.filter(i => i.isMatched);
   const unmatchedItems = items.filter(i => !i.isMatched);
 

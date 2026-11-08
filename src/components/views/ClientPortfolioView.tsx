@@ -27,6 +27,9 @@ interface ClientPortfolioViewProps {
   onLogKeyfetchTopup: (dealershipId: string, quantity: number, notes?: string) => void;
   onUpdateUpsell: (dealershipId: string, upsell: UpsellOpportunity) => void;
   onCreateUpsell: (dealershipId: string, productId: string, nextStep: string) => void;
+  /** Add a client directly (without going through the prospect stages). */
+  onAddClient?: () => void;
+  allUsers?: User[];
 }
 
 export const ClientPortfolioView: React.FC<ClientPortfolioViewProps> = ({
@@ -36,8 +39,15 @@ export const ClientPortfolioView: React.FC<ClientPortfolioViewProps> = ({
   onOpenDealership,
   onLogKeyfetchTopup,
   onUpdateUpsell,
-  onCreateUpsell
+  onCreateUpsell,
+  onAddClient,
+  allUsers = []
 }) => {
+  const repName = (id: string | null) => {
+    if (!id) return '—';
+    const u = allUsers.find(x => x.id === id);
+    return u ? `${u.firstName} ${u.lastName}` : id;
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [topupModalDeal, setTopupModalDeal] = useState<Dealership | null>(null);
   const [topupQty, setTopupQty] = useState(250);
@@ -117,6 +127,16 @@ export const ClientPortfolioView: React.FC<ClientPortfolioViewProps> = ({
           </p>
         </div>
 
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        {onAddClient && (
+          <button
+            type="button"
+            onClick={onAddClient}
+            className="flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-2xs cursor-pointer"
+          >
+            + Add client
+          </button>
+        )}
         <div className="relative w-full sm:w-64">
           <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
           <input
@@ -126,6 +146,7 @@ export const ClientPortfolioView: React.FC<ClientPortfolioViewProps> = ({
             placeholder="Search active clients..."
             className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-blue-500 w-full"
           />
+        </div>
         </div>
       </div>
 
@@ -158,7 +179,7 @@ export const ClientPortfolioView: React.FC<ClientPortfolioViewProps> = ({
                     )}
                   </div>
                   <div className="text-xs text-slate-500 mt-0.5">
-                    {client.city}, {client.state} • {client.usedCarsOnLot} used cars • Rep: <strong>{client.originRepId}</strong>
+                    {client.city}, {client.state} • {client.usedCarsOnLot} used cars • Rep: <strong>{repName(client.originRepId)}</strong>
                   </div>
                 </div>
 

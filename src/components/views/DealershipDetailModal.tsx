@@ -16,6 +16,8 @@ import {
   isGoodVisitWindow 
 } from '../../utils/territory';
 import { AIService, PreVisitBrief } from '../../services/aiService';
+import { NextStepState, needsNextStep, nextStepText } from '../../utils/nextStepStatus';
+import { AccountStatusBanner, ActivityTimeline, AuditList, LotHistory, OnboardingChecklist } from './DealershipHistory';
 import {
   Building2,
   MapPin,
@@ -57,6 +59,14 @@ interface DealershipDetailModalProps {
   onAddContact: (contact: Contact) => void;
   onLogKeyfetchTopup: (dealershipId: string, quantity: number, notes?: string) => void;
   onAddToPlan?: (dealership: Dealership) => void;
+  onPlanLater?: (dealership: Dealership) => void;
+  /** My Plan panel: what's planned and the open action points for this dealership. */
+  planPanel?: React.ReactNode;
+  /** Opens the shared Add Contact form for this dealership. */
+  onRequestAddContact?: (dealership: Dealership) => void;
+  /** What happens next, and a way to plan it. */
+  nextStep?: NextStepState;
+  onPlanNextStep?: (dealership: Dealership) => void;
 }
 
 export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
@@ -74,7 +84,12 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
   onRequestAssist,
   onAddContact,
   onLogKeyfetchTopup,
-  onAddToPlan
+  onAddToPlan,
+  onPlanLater,
+  planPanel,
+  onRequestAddContact,
+  nextStep,
+  onPlanNextStep
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'visit_log' | 'products' | 'assist' | 'contacts' | 'audit'>('overview');
 
@@ -84,7 +99,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
 
   // Visit log form
   const [logPurpose, setLogPurpose] = useState('In-Person Discovery');
-  const [logContactId, setLogContactId] = useState(contacts?.[0]?.id || '');
+  const [logContactId, setLogContactId] = useState((contacts || []).find(c => c.dealershipId === dealership?.id)?.id || '');
   const [logNotes, setLogNotes] = useState('');
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
 
@@ -92,7 +107,11 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
   const repManager = (allUsers || []).find(u => u.id === currentUser?.managerId) || (allUsers || []).find(u => u.role === 'manager');
   const [assistManagerId, setAssistManagerId] = useState<string>(repManager?.id || '');
   const [assistType, setAssistType] = useState<AssistType>('terms_approval');
-  const [assistDate, setAssistDate] = useState('2026-11-04');
+  const [assistDate, setAssistDate] = useState(() => {
+    const d = new Date();
+    do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [assistTime, setAssistTime] = useState('11:00');
   const [assistBrief, setAssistBrief] = useState<string>(() => 
     dealership ? AIService.generateManagerAssistBrief(dealership, currentUser?.firstName || 'Rep') : ''
@@ -122,7 +141,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
   const handleSimulateVoiceInput = () => {
     setIsVoiceRecording(true);
     setTimeout(() => {
-      setLogNotes('Met GSM on lot. Counted 85 used cars. Walked through key tracking workflow. Very impressed by claims turnaround SLA.');
+      setLogNotes(`Met ${(contacts || []).find(c => c.dealershipId === dealership.id)?.firstName ?? 'the GSM'} on the lot. Counted ${dealership.usedCarsOnLot} used cars. Walked through the key tracking workflow; good questions on claims turnaround.`);
       setIsVoiceRecording(false);
     }, 800);
   };
@@ -222,6 +241,17 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
             <p className="text-xs text-slate-500">
               {dealership.city}, {dealership.state} {dealership.zipCode} • {dealership.usedCarsOnLot} used cars • F&I: {dealership.fiSystem}
             </p>
+            {nextStep && nextStep.kind !== 'not_applicable' && (
+              <div className={`mt-2 inline-flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${needsNextStep(nextStep) ? 'bg-rose-50 text-rose-800' : nextStep.kind === 'waiting' ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
+                {nextStep.kind === 'planned' ? 'Next step: ' : ''}
+                {nextStepText(nextStep)}
+                {needsNextStep(nextStep) && onPlanNextStep && (
+                  <button type="button" onClick={() => onPlanNextStep(dealership)} className="rounded-md bg-rose-600 px-2 py-0.5 font-bold text-white">
+                    Plan it
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -236,6 +266,18 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add to My Plan</span>
+              </button>
+            )}
+            {onPlanLater && (
+              <button
+                type="button"
+                onClick={() => {
+                  onPlanLater(dealership);
+                  onClose();
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-white border border-blue-300 hover:bg-blue-50 text-blue-700 font-bold text-xs shadow-xs cursor-pointer"
+              >
+                Plan later
               </button>
             )}
             {!isClient && (
@@ -286,6 +328,8 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
           {/* TAB 1: OVERVIEW & RELATIONSHIP TEMPERATURE */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              <AccountStatusBanner dealership={dealership} users={allUsers || []} />
+              {planPanel}
               {/* Relationship Temperature Card (Section 7) */}
               {dealership.relationshipTemperature && (
                 <div className="bg-linear-to-r from-indigo-50/80 via-white to-purple-50/80 p-4 rounded-2xl border border-indigo-200/80 space-y-3">
@@ -352,7 +396,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                 </div>
 
                 {preVisitBrief && (
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs" data-brief>
                     <p className="font-medium text-slate-800">{preVisitBrief.summary}</p>
                     <div>
                       <strong className="text-slate-900 block mb-0.5">Key Talking Points:</strong>
@@ -365,6 +409,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                   </div>
                 )}
               </div>
+              <ActivityTimeline dealership={dealership} activities={dealActivities} />
             </div>
           )}
 
@@ -410,6 +455,8 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
           {/* TAB 3: PRODUCTS & SCOUTING (Section 2) */}
           {activeTab === 'products' && (
             <div className="space-y-6">
+              <OnboardingChecklist dealership={dealership} users={allUsers || []} />
+              <LotHistory dealership={dealership} users={allUsers || []} />
               {!isClient ? (
                 /* Scouting 2-column checklist */
                 <div className="space-y-3">
@@ -593,12 +640,27 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
           {/* TAB 5: CONTACTS */}
           {activeTab === 'contacts' && (
             <div className="space-y-3">
-              <h4 className="font-bold text-sm text-slate-900">Key Stakeholders & Decision Makers</h4>
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-bold text-sm text-slate-900">Key Stakeholders & Decision Makers</h4>
+                {onRequestAddContact && (
+                  <button
+                    type="button"
+                    onClick={() => onRequestAddContact(dealership)}
+                    className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer"
+                  >
+                    + Add contact
+                  </button>
+                )}
+              </div>
+              {dealContacts.length === 0 && <p className="text-xs text-slate-500">No contacts yet.</p>}
+              {dealContacts.length > 0 && !dealContacts.some(c => c.isDecisionMaker) && (
+                <p className="text-xs text-amber-700 font-semibold">No decision maker on file yet.</p>
+              )}
               {dealContacts.map(c => (
                 <div key={c.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
                   <div>
                     <span className="font-bold text-slate-900">{c.firstName} {c.lastName}</span>
-                    <span className="text-slate-500 block text-[11px]">{c.jobTitle} • {formatUSPhone(c.phone)}</span>
+                    <span className="text-slate-500 block text-[11px]">{c.jobTitle}{c.phone ? ` • ${formatUSPhone(c.phone)}` : ''}{c.email ? ` • ${c.email}` : ''}</span>
                   </div>
                   {c.isDecisionMaker && (
                     <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
@@ -616,7 +678,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
               <h4 className="font-bold text-sm text-slate-900">Dealership Audit Log & Ownership Trail</h4>
               <div className="space-y-2">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <span className="font-bold text-slate-900 block">Origin Rep: {dealership.originRepId || 'Assigned'}</span>
+                  <span className="font-bold text-slate-900 block">Origin rep: {(() => { const o = (allUsers || []).find(u => u.id === dealership.originRepId); return o ? `${o.firstName} ${o.lastName}` : 'Not claimed yet'; })()}</span>
                   <p className="text-slate-600 text-[11px] mt-0.5">
                     Attribution is permanently locked. All introduction and closing rewards flow to origin rep.
                   </p>
@@ -626,10 +688,11 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                   <div key={tx.id} className="p-3 bg-purple-50 rounded-xl border border-purple-200">
                     <span className="font-bold text-purple-900 block">Ownership Reassigned</span>
                     <p className="text-[11px] text-purple-800 mt-0.5">
-                      Transferred by manager {tx.transferredByManagerName}. Reason: "{tx.reason}"
+                      {(() => { const f = (allUsers || []).find(u => u.id === tx.fromRepId); const t = (allUsers || []).find(u => u.id === tx.toRepId); return `${f ? `${f.firstName} ${f.lastName}` : tx.fromRepId} → ${t ? `${t.firstName} ${t.lastName}` : tx.toRepId}`; })()} on {new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, by {tx.transferredByManagerName}. Reason: “{tx.reason}”
                     </p>
                   </div>
                 ))}
+                <AuditList logs={(auditLogs || []).filter(l => l.dealershipId === dealership.id)} timeZone={dealership.timeZone} />
               </div>
             </div>
           )}

@@ -1,3 +1,4 @@
+import { NextStepState, needsNextStep, nextStepText } from '../../utils/nextStepStatus';
 import React, { useState } from 'react';
 import { Dealership, User } from '../../types/crm';
 import { calculateDistanceMiles, isWithinTerritory, getDistanceBand } from '../../utils/territory';
@@ -14,7 +15,8 @@ import {
   FileSpreadsheet,
   Building,
   ShieldAlert,
-  HelpCircle
+  HelpCircle,
+  Radar
 } from 'lucide-react';
 
 interface ProspectPoolViewProps {
@@ -22,8 +24,12 @@ interface ProspectPoolViewProps {
   currentUser: User;
   onClaimDealership: (dealership: Dealership, reason?: string) => void;
   onOpenDealership: (dealership: Dealership) => void;
-  onAddNewProspect: (newDeal: Partial<Dealership>) => void;
+  /** Opens the shared Add New Prospect form (optionally straight into Open Radar). */
+  onAddNewProspect: (opts?: { radar?: boolean }) => void;
   isPoolOnly?: boolean;
+  /** What happens next with each dealership (Bench only). */
+  nextSteps?: Map<string, NextStepState>;
+  onPlanNextStep?: (dealership: Dealership) => void;
 }
 
 export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
@@ -32,22 +38,15 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
   onClaimDealership,
   onOpenDealership,
   onAddNewProspect,
-  isPoolOnly = false
+  isPoolOnly = false,
+  nextSteps,
+  onPlanNextStep
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [onlyMissing, setOnlyMissing] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [showManualSearchModal, setShowManualSearchModal] = useState(false);
   const [outOfRadiusDeal, setOutOfRadiusDeal] = useState<Dealership | null>(null);
   const [outOfRadiusReason, setOutOfRadiusReason] = useState('');
-
-  // Manual search form state
-  const [manualName, setManualName] = useState('');
-  const [manualAddress, setManualAddress] = useState('');
-  const [manualCity, setManualCity] = useState('');
-  const [manualState, setManualState] = useState('CA');
-  const [manualZip, setManualZip] = useState('');
-  const [manualCars, setManualCars] = useState('75');
-  const [manualDuplicateMatch, setManualDuplicateMatch] = useState<Dealership | null>(null);
 
   // Pool list vs bench list
   const targetDeals = dealerships.filter(d => {
@@ -80,21 +79,12 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
     );
     const band = getDistanceBand(dist);
     return { dealership: d, distance: dist, withinTerritory: isWithinTerritory(dist), band };
-  });
-
-  // Check duplicates when typing manual search
-  const handleCheckDuplicate = (name: string, zip: string) => {
-    setManualName(name);
-    if (!name || name.length < 3) {
-      setManualDuplicateMatch(null);
-      return;
-    }
-    const match = dealerships.find(d => 
-      d.dealershipName.toLowerCase().includes(name.toLowerCase()) || 
-      (zip && d.zipCode === zip)
-    );
-    setManualDuplicateMatch(match || null);
-  };
+  })
+    // Reps see their own area (territory, tolerance band and a little beyond), nearest first.
+    .filter(x => !isPoolOnly || !['new_rep', 'veteran_rep', 'team_lead'].includes(currentUser.role) || x.distance <= 100 || !!searchTerm)
+    .sort((a, b) => (isPoolOnly ? a.distance - b.distance : 0))
+    .filter(x => !onlyMissing || (nextSteps && needsNextStep(nextSteps.get(x.dealership.id) ?? { kind: 'not_applicable' })));
+  const missingCount = !isPoolOnly && nextSteps ? targetDeals.filter(d => needsNextStep(nextSteps.get(d.id) ?? { kind: 'not_applicable' })).length : 0;
 
   const handleClaim = (d: Dealership) => {
     const dist = calculateDistanceMiles(
@@ -145,11 +135,20 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
 
           <button
             type="button"
-            onClick={() => setShowManualSearchModal(true)}
+            onClick={() => onAddNewProspect({ radar: true })}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 shadow-2xs cursor-pointer"
+          >
+            <Radar className="w-3.5 h-3.5" />
+            <span>Open Radar</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onAddNewProspect()}
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-2xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 text-blue-600" />
-            <span>Manual Search (Google Places)</span>
+            <span>Add prospect</span>
           </button>
 
           <button
@@ -168,7 +167,19 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
         {/* Dealership Cards Grid */}
         <div className="lg:col-span-8 space-y-3">
           <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
-            <span>Showing {dealsWithDistance.length} dealerships</span>
+            <span className="flex items-center gap-2">
+              Showing {dealsWithDistance.length} dealerships
+              {!isPoolOnly && nextSteps && (
+                <button
+                  type="button"
+                  onClick={() => setOnlyMissing(v => !v)}
+                  aria-pressed={onlyMissing}
+                  className={`rounded-full border px-2.5 py-1 font-sans text-[11px] font-bold ${onlyMissing ? 'border-rose-600 bg-rose-600 text-white' : missingCount ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-500'}`}
+                >
+                  {missingCount} with no next step{onlyMissing ? ' · show all' : ''}
+                </button>
+              )}
+            </span>
             <span>Radius: 60 miles base</span>
           </div>
 
@@ -221,6 +232,21 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
                     </div>
 
                     <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                      {!isPoolOnly && nextSteps && (() => {
+                        const ns = nextSteps.get(d.id);
+                        if (!ns || ns.kind === 'not_applicable') return null;
+                        const miss = needsNextStep(ns);
+                        return (
+                          <div className={`flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold ${miss ? 'bg-rose-50 text-rose-800' : ns.kind === 'waiting' ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
+                            <span className="line-clamp-1">{ns.kind === 'planned' ? 'Next: ' : ''}{nextStepText(ns)}</span>
+                            {miss && onPlanNextStep && (
+                              <button type="button" onClick={e => { e.stopPropagation(); onPlanNextStep(d); }} className="shrink-0 rounded-md bg-rose-600 px-2 py-0.5 text-[11px] font-bold text-white">
+                                Plan it
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
                         <span className="flex items-center gap-1">
                           <Car className="w-3.5 h-3.5 text-slate-400" />
@@ -325,142 +351,6 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
                 className="px-4 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-xs cursor-pointer"
               >
                 Submit Claim with Reason
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Manual Search (Google Places Simulation) Modal */}
-      {showManualSearchModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-2xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Compass className="w-5 h-5 text-blue-600" />
-                <h3 className="font-bold text-base text-slate-900">Manual Dealership Search</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowManualSearchModal(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Live Duplicate Alert */}
-            {manualDuplicateMatch && (
-              <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl flex items-start gap-2.5 text-xs text-rose-900">
-                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <div>
-                  <strong>Duplicate Detected!</strong> An existing record matches:
-                  <div className="font-bold mt-0.5">{manualDuplicateMatch.dealershipName} ({manualDuplicateMatch.city}, {manualDuplicateMatch.state})</div>
-                  <div className="text-[11px] text-rose-700">Owner: {manualDuplicateMatch.assignedRepId || 'Pool'} • Stage: {manualDuplicateMatch.stage}</div>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Dealership Name *</label>
-                <input
-                  type="text"
-                  value={manualName}
-                  onChange={(e) => handleCheckDuplicate(e.target.value, manualZip)}
-                  placeholder="e.g. Classic Chevrolet of Dallas"
-                  className="w-full p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-hidden font-medium"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Street Address</label>
-                  <input
-                    type="text"
-                    value={manualAddress}
-                    onChange={(e) => setManualAddress(e.target.value)}
-                    placeholder="100 Auto Dr"
-                    className="w-full p-2.5 border border-slate-300 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">City</label>
-                  <input
-                    type="text"
-                    value={manualCity}
-                    onChange={(e) => setManualCity(e.target.value)}
-                    placeholder="City"
-                    className="w-full p-2.5 border border-slate-300 rounded-xl"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">State</label>
-                  <input
-                    type="text"
-                    value={manualState}
-                    onChange={(e) => setManualState(e.target.value)}
-                    className="w-full p-2.5 border border-slate-300 rounded-xl uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">ZIP Code *</label>
-                  <input
-                    type="text"
-                    value={manualZip}
-                    onChange={(e) => {
-                      setManualZip(e.target.value);
-                      handleCheckDuplicate(manualName, e.target.value);
-                    }}
-                    placeholder="90210"
-                    className="w-full p-2.5 border border-slate-300 rounded-xl font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Used Cars</label>
-                  <input
-                    type="number"
-                    value={manualCars}
-                    onChange={(e) => setManualCars(e.target.value)}
-                    className="w-full p-2.5 border border-slate-300 rounded-xl"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowManualSearchModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!manualName || manualDuplicateMatch !== null}
-                onClick={() => {
-                  onAddNewProspect({
-                    dealershipName: manualName,
-                    address: manualAddress || 'Auto Mall Blvd',
-                    city: manualCity || 'Regional City',
-                    state: manualState || 'CA',
-                    zipCode: manualZip || currentUser.homeZipCode,
-                    usedCarsOnLot: parseInt(manualCars, 10) || 50,
-                    source: 'Manual Search',
-                    stage: 'Claimed',
-                    assignedRepId: currentUser.id,
-                    originRepId: currentUser.id,
-                    heatLevel: 'Cold'
-                  });
-                  setShowManualSearchModal(false);
-                }}
-                className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl shadow-xs cursor-pointer"
-              >
-                Add to My Bench
               </button>
             </div>
           </div>

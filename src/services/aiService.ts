@@ -347,31 +347,41 @@ Key Goal: Co-present with manager to address claims administration turnaround an
     keyfetchUnitsRestocked: number;
     upsellsWonCount: number;
     topRepName: string;
+    topRepPoints?: number;
+    topRegion?: string;
+    pendingAssistCount?: number;
+    pendingAssistManagers?: string[];
+    stalledGroupDealCount?: number;
+    atRiskClientNames?: string[];
+    noNextStepCount?: number;
+    noNextStepByRep?: string[];
   }) {
+    // Written only from the numbers passed in — no invented facts.
     const totalVisits = metrics.goodTimeVisitCount + metrics.badTimeVisitCount;
-    const goodVisitRatio = Math.round(
-      (metrics.goodTimeVisitCount / Math.max(1, totalVisits)) * 100
-    );
-
+    const goodVisitRatio = Math.round((metrics.goodTimeVisitCount / Math.max(1, totalVisits)) * 100);
+    const label = period === 'Weekly' ? 'this week' : period === 'Monthly' ? 'in the last 30 days' : 'in the last 90 days';
+    const concerns: string[] = [];
+    if (metrics.badTimeVisitCount > 0) concerns.push(`${metrics.badTimeVisitCount} live contact${metrics.badTimeVisitCount > 1 ? 's' : ''} logged outside 10 AM – 4 PM (${100 - goodVisitRatio}% of ${totalVisits}).`);
+    if (metrics.atRiskClientNames?.length) concerns.push(`Client health below 70: ${metrics.atRiskClientNames.join(', ')}.`);
+    if (metrics.stalledGroupDealCount) concerns.push(`${metrics.stalledGroupDealCount} dealer-group rooftop${metrics.stalledGroupDealCount > 1 ? 's are' : ' is'} in HOT / Negotiation / Contract without a Manager Assist booked.`);
+    if (metrics.noNextStepCount) concerns.push(`${metrics.noNextStepCount} live deal${metrics.noNextStepCount > 1 ? 's have' : ' has'} no next step planned${metrics.noNextStepByRep?.length ? ` (${metrics.noNextStepByRep.join(', ')})` : ''}.`);
+    if (!concerns.length) concerns.push('No compliance or client-health warnings for this period.');
+    const recommendations: string[] = [];
+    if (metrics.pendingAssistCount) recommendations.push(`Answer ${metrics.pendingAssistCount} open assist request${metrics.pendingAssistCount > 1 ? 's' : ''} (${(metrics.pendingAssistManagers ?? []).join(', ')}).`);
+    if (metrics.noNextStepCount) recommendations.push('Ask each rep to plan a next step for every live deal — use the “no next step” filter on the Pipeline.');
+    if (metrics.atRiskClientNames?.length) recommendations.push(`Book an owner-level visit at ${metrics.atRiskClientNames[0]} this week.`);
+    recommendations.push('Pitch Ceramic Pro on routine Keyfetch visits while the launch bonus is live.');
     return {
       period,
-      headline: `${period} Performance: ${metrics.clientsSignedCount} dealerships signed, up from last period. Southeast led on visits; Midwest drove multi-store expansion.`,
+      headline: `${metrics.clientsSignedCount} dealership${metrics.clientsSignedCount === 1 ? '' : 's'} signed ${label}; ${metrics.activeDealsCount} deals in the pipeline.`,
       highlights: [
-        `${metrics.clientsSignedCount} dealership partner contracts executed, bringing portfolio active deals to ${metrics.activeDealsCount}.`,
-        `${metrics.keyfetchUnitsRestocked.toLocaleString()} physical Keyfetch smart fobs delivered across active clients with 100% on-time fulfillment.`,
-        `Top performing territory producer: ${metrics.topRepName} led with ${metrics.upsellsWonCount} catalog upsells closed.`
+        `${metrics.keyfetchUnitsRestocked.toLocaleString()} Keyfetch tags delivered and ${metrics.upsellsWonCount} upsell${metrics.upsellsWonCount === 1 ? '' : 's'} won ${label}.`,
+        `Top rep by points: ${metrics.topRepName}${metrics.topRepPoints ? ` with ${metrics.topRepPoints.toLocaleString()} pts` : ''}.`,
+        metrics.topRegion ? `Most field visits: ${metrics.topRegion}.` : `${totalVisits} live contacts logged.`
       ],
-      concerns: [
-        goodVisitRatio < 80 
-          ? `Territory discipline warning: ${metrics.badTimeVisitCount} visits logged outside the 10 AM-4 PM Golden Window (${100 - goodVisitRatio}% bad-time rate).`
-          : `3 multi-rooftop dealer group opportunities currently in Negotiation phase over 14 days without scheduled assist.`,
-        `West territory shows higher average travel miles per prospect touch compared to Northeast and Midwest clusters.`
-      ],
-      recommendations: [
-        `Direct territory managers Jason Scott and Jose Matos to accept pending assist requests to accelerate contract sign-ups.`,
-        `Enforce route clustering via the AI Day Planner to pull morning visits into the 10:00 AM-4:00 PM sweet spot.`,
-        `Promote active Ceramic Pro launch bonus (+150 bonus points) during routine Keyfetch top-up visits.`
-      ]
+      concerns,
+      recommendations
     };
   }
+
 }

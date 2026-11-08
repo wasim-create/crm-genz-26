@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Dealership, Activity, ManagerAssist, IntroductionIncentive, User } from '../../types/crm';
 import { formatUSDate } from '../../utils/territory';
+import { NextStepState, needsNextStep } from '../../utils/nextStepStatus';
 import { AIService } from '../../services/aiService';
 import {
   TrendingUp,
@@ -32,6 +33,7 @@ interface ExecutiveDeskViewProps {
   incentives: IntroductionIncentive[];
   users: User[];
   onOpenDealership: (dealership: Dealership) => void;
+  nextSteps?: Map<string, NextStepState>;
 }
 
 export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
@@ -40,41 +42,91 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
   assists,
   incentives,
   users,
-  onOpenDealership
+  onOpenDealership,
+  nextSteps
 }) => {
   const [period, setPeriod] = useState<'Weekly' | 'Monthly' | 'Quarterly'>('Weekly');
   const [isTvMode, setIsTvMode] = useState(false);
 
-  // Strictly Non-Monetary Calculations (Section 1 & 9)
+  // Strictly non-monetary. Everything is worked out from the data for the chosen period.
+  const periodDays = period === 'Weekly' ? 7 : period === 'Monthly' ? 30 : 90;
+  const since = Date.now() - periodDays * 86400000;
+  const inPeriod = (iso?: string | null) => !!iso && new Date(iso).getTime() >= since;
+  const repIds = new Set(users.filter(u => ['new_rep', 'veteran_rep', 'team_lead'].includes(u.role)).map(u => u.id));
+
   const totalClients = dealerships.filter(d => d.stage === 'Client' || d.stage === 'Onboarding').length;
-  const activePipelineDeals = dealerships.filter(d => d.stage !== 'Pool' && d.stage !== 'Client' && d.stage !== 'Lost');
-  const wonDeals = dealerships.filter(d => d.stage === 'Won' || d.stage === 'Signed' || d.stage === 'Client');
-  
-  // Good window compliance
-  const goodTimeVisits = activities.filter(a => a.isGoodWindow !== false).length;
-  const badTimeVisits = activities.filter(a => a.isGoodWindow === false).length;
+  const activePipelineDeals = dealerships.filter(d => !['Pool', 'Client', 'Lost', 'Disqualified', 'Not Now'].includes(d.stage));
+  const periodActs = activities.filter(a => a.status === 'completed' && inPeriod(a.completedAt));
+
+  // Golden window: live contact only (visits, calls, Meets)
+  const live = periodActs.filter(a => ['In-Person Visit', 'Phone Call', 'Google Meet'].includes(a.activityType));
+  const goodTimeVisits = live.filter(a => a.isGoodWindow !== false).length;
+  const badTimeVisits = live.filter(a => a.isGoodWindow === false).length;
   const totalVisits = goodTimeVisits + badTimeVisits;
   const goodTimePercent = totalVisits > 0 ? Math.round((goodTimeVisits / totalVisits) * 100) : 100;
 
-  // Keyfetch units topped up
-  const totalUnitsToppedUp = dealerships.reduce((acc, d) => acc + (d.topups || []).reduce((s, t) => s + t.quantity, 0), 0);
+  // Keyfetch units delivered in the period
+  const totalUnitsToppedUp = dealerships.reduce((acc, d) => acc + (d.topups || []).filter(t => inPeriod(`${t.date}T12:00:00`)).reduce((s2, t) => s2 + t.quantity, 0), 0);
 
-  // Solo vs Assisted Closes
-  const assistedWon = assists.filter(a => a.status === 'Completed').length;
+  // Deals signed in the period: solo vs with a Manager Assist
+  const signedActs = periodActs.filter(a => a.tags?.includes('signed'));
+  const wonDeals = Array.from(new Set(signedActs.map(a => a.dealershipId)));
+  const assistedWon = signedActs.filter(a => a.tags?.includes('assist_meet') || assists.some(x => x.dealershipId === a.dealershipId && x.status === 'Completed')).length;
   const soloWon = Math.max(0, wonDeals.length - assistedWon);
 
-  // Catalog Upsells Won
-  const totalUpsellsWon = dealerships.reduce((acc, d) => acc + (d.upsells || []).filter(u => u.stage === 'Won').length, 0);
+  // Upsells won in the period
+  const totalUpsellsWon = dealerships.reduce((acc, d) => acc + (d.upsells || []).filter(u => u.stage === 'Won' && inPeriod(u.wonDate)).length, 0);
 
-  // Dynamic AI Narrative digest (strictly non-monetary)
+  // Top rep by points earned in the period
+  const pointsByRep: Record<string, number> = {};
+  periodActs.filter(a => repIds.has(a.userId)).forEach(a => (pointsByRep[a.userId] = (pointsByRep[a.userId] ?? 0) + (a.pointsEarned ?? 0)));
+  const topRepId = Object.entries(pointsByRep).sort((x, y) => y[1] - x[1])[0]?.[0];
+  const topRep = users.find(u => u.id === topRepId);
+  const visitsByRegion: Record<string, number> = {};
+  live.filter(a => a.activityType === 'In-Person Visit').forEach(a => {
+    const r = users.find(u => u.id === a.userId)?.region;
+    if (r) visitsByRegion[r] = (visitsByRegion[r] ?? 0) + 1;
+  });
+  const topRegion = Object.entries(visitsByRegion).sort((x, y) => y[1] - x[1])[0];
+  const pendingAssists = assists.filter(a => a.status === 'Pending' || a.status === 'Reschedule Proposed');
+  const stalledGroupDeals = dealerships.filter(d => d.groupId && ['Negotiation', 'Contract', 'HOT'].includes(d.stage) && !d.hasActiveAssist);
+  const atRiskClients = dealerships.filter(d => d.stage === 'Client' && (d.clientHealthScore ?? 100) < 70);
+  const noNextStep = dealerships.filter(d => nextSteps && needsNextStep(nextSteps.get(d.id) ?? { kind: 'not_applicable' }));
+  const noNextByRep = Object.entries(
+    noNextStep.reduce<Record<string, number>>((acc, d) => {
+      const u = users.find(x => x.id === d.assignedRepId);
+      if (u) acc[`${u.firstName} ${u.lastName[0]}.`] = (acc[`${u.firstName} ${u.lastName[0]}.`] ?? 0) + 1;
+      return acc;
+    }, {})
+  ).map(([n, c]) => `${n} ${c}`);
+
+  // Product adoption across clients (from what each client actually signed)
+  const clientList = dealerships.filter(d => d.stage === 'Client' || d.stage === 'Onboarding');
+  const ADOPTION = [
+    { id: 'prod_3', name: 'Keyfetch', color: 'bg-blue-600' },
+    { id: 'prod_1', name: 'Vehicle Service Contract (VSC)', color: 'bg-emerald-600' },
+    { id: 'prod_4', name: 'GAP', color: 'bg-amber-600' },
+    { id: 'prod_10', name: 'Ceramic Pro (new launch)', color: 'bg-purple-600' },
+    { id: 'prod_5', name: 'Tire & Wheel Protection', color: 'bg-teal-600' },
+    { id: 'prod_9', name: 'EV Solutions / ChargeClub', color: 'bg-sky-600', also: 'prod_8' }
+  ].map(p => ({ ...p, count: clientList.filter(d => d.signedProducts.includes(p.id) || (p.also ? d.signedProducts.includes(p.also) : false)).length }));
+
   const aiSummary = AIService.generateExecutiveSummary(period, {
-    clientsSignedCount: 6,
+    clientsSignedCount: wonDeals.length,
     activeDealsCount: activePipelineDeals.length,
     badTimeVisitCount: badTimeVisits,
     goodTimeVisitCount: goodTimeVisits,
     keyfetchUnitsRestocked: totalUnitsToppedUp,
     upsellsWonCount: totalUpsellsWon,
-    topRepName: 'Kevin Houk (Midwest)'
+    topRepName: topRep ? `${topRep.firstName} ${topRep.lastName} (${topRep.region})` : 'No activity yet',
+    topRepPoints: topRepId ? pointsByRep[topRepId] : 0,
+    topRegion: topRegion ? `${topRegion[0]} (${topRegion[1]} visits)` : undefined,
+    pendingAssistCount: pendingAssists.length,
+    pendingAssistManagers: Array.from(new Set(pendingAssists.map(a => a.assignedManagerName))),
+    stalledGroupDealCount: stalledGroupDeals.length,
+    atRiskClientNames: atRiskClients.map(d => d.dealershipName),
+    noNextStepCount: noNextStep.length,
+    noNextStepByRep: noNextByRep
   });
 
   return (
@@ -190,27 +242,27 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
       {/* KPI Tiles (Strictly Counts & Quantities) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-          <span className="text-[11px] font-bold text-slate-400 uppercase block">Clients Signed</span>
-          <div className="text-3xl font-black font-mono text-emerald-600 mt-1">{totalClients}</div>
-          <span className="text-[10px] text-slate-500">Active contracted rooftops</span>
+          <span className="text-[11px] font-bold text-slate-400 uppercase block">Signed this period</span>
+          <div className="text-3xl font-black font-mono text-emerald-600 mt-1">{wonDeals.length}</div>
+          <span className="text-[10px] text-slate-500">{totalClients} active client rooftops in total</span>
         </div>
 
         <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
           <span className="text-[11px] font-bold text-slate-400 uppercase block">Golden Window Ratio</span>
           <div className="text-3xl font-black font-mono text-blue-600 mt-1">{goodTimePercent}%</div>
-          <span className="text-[10px] text-slate-500">{goodTimeVisits} of {totalVisits} visits inside 10a-4p</span>
+          <span className="text-[10px] text-slate-500">{goodTimeVisits} of {totalVisits} visits, calls & Meets inside 10–4</span>
         </div>
 
         <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
           <span className="text-[11px] font-bold text-slate-400 uppercase block">Keyfetch Units Restocked</span>
           <div className="text-3xl font-black font-mono text-indigo-600 mt-1">{totalUnitsToppedUp.toLocaleString()}</div>
-          <span className="text-[10px] text-slate-500">Physical fobs fulfilled YTD</span>
+          <span className="text-[10px] text-slate-500">Tags delivered this period</span>
         </div>
 
         <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
           <span className="text-[11px] font-bold text-slate-400 uppercase block">Catalog Upsells Won</span>
           <div className="text-3xl font-black font-mono text-purple-600 mt-1">{totalUpsellsWon}</div>
-          <span className="text-[10px] text-slate-500">Ceramic Pro, VSC & GAP expansions</span>
+          <span className="text-[10px] text-slate-500">Add-ons won on existing clients</span>
         </div>
       </div>
 
@@ -223,7 +275,7 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
               <Users2 className="w-4 h-4 text-blue-600" />
               <span>Solo vs. Assisted Closing Ratio</span>
             </h4>
-            <span className="text-xs font-mono text-slate-400">{wonDeals.length} Total Won</span>
+            <span className="text-xs font-mono text-slate-400">{wonDeals.length} signed this period</span>
           </div>
 
           <div className="space-y-3 text-xs">
@@ -266,13 +318,7 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
           </div>
 
           <div className="space-y-2 text-xs">
-            {[
-              { name: 'Keyfetch Smart Key Hardware', count: 18, color: 'bg-blue-600' },
-              { name: 'Vehicle Service Contract (VSC)', count: 12, color: 'bg-emerald-600' },
-              { name: 'Certified Limited Warranty', count: 8, color: 'bg-teal-600' },
-              { name: 'Ceramic Pro (NEW Launch)', count: 6, color: 'bg-purple-600' },
-              { name: 'GAP Protection', count: 5, color: 'bg-amber-600' }
-            ].map(item => (
+            {ADOPTION.map(item => (
               <div key={item.name} className="space-y-1">
                 <div className="flex justify-between text-[11px] font-medium">
                   <span>{item.name}</span>
