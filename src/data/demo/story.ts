@@ -166,7 +166,9 @@ type Tag =
   | 'issue'
   | 'cancelled'
   | 'late'
-  | 'priority_done';
+  | 'priority_done'
+  | 'no_next_step'
+  | 'next_skipped_waiting';
 
 interface Ev {
   d: number;
@@ -187,6 +189,15 @@ interface Ev {
   tasks?: string[];
   upsell?: string;
 }
+
+/** Deals with no next step planned (to show the warnings). */
+const NEXT_GAP: Record<string, 'missing' | 'waiting' | 'waiting_overdue'> = {
+  mw_nwcdjr: 'missing',
+  tx_stockyards: 'missing',
+  w_brand: 'missing',
+  ne_northshore: 'waiting_overdue',
+  se_gwinnett: 'waiting'
+};
 
 interface StoryCtx {
   p: Place;
@@ -795,6 +806,23 @@ export function buildDemoData(users: User[], gameRules: GameRule[], now: Date = 
       }
     }
 
+    // Demo: deals where the rep hasn't planned what happens next.
+    const gap = NEXT_GAP[p.key];
+    if (gap) {
+      evs.forEach(e => {
+        delete e.next;
+        delete e.nextIn;
+        delete e.nextTime;
+      });
+      if (gap === 'missing') {
+        const lastEv = [...evs].filter(e => e.type !== 'System Note' && e.d < 0).sort((a, b) => a.d - b.d || a.t.localeCompare(b.t)).pop();
+        if (lastEv) lastEv.tags = [...(lastEv.tags ?? []), 'no_next_step'];
+      } else {
+        const lastD = Math.max(...evs.filter(e => e.d < 0).map(e => e.d));
+        const d = gap === 'waiting_overdue' ? Math.max(lastD + 1, -7) : Math.max(lastD + 1, -3);
+        push({ d, t: '14:40', type: 'Phone Call', to: 0, notes: `${fn(0)} is reviewing it with ${p.independent ? 'the owner' : 'the dealer principal'} and will get back to me. Nothing to book until then.`, next: 'Waiting on them', tags: ['next_skipped_waiting'], tasks: ['p_followup'] });
+      }
+    }
     stories.push({ p, evs, upsells, signedD, lostReason, nurture, disq, isOwned, sourceLabel });
   }
 
@@ -1372,7 +1400,7 @@ function addRoutine(stories: StoryCtx[], users: User[], localsFor: (p: Place) =>
   const lastFiller = new Map<StoryCtx, number>();
   let turn = 0;
   for (const u of users.filter(x => TARGET[x.id])) {
-    const mine = stories.filter(s => s.p.rep === u.id && ACTIVE.includes(s.p.scen));
+    const mine = stories.filter(s => s.p.rep === u.id && ACTIVE.includes(s.p.scen) && !NEXT_GAP[s.p.key]);
     for (let d = -22; d <= -1; d++) {
       if (SKIP[u.id]?.includes(d)) continue;
       const today = stories.filter(s => s.p.rep === u.id).flatMap(s => s.evs.filter(e => e.d === d && (!e.by || e.by === 'rep') && LIVE.includes(e.type)));

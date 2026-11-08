@@ -353,6 +353,8 @@ Key Goal: Co-present with manager to address claims administration turnaround an
     pendingAssistManagers?: string[];
     stalledGroupDealCount?: number;
     atRiskClientNames?: string[];
+    noNextStepCount?: number;
+    noNextStepByRep?: string[];
   }) {
     // Written only from the numbers passed in — no invented facts.
     const totalVisits = metrics.goodTimeVisitCount + metrics.badTimeVisitCount;
@@ -362,9 +364,11 @@ Key Goal: Co-present with manager to address claims administration turnaround an
     if (metrics.badTimeVisitCount > 0) concerns.push(`${metrics.badTimeVisitCount} live contact${metrics.badTimeVisitCount > 1 ? 's' : ''} logged outside 10 AM – 4 PM (${100 - goodVisitRatio}% of ${totalVisits}).`);
     if (metrics.atRiskClientNames?.length) concerns.push(`Client health below 70: ${metrics.atRiskClientNames.join(', ')}.`);
     if (metrics.stalledGroupDealCount) concerns.push(`${metrics.stalledGroupDealCount} dealer-group rooftop${metrics.stalledGroupDealCount > 1 ? 's are' : ' is'} in HOT / Negotiation / Contract without a Manager Assist booked.`);
+    if (metrics.noNextStepCount) concerns.push(`${metrics.noNextStepCount} live deal${metrics.noNextStepCount > 1 ? 's have' : ' has'} no next step planned${metrics.noNextStepByRep?.length ? ` (${metrics.noNextStepByRep.join(', ')})` : ''}.`);
     if (!concerns.length) concerns.push('No compliance or client-health warnings for this period.');
     const recommendations: string[] = [];
     if (metrics.pendingAssistCount) recommendations.push(`Answer ${metrics.pendingAssistCount} open assist request${metrics.pendingAssistCount > 1 ? 's' : ''} (${(metrics.pendingAssistManagers ?? []).join(', ')}).`);
+    if (metrics.noNextStepCount) recommendations.push('Ask each rep to plan a next step for every live deal — use the “no next step” filter on the Pipeline.');
     if (metrics.atRiskClientNames?.length) recommendations.push(`Book an owner-level visit at ${metrics.atRiskClientNames[0]} this week.`);
     recommendations.push('Pitch Ceramic Pro on routine Keyfetch visits while the launch bonus is live.');
     return {

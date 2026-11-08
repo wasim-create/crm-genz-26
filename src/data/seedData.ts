@@ -26,7 +26,7 @@ import {
 import { buildDemoData, DemoData } from './demo/story';
 
 /** Bump when the demo story changes so saved browser data is refreshed. */
-export const SEED_VERSION = 'story-2026-11-v4';
+export const SEED_VERSION = 'story-2026-11-v5';
 
 export const USERS: User[] = [
   {

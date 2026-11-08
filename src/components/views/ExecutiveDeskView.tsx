@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Dealership, Activity, ManagerAssist, IntroductionIncentive, User } from '../../types/crm';
 import { formatUSDate } from '../../utils/territory';
+import { NextStepState, needsNextStep } from '../../utils/nextStepStatus';
 import { AIService } from '../../services/aiService';
 import {
   TrendingUp,
@@ -32,6 +33,7 @@ interface ExecutiveDeskViewProps {
   incentives: IntroductionIncentive[];
   users: User[];
   onOpenDealership: (dealership: Dealership) => void;
+  nextSteps?: Map<string, NextStepState>;
 }
 
 export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
@@ -40,7 +42,8 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
   assists,
   incentives,
   users,
-  onOpenDealership
+  onOpenDealership,
+  nextSteps
 }) => {
   const [period, setPeriod] = useState<'Weekly' | 'Monthly' | 'Quarterly'>('Weekly');
   const [isTvMode, setIsTvMode] = useState(false);
@@ -88,6 +91,14 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
   const pendingAssists = assists.filter(a => a.status === 'Pending' || a.status === 'Reschedule Proposed');
   const stalledGroupDeals = dealerships.filter(d => d.groupId && ['Negotiation', 'Contract', 'HOT'].includes(d.stage) && !d.hasActiveAssist);
   const atRiskClients = dealerships.filter(d => d.stage === 'Client' && (d.clientHealthScore ?? 100) < 70);
+  const noNextStep = dealerships.filter(d => nextSteps && needsNextStep(nextSteps.get(d.id) ?? { kind: 'not_applicable' }));
+  const noNextByRep = Object.entries(
+    noNextStep.reduce<Record<string, number>>((acc, d) => {
+      const u = users.find(x => x.id === d.assignedRepId);
+      if (u) acc[`${u.firstName} ${u.lastName[0]}.`] = (acc[`${u.firstName} ${u.lastName[0]}.`] ?? 0) + 1;
+      return acc;
+    }, {})
+  ).map(([n, c]) => `${n} ${c}`);
 
   // Product adoption across clients (from what each client actually signed)
   const clientList = dealerships.filter(d => d.stage === 'Client' || d.stage === 'Onboarding');
@@ -113,7 +124,9 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
     pendingAssistCount: pendingAssists.length,
     pendingAssistManagers: Array.from(new Set(pendingAssists.map(a => a.assignedManagerName))),
     stalledGroupDealCount: stalledGroupDeals.length,
-    atRiskClientNames: atRiskClients.map(d => d.dealershipName)
+    atRiskClientNames: atRiskClients.map(d => d.dealershipName),
+    noNextStepCount: noNextStep.length,
+    noNextStepByRep: noNextByRep
   });
 
   return (

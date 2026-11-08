@@ -34,6 +34,10 @@ export interface WritebackInput {
   acceptedStageChanges?: Record<string, PipelineStage>;
   newContacts?: Contact[];
   extraActionPoints?: ActionPoint[];
+  /** What happens next (saved on the CRM activity so every screen can see it). */
+  nextStep?: { action: string; date?: string; time?: string };
+  /** The rep chose not to plan a next step, and why. */
+  nextSkipped?: { reason: 'waiting' | 'not_now' | 'none'; label: string; nurtureDate?: string };
 }
 
 export interface WritebackResult {
@@ -280,6 +284,7 @@ export function buildWriteback(input: WritebackInput): WritebackResult {
     return {
       ...d,
       stage: stageChanges[d.id] ?? d.stage,
+      nurtureFollowUpDate: input.nextSkipped?.nurtureDate ?? (stageChanges[d.id] === 'Not Now' ? input.nextStep?.date : undefined) ?? d.nurtureFollowUpDate,
       lastTouchpointDate: now,
       productInterests,
       signedProducts: [...signedProducts],
@@ -318,7 +323,11 @@ export function buildWriteback(input: WritebackInput): WritebackResult {
     notes: slot.target.kind === 'group' ? `[Group: ${slot.target.name}] ${notes}` : notes,
     productsDiscussed,
     interestLevel: topInterest,
-    pointsEarned: i === 0 ? totalPoints : undefined
+    pointsEarned: i === 0 ? totalPoints : undefined,
+    nextAction: input.nextStep?.action ?? (input.nextSkipped && input.nextSkipped.reason !== 'none' ? input.nextSkipped.label : undefined),
+    nextActionDate: input.nextStep?.date ?? input.nextSkipped?.nurtureDate,
+    nextActionTime: input.nextStep?.time,
+    tags: input.nextSkipped ? [`next_skipped_${input.nextSkipped.reason}`] : input.nextStep ? undefined : ['no_next_step']
   }));
 
   // Action points

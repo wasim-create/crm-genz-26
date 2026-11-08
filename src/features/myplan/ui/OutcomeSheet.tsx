@@ -17,6 +17,9 @@ import { Button, Card, Checkbox, Segmented, Sheet } from './primitives';
 import { useMyPlan } from './context';
 import { ContactsEditor, TasksEditor } from './parts';
 import { newId, productName } from './slotHelpers';
+import { readNote } from '../engine/nextStep';
+import { NextStepCard, NextStepValue, buildNextSlot, nextStepSummary, placeNextSlot, valueFromReading } from './NextStepCard';
+import { NEXT_SKIP_REASONS } from '../engine/nextStep';
 
 const SIMPLE: { value: SimpleResult; label: string }[] = [
   { value: 'done', label: 'Done' },
@@ -87,11 +90,32 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
   const [result, setResult] = useState<{ points: number; queued: boolean } | null>(null);
   const [listening, setListening] = useState(false);
   const [replanAnswered, setReplanAnswered] = useState(false);
+  const [nsTouched, setNsTouched] = useState<NextStepValue | null>(null);
+  const [noteTipOff, setNoteTipOff] = useState<Record<string, boolean>>({});
+  const [savedNext, setSavedNext] = useState<NextStepValue | null>(null);
 
   const preview: PlanSlot | undefined = slot ? { ...slot, tasks } : undefined;
   const dealership = slot?.target.kind === 'dealership' ? dealershipById.get(slot.target.id) : undefined;
   const stageSuggestion = useMemo(() => (preview && dealership && !wasDone ? suggestStageChange(preview, dealership) : null), [preview, dealership, wasDone]);
   const tips = useMemo(() => (preview && !wasDone ? suggestActionPoints(preview, catalog) : []), [preview, wasDone, catalog]);
+  // Read the note as the rep types: next step, dated action points and stage hints.
+  const reading = useMemo(
+    () =>
+      readNote({
+        note,
+        today: ctx.today,
+        stage: dealership?.stage,
+        workType: slot?.workType ?? 'prospect',
+        tasks,
+        dealershipName: slot?.target.name ?? '',
+        contacts: dealership ? ctx.contacts.filter(c => c.dealershipId === dealership.id) : []
+      }),
+    [note, ctx.today, dealership, slot?.workType, tasks, slot?.target.name, ctx.contacts]
+  );
+  const nextValue: NextStepValue = nsTouched ?? valueFromReading(reading, ctx.today);
+  const noteTips = reading.actionPoints.filter(a => !tips.includes(a.title));
+  const stageSug = stageSuggestion ?? (reading.stage && dealership && reading.stage.to !== dealership.stage ? { to: reading.stage.to, reason: `${reading.stage.reason} (“${reading.stage.from}”)` } : null);
+  const showNext = !wasDone && !!slot && slot.target.kind !== 'block';
 
   if (!slot) return null;
 
@@ -129,7 +153,8 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
     };
     const extraAps: ActionPoint[] = [
       ...tips.filter(t => acceptedTips[t]).map(t => tipEdits[t] ?? t),
-      ...(manualAp.trim() ? [manualAp.trim()] : [])
+      ...(manualAp.trim() ? [manualAp.trim()] : []),
+      ...noteTips.filter(t => !noteTipOff[t.title]).map(t => t.title)
     ].map(title => ({
       id: newId('ap'),
       userId: slot.userId,
@@ -137,13 +162,15 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
       dealershipId: slot.target.kind === 'dealership' ? slot.target.id : undefined,
       dealershipName: slot.target.name,
       slotId: slot.id,
-      dueDate: ctx.today,
+      dueDate: noteTips.find(t => t.title === title)?.dueDate ?? ctx.today,
       done: false,
-      source: acceptedTips[title] !== undefined ? 'suggestion' : 'manual',
+      source: acceptedTips[title] !== undefined || noteTips.some(t => t.title === title) ? 'suggestion' : 'manual',
       createdAt: nowISO,
       updatedAt: nowISO
     }));
-    const stageChanges: Record<string, PipelineStage> = stageSuggestion && stageYes && dealership ? { [dealership.id]: stageSuggestion.to } : {};
+    const stageChanges: Record<string, PipelineStage> = stageSug && stageYes && dealership ? { [dealership.id]: stageSug.to } : {};
+    const nv = showNext ? nextValue : null;
+    const skipLabel = nv?.mode === 'skip' ? NEXT_SKIP_REASONS.find(r => r.id === nv.skipReason)?.label ?? '' : '';
 
     const wb = buildWriteback({
       slot: finalSlot,
@@ -155,7 +182,9 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
       startedAt,
       now: nowISO,
       acceptedStageChanges: stageChanges,
-      extraActionPoints: extraAps
+      extraActionPoints: extraAps,
+      nextStep: nv && nv.mode !== 'skip' ? { action: nv.mode === 'later' ? `${nv.label} (plan later)` : nv.label, date: nv.mode === 'plan' ? nv.date : undefined, time: nv.mode === 'plan' ? nv.time : undefined } : undefined,
+      nextSkipped: nv?.mode === 'skip' ? { reason: nv.skipReason ?? 'waiting', label: skipLabel, nurtureDate: nv.skipReason === 'not_now' ? nv.nurtureDate : undefined } : undefined
     });
 
     if (wasDone) {
@@ -188,6 +217,11 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
       { message: undefined, undoable: false }
     );
     addActionPoints(wb.actionPoints);
+    if (nv && nv.mode !== 'skip') {
+      const nextSlot = buildNextSlot(nv, { userId: slot.userId, target: slot.target, workType: slot.workType, contactIds: spoke.contactIds, contactNames: spoke.contactNames, contacts: dealership ? ctx.contacts.filter(c => c.dealershipId === dealership.id) : [] }, dealership);
+      placeNextSlot(ctx, nextSlot, nv.index, '', slot.id);
+    }
+    setSavedNext(nv);
     if (wb.totalPoints > 0) {
       try {
         confetti({ particleCount: 80, spread: 70, origin: { y: 0.7 } });
@@ -268,39 +302,38 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
           </p>
           {result.queued && <WifiOff className="mt-2 h-6 w-6 text-slate-500" />}
         </Card>
-        {!wasDone && slot.target.kind !== 'block' && (
-          <>
-            <div className="mb-2 mt-6 text-[17px] font-bold text-slate-900">Plan the next step?</div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() =>
-                  openSheet({
-                    kind: 'add',
-                    preset: slot.target.kind === 'group' ? { groupId: slot.target.id, nonce: Date.now() } : { dealershipId: slot.target.id, nonce: Date.now() }
-                  })
-                }
-              >
-                Add the next step
-              </Button>
-              <Button
-                variant="secondary"
-                size="lg"
-                onClick={() =>
-                  openSheet({
-                    kind: 'add',
-                    preset: slot.target.kind === 'group' ? { groupId: slot.target.id, planLater: true, nonce: Date.now() } : { dealershipId: slot.target.id, planLater: true, nonce: Date.now() }
-                  })
-                }
-              >
-                Plan later
-              </Button>
-              <Button variant="ghost" size="lg" onClick={onClose}>
-                Not now
+        {!wasDone && savedNext && (
+          <Card className={`mt-4 space-y-3 p-4 ${savedNext.mode === 'skip' ? 'border-amber-300 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
+            <div className="text-[17px] font-bold text-slate-900">{savedNext.mode === 'skip' ? 'No next step' : 'Next step'}</div>
+            <div className="text-[16px] text-slate-800">{nextStepSummary(savedNext)}</div>
+            <div className="flex flex-wrap gap-2">
+              {savedNext.mode === 'plan' && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    ctx.setView('day');
+                    ctx.setDate(savedNext.date);
+                    onClose();
+                  }}
+                >
+                  See {formatDayLabel(savedNext.date)}
+                </Button>
+              )}
+              {savedNext.mode === 'skip' && slot.target.kind === 'dealership' && (
+                <Button variant="primary" onClick={() => openSheet({ kind: 'nextstep', dealershipId: slot.target.id })}>
+                  Plan it now
+                </Button>
+              )}
+              <Button variant="ghost" onClick={onClose}>
+                Close
               </Button>
             </div>
-          </>
+          </Card>
+        )}
+        {!wasDone && !savedNext && slot.target.kind !== 'block' && (
+          <Button variant="primary" size="lg" className="mt-6" onClick={onClose}>
+            Done
+          </Button>
         )}
         {wasDone && (
           <Button variant="primary" size="lg" className="mt-6" onClick={onClose}>
@@ -387,9 +420,29 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
           />
         </Card>
 
+        {showNext && (
+          <NextStepCard
+            value={nextValue}
+            onChange={v => setNsTouched(v)}
+            target={slot.target}
+            workType={slot.workType}
+            dealership={dealership}
+            ignoreSlotId={slot.id}
+          />
+        )}
+
         {!wasDone && slot.target.kind !== 'block' && (
           <Card className="space-y-2 p-4">
             <div className="text-[17px] font-bold text-slate-900">Action points</div>
+            {noteTips.map(t => (
+              <Checkbox
+                key={t.title}
+                checked={!noteTipOff[t.title]}
+                onChange={v => setNoteTipOff(x => ({ ...x, [t.title]: !v }))}
+                label={`${t.title} — due ${formatDayLabel(t.dueDate)}`}
+                hint={`From your note: “${t.from}”`}
+              />
+            ))}
             {keyfetchQty?.quantity ? (
               <div className="rounded-xl bg-blue-50 p-3 text-[15px] text-blue-900">
                 ✓ “Place Keyfetch order for {slot.target.name} — {keyfetchQty.quantity} units” will be added to your to-dos and Google Tasks.
@@ -417,12 +470,12 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
           </Card>
         )}
 
-        {stageSuggestion && dealership && (
+        {stageSug && dealership && (
           <Card className="space-y-2 border-emerald-200 bg-emerald-50 p-4">
             <div className="text-[17px] font-bold text-emerald-950">
-              Move {dealership.dealershipName} from {dealership.stage} to {stageSuggestion.to}?
+              Move {dealership.dealershipName} from {dealership.stage} to {stageSug.to}?
             </div>
-            <div className="text-[15px] text-emerald-900">{stageSuggestion.reason}.</div>
+            <div className="text-[15px] text-emerald-900">{stageSug.reason}.</div>
             <div className="flex gap-2">
               <Button variant={stageYes === true ? 'primary' : 'secondary'} onClick={() => setStageYes(true)}>
                 Yes, move it
@@ -441,6 +494,10 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
     return c.users.find(u => u.id === id) ?? viewUser;
   }
 };
+
+function formatDayLabel(iso: string) {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
 
 function alertless(msg: string) {
   // Avoid blocking browser dialogs; surface through the console for the demo.

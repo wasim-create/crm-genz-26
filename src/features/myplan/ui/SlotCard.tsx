@@ -9,6 +9,7 @@ import { taskSummary, timeText } from './slotHelpers';
 import { ZONE_SHORT } from '../engine/timezones';
 import { format12h } from '../engine/time';
 import { Clock3, Info } from 'lucide-react';
+import { NextStepLine } from './NextStepLine';
 
 export interface SlotCardProps {
   slot: PlanSlot;
@@ -98,7 +99,7 @@ export const SlotCard: React.FC<SlotCardProps> = ({
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[15px]">
             {slot.target.kind !== 'block' && <WorkChip workType={slot.workType} />}
-            <HowLabel how={slot.how} />
+            {slot.target.kind === 'block' && slot.target.id.startsWith('blk_personal') ? <span className="text-slate-600">Personal · busy</span> : <HowLabel how={slot.how} />}
             {slot.how === 'in_person' && band && miles !== undefined && <BandChip band={band} miles={miles} />}
           </div>
 
@@ -188,6 +189,11 @@ export const SlotCard: React.FC<SlotCardProps> = ({
           )
         )}
       </div>
+      {done && !compact && slot.target.kind === 'dealership' && (
+        <div className="px-4 pb-3">
+          <NextStepLine dealershipId={slot.target.id} />
+        </div>
+      )}
       {!hideActions && (slot.target.kind !== 'block' || (!readOnly && slot.status === 'planned')) && (
         <div className="flex flex-wrap gap-1 border-t border-slate-100 px-2 py-1.5">
           {slot.target.kind !== 'block' && (

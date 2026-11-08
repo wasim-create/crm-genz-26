@@ -320,6 +320,10 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
         });
 
       const inBasket = new Set<string>();
+      // Deals the rep left without a next step stay that way (the demo shows the warning).
+      const lastTags = (id: string) =>
+        activities.filter(a => a.dealershipId === id && a.status === 'completed' && a.activityType !== 'System Note').sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''))[0]?.tags ?? [];
+      book.filter(d => lastTags(d.id).some(t => t === 'no_next_step' || t.startsWith('next_skipped'))).forEach(d => inBasket.add(d.id));
       const booked = new Set([...latestByDealer.values()].filter(a => a.nextActionDate && a.nextActionDate >= today).map(a => a.dealershipId));
 
       // 4) Fill each plan day with sensible stops (each dealership once a week)
@@ -346,7 +350,7 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
       // 5) Plan-later basket: Not Now nurture dates, fresh claims, upsell ideas, low health
       const basket: { d: Dealership; note: string }[] = [];
       book.forEach(d => {
-        if (thisWeek.has(d.id)) return;
+        if (thisWeek.has(d.id) || inBasket.has(d.id)) return;
         if (d.stage === 'Not Now' && d.nurtureFollowUpDate) basket.push({ d, note: `Nurture follow-up due ${d.nurtureFollowUpDate}` });
         else if (d.stage === 'Client' && (d.clientHealthScore ?? 100) < 70) basket.push({ d, note: 'Health is low — book a proper visit with the owner' });
         else if (d.stage === 'Client' && d.upsells.some(u => u.stage === 'Interested' || u.stage === 'Identified')) {
@@ -390,6 +394,40 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
         createdAt: nowISO,
         updatedAt: nowISO
       });
+
+      // Personal Google Calendar events (busy — no visits then)
+      const PERSONAL = [
+        { name: 'Dentist', time: '15:30', min: 60 },
+        { name: 'School pickup', time: '15:00', min: 45 },
+        { name: 'Car service', time: '08:00', min: 60 },
+        { name: 'Doctor’s appointment', time: '16:15', min: 60 },
+        { name: 'Kids’ game', time: '15:45', min: 60 }
+      ];
+      const pi = users.filter(u => u.role.endsWith('_rep')).indexOf(user);
+      const pe = PERSONAL[pi % PERSONAL.length];
+      const peDay = planDays[1 + (pi % 3)];
+      if (peDay)
+        slots.push({
+          id: sid('slot'),
+          userId: user.id,
+          date: peDay,
+          orderIndex: 90,
+          status: 'planned',
+          how: 'in_person',
+          workType: 'block',
+          target: { kind: 'block', id: `blk_personal_${pi}`, name: pe.name },
+          tasks: [],
+          contactIds: [],
+          contactNames: [],
+          timeMode: 'exact',
+          fixedTime: pe.time,
+          durationMin: pe.min,
+          locked: true,
+          source: 'calendar',
+          notes: 'From your Google Calendar (busy)',
+          createdAt: nowISO,
+          updatedAt: nowISO
+        });
 
       // Email batch on the first plan day: follow-ups to recent first visits
       const emailTargets = local.filter(d => ['Visited', 'Follow-up', 'In Progress', 'HOT'].includes(d.stage) && !taken(p1, d.id) && !inBasket.has(d.id) && !/send|email/i.test(latestByDealer.get(d.id)?.nextAction ?? '')).slice(0, 2);

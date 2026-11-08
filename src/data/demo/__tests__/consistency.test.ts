@@ -8,6 +8,7 @@ import { buildDemoData, LEVELS, levelFor } from '../story';
 import { buildSeed } from '../../../features/myplan/data/seed';
 import { milesBetween } from '../../../features/myplan/engine/geo';
 import type { PipelineStage } from '../../../types/crm';
+import { computeNextSteps, needsNextStep } from '../../../utils/nextStepStatus';
 
 const DATES = [
   '2026-11-08T15:00:00Z', // Sunday
@@ -165,6 +166,14 @@ for (const iso of DATES) {
         const todays = seed.slots.filter(s => s.userId === rep.id && s.date === today && s.target.kind === 'dealership' && s.how !== 'email' && s.how !== 'text');
         assert.ok(todays.length >= 3, `${rep.firstName} has a real day today (${todays.length} stops)`);
       }
+    // Next-step status: most live deals have one; the demo keeps a few gaps to show the warnings.
+    const refs = seed.slots.filter(s => (s.status === 'planned' || s.status === 'basket') && s.target.kind !== 'block').map(s => ({ targetId: s.target.id, rooftopIds: s.target.rooftopIds, date: s.date, time: s.fixedTime, status: s.status, label: s.how }));
+    const states = computeNextSteps(D.dealerships, D.activities, refs, D.assists, today);
+    const all = [...states.values()];
+    assert.ok(all.filter(needsNextStep).length >= 3 && all.filter(needsNextStep).length <= 8, `a few deals with no next step (${all.filter(needsNextStep).length})`);
+    assert.ok(all.some(x => x.kind === 'waiting' && !x.overdue), 'a deal waiting on them');
+    assert.ok(all.some(x => x.kind === 'waiting' && x.overdue), 'a deal waiting too long');
+    assert.ok(all.filter(x => x.kind === 'planned').length >= 30, 'most live deals have a next step');
     const byUserDay = new Map<string, typeof seed.slots>();
     seed.slots.filter(s => s.date && s.date >= today && s.status === 'planned').forEach(s => {
       const k = `${s.userId}|${s.date}`;

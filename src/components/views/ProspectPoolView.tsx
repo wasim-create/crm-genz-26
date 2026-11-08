@@ -1,3 +1,4 @@
+import { NextStepState, needsNextStep, nextStepText } from '../../utils/nextStepStatus';
 import React, { useState } from 'react';
 import { Dealership, User } from '../../types/crm';
 import { calculateDistanceMiles, isWithinTerritory, getDistanceBand } from '../../utils/territory';
@@ -26,6 +27,9 @@ interface ProspectPoolViewProps {
   /** Opens the shared Add New Prospect form (optionally straight into Open Radar). */
   onAddNewProspect: (opts?: { radar?: boolean }) => void;
   isPoolOnly?: boolean;
+  /** What happens next with each dealership (Bench only). */
+  nextSteps?: Map<string, NextStepState>;
+  onPlanNextStep?: (dealership: Dealership) => void;
 }
 
 export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
@@ -34,9 +38,12 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
   onClaimDealership,
   onOpenDealership,
   onAddNewProspect,
-  isPoolOnly = false
+  isPoolOnly = false,
+  nextSteps,
+  onPlanNextStep
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [onlyMissing, setOnlyMissing] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [outOfRadiusDeal, setOutOfRadiusDeal] = useState<Dealership | null>(null);
   const [outOfRadiusReason, setOutOfRadiusReason] = useState('');
@@ -75,7 +82,9 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
   })
     // Reps see their own area (territory, tolerance band and a little beyond), nearest first.
     .filter(x => !isPoolOnly || !['new_rep', 'veteran_rep', 'team_lead'].includes(currentUser.role) || x.distance <= 100 || !!searchTerm)
-    .sort((a, b) => (isPoolOnly ? a.distance - b.distance : 0));
+    .sort((a, b) => (isPoolOnly ? a.distance - b.distance : 0))
+    .filter(x => !onlyMissing || (nextSteps && needsNextStep(nextSteps.get(x.dealership.id) ?? { kind: 'not_applicable' })));
+  const missingCount = !isPoolOnly && nextSteps ? targetDeals.filter(d => needsNextStep(nextSteps.get(d.id) ?? { kind: 'not_applicable' })).length : 0;
 
   const handleClaim = (d: Dealership) => {
     const dist = calculateDistanceMiles(
@@ -158,7 +167,19 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
         {/* Dealership Cards Grid */}
         <div className="lg:col-span-8 space-y-3">
           <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
-            <span>Showing {dealsWithDistance.length} dealerships</span>
+            <span className="flex items-center gap-2">
+              Showing {dealsWithDistance.length} dealerships
+              {!isPoolOnly && nextSteps && (
+                <button
+                  type="button"
+                  onClick={() => setOnlyMissing(v => !v)}
+                  aria-pressed={onlyMissing}
+                  className={`rounded-full border px-2.5 py-1 font-sans text-[11px] font-bold ${onlyMissing ? 'border-rose-600 bg-rose-600 text-white' : missingCount ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-500'}`}
+                >
+                  {missingCount} with no next step{onlyMissing ? ' · show all' : ''}
+                </button>
+              )}
+            </span>
             <span>Radius: 60 miles base</span>
           </div>
 
@@ -211,6 +232,21 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({
                     </div>
 
                     <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                      {!isPoolOnly && nextSteps && (() => {
+                        const ns = nextSteps.get(d.id);
+                        if (!ns || ns.kind === 'not_applicable') return null;
+                        const miss = needsNextStep(ns);
+                        return (
+                          <div className={`flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold ${miss ? 'bg-rose-50 text-rose-800' : ns.kind === 'waiting' ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
+                            <span className="line-clamp-1">{ns.kind === 'planned' ? 'Next: ' : ''}{nextStepText(ns)}</span>
+                            {miss && onPlanNextStep && (
+                              <button type="button" onClick={e => { e.stopPropagation(); onPlanNextStep(d); }} className="shrink-0 rounded-md bg-rose-600 px-2 py-0.5 text-[11px] font-bold text-white">
+                                Plan it
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
                         <span className="flex items-center gap-1">
                           <Car className="w-3.5 h-3.5 text-slate-400" />

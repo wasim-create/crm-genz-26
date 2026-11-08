@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Dealership, 
   User, 
@@ -41,6 +41,10 @@ import { SettingsAdminView } from './components/views/SettingsAdminView';
 import { DealershipDetailModal } from './components/views/DealershipDetailModal';
 import { WorkspaceSyncView } from './components/views/WorkspaceSyncView';
 import { CommandPalette } from './components/command/CommandPalette';
+import { ensureSeeded, useMyPlanState } from './features/myplan/data/store';
+import { HOW_SHORT, TASK_BY_ID } from './features/myplan/engine/tasks';
+import { todayISO } from './features/myplan/engine/time';
+import { computeNextSteps, PlannedRef } from './utils/nextStepStatus';
 import { CheckCircle2, X, Sparkles, Flame } from 'lucide-react';
 
 const storage = new LocalStorageAdapter();
@@ -72,7 +76,7 @@ export default function App() {
   // Shared "Add New Prospect / Client" and "Add Contact" forms (used everywhere)
   const [prospectForm, setProspectForm] = useState<{ mode: 'prospect' | 'client'; radar?: boolean } | null>(null);
   const [contactFormFor, setContactFormFor] = useState<Dealership | null>(null);
-  const [planRequest, setPlanRequest] = useState<{ dealershipId: string; planLater?: boolean; nonce: number } | null>(null);
+  const [planRequest, setPlanRequest] = useState<{ dealershipId: string; planLater?: boolean; nextStep?: boolean; nonce: number } | null>(null);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isWorkspaceSyncOpen, setIsWorkspaceSyncOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -103,6 +107,8 @@ export default function App() {
       setProductBonuses(data.productBonuses);
       setManagerPriorities(data.managerPriorities);
       setPointsLedger(data.pointsLedger);
+      // Seed My Plan straight away, so next-step status is right on every screen.
+      ensureSeeded({ users: data.users, dealerships: data.dealerships, contacts: data.contacts, groups: data.groups, catalog: data.products, today: todayISO(), activities: data.activities, assists: data.assists, priorities: data.managerPriorities, workspace: data.workspaceItems });
 
       // Default to Carlos Martinez (New Rep, Texas) or Kelley
       const defaultUser = data.users.find((u: User) => u.id === 'u_carlos') || data.users[0];
@@ -111,6 +117,29 @@ export default function App() {
 
     loadData();
   }, []);
+
+  // What happens next with each dealership (My Plan + assists + CRM history).
+  const planState = useMyPlanState();
+  const plannedRefs: PlannedRef[] = useMemo(
+    () =>
+      planState.slots
+        .filter(s => (s.status === 'planned' || s.status === 'basket') && s.target.kind !== 'block')
+        .map(s => ({
+          targetId: s.target.id,
+          rooftopIds: s.target.rooftopIds,
+          date: s.date,
+          time: s.timeMode === 'exact' ? s.fixedTime : undefined,
+          status: s.status,
+          label: `${HOW_SHORT[s.how]}${s.tasks[0] ? `: ${TASK_BY_ID[s.tasks[0].taskId]?.label ?? ''}` : ''}`
+        })),
+    [planState.slots]
+  );
+  const nextSteps = useMemo(() => computeNextSteps(dealerships, activities, plannedRefs, assists, todayISO()), [dealerships, activities, plannedRefs, assists]);
+  const planNextStep = (d: Dealership) => {
+    setSelectedDealership(null);
+    setPlanRequest({ dealershipId: d.id, nextStep: true, nonce: Date.now() });
+    setCurrentView('planner');
+  };
 
   // Saving from the shared prospect form: the dealership, any new / updated
   // dealer group, and placeholder rooftops for a new group.
@@ -643,6 +672,8 @@ export default function App() {
               dealerships={dealerships}
               currentUser={currentUser}
               allUsers={users}
+              nextSteps={nextSteps}
+              onPlanNextStep={planNextStep}
               onOpenDealership={(d) => setSelectedDealership(d)}
               onMoveStage={handleMoveStage}
               onInitiateAssist={(d) => setSelectedDealership(d)}
@@ -657,6 +688,8 @@ export default function App() {
               onOpenDealership={(d) => setSelectedDealership(d)}
               onAddNewProspect={(opts) => setProspectForm({ mode: 'prospect', radar: opts?.radar })}
               isPoolOnly={false}
+              nextSteps={nextSteps}
+              onPlanNextStep={planNextStep}
             />
           )}
 
@@ -693,6 +726,7 @@ export default function App() {
               incentives={incentives}
               users={users}
               onOpenDealership={(d) => setSelectedDealership(d)}
+              nextSteps={nextSteps}
             />
           )}
 
@@ -838,6 +872,8 @@ export default function App() {
           }}
           planPanel={<DealershipPlanPanel dealership={selectedDealership} user={currentUser} />}
           onRequestAddContact={(d) => setContactFormFor(d)}
+          nextStep={nextSteps.get(selectedDealership.id)}
+          onPlanNextStep={planNextStep}
         />
       )}
 

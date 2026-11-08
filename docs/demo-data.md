@@ -44,6 +44,8 @@ leaderboard, the Executive Desk and the incentive trail.
 | At-risk client | Minuteman Chevrolet (no reply for 5 weeks, health below 70) |
 | Workspace matching | Two unmatched items (a forwarded dealer list, a "Coffee — Mark?" event) |
 | Over-full day / trip day | Kevin's Wednesday; Kelley's and Todd Bilius's Thursday trip days |
+| No next step / waiting | Kevin (Northwest CDJR), Todd Kelly (Brand Boulevard Nissan), Carlos (Stockyards Kia) have none; Todd Bilius is waiting on Gwinnett Subaru; Kelley has waited too long on North Shore Auto Sales |
+| Google Calendar busy times | Each rep has one personal event (dentist, school pickup…) that the week strip works around |
 | Rookie | Carlos: first deal (Trinity Honda), a cancelled visit, a training day, Rookie League |
 
 ## Changing the story
@@ -51,3 +53,18 @@ leaderboard, the Executive Desk and the incentive trail.
 Add or edit a dealership in `places.ts` and pick a scenario; the engine writes its history. Named contacts in
 `people` are used in the notes. After changing anything, run `npm test` — the consistency checks will tell you
 if something no longer adds up. Bump `SEED_VERSION` in `seedData.ts` so browsers load the new story.
+
+## Next steps after a meeting
+
+When a rep saves "How did it go?", the last card is **Next step**. It is pre-filled by reading the note with plain
+rules in `src/features/myplan/engine/nextStep.ts` — dates ("next Tuesday", "by Friday", "after the 20th", "after Q1"),
+what to do (visit, call, Meet, install, training, signing, demo, bring the manager), things to send ("send the
+agenda by Friday" → a dated action point), tasks ("recount the tags" → Keyfetch check), people named ("with Tracy")
+and stage hints ("went with another provider" → Lost, "revisit after Q1" → Not Now). Each suggestion shows the words
+it came from; the rep confirms or changes it. If the rep picks "No next step" they give a reason (waiting on them,
+not now until a date, or no further action).
+
+`src/utils/nextStepStatus.ts` answers "what happens next?" for every dealership (a planned slot, the basket, an open
+assist, a dated next action, or the skip reason). Deals with none — or waiting on the dealer for more than a week —
+are flagged on the finished My Plan card, the Bench, the Pipeline, the dealership record and the Executive Desk,
+each with **Plan it**.

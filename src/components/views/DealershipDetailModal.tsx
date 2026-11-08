@@ -16,6 +16,7 @@ import {
   isGoodVisitWindow 
 } from '../../utils/territory';
 import { AIService, PreVisitBrief } from '../../services/aiService';
+import { NextStepState, needsNextStep, nextStepText } from '../../utils/nextStepStatus';
 import { AccountStatusBanner, ActivityTimeline, AuditList, LotHistory, OnboardingChecklist } from './DealershipHistory';
 import {
   Building2,
@@ -63,6 +64,9 @@ interface DealershipDetailModalProps {
   planPanel?: React.ReactNode;
   /** Opens the shared Add Contact form for this dealership. */
   onRequestAddContact?: (dealership: Dealership) => void;
+  /** What happens next, and a way to plan it. */
+  nextStep?: NextStepState;
+  onPlanNextStep?: (dealership: Dealership) => void;
 }
 
 export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
@@ -83,7 +87,9 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
   onAddToPlan,
   onPlanLater,
   planPanel,
-  onRequestAddContact
+  onRequestAddContact,
+  nextStep,
+  onPlanNextStep
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'visit_log' | 'products' | 'assist' | 'contacts' | 'audit'>('overview');
 
@@ -235,6 +241,17 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
             <p className="text-xs text-slate-500">
               {dealership.city}, {dealership.state} {dealership.zipCode} • {dealership.usedCarsOnLot} used cars • F&I: {dealership.fiSystem}
             </p>
+            {nextStep && nextStep.kind !== 'not_applicable' && (
+              <div className={`mt-2 inline-flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${needsNextStep(nextStep) ? 'bg-rose-50 text-rose-800' : nextStep.kind === 'waiting' ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
+                {nextStep.kind === 'planned' ? 'Next step: ' : ''}
+                {nextStepText(nextStep)}
+                {needsNextStep(nextStep) && onPlanNextStep && (
+                  <button type="button" onClick={() => onPlanNextStep(dealership)} className="rounded-md bg-rose-600 px-2 py-0.5 font-bold text-white">
+                    Plan it
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

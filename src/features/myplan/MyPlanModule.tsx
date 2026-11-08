@@ -16,6 +16,7 @@ import {
   WorkspaceItem
 } from '../../types/crm';
 import { DEFAULT_ENGINE_SETTINGS } from './engine/geo';
+import { NextStepSheet } from './ui/NextStepCard';
 import { layoutDay } from './engine/schedule';
 import { isMessage } from './engine/tasks';
 import { addDays, todayISO, toHHMM } from './engine/time';
@@ -50,7 +51,7 @@ export interface MyPlanModuleProps {
   assists?: ManagerAssist[];
   workspaceItems?: WorkspaceItem[];
   /** Opened from elsewhere in the CRM ("Add to my plan" / "Plan later"). */
-  request?: { dealershipId: string; planLater?: boolean; nonce: number } | null;
+  request?: { dealershipId: string; planLater?: boolean; nextStep?: boolean; nonce: number } | null;
   onRequestHandled?: () => void;
   onAddContact: (c: Contact) => void;
   onSaveProspect: (r: ProspectFormResult) => void;
@@ -152,7 +153,8 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
   useEffect(() => {
     if (!props.request) return;
     setViewUserId(currentUser.id);
-    setSheet({ kind: 'add', preset: { dealershipId: props.request.dealershipId, planLater: props.request.planLater, nonce: props.request.nonce } });
+    if (props.request.nextStep) setSheet({ kind: 'nextstep', dealershipId: props.request.dealershipId });
+    else setSheet({ kind: 'add', preset: { dealershipId: props.request.dealershipId, planLater: props.request.planLater, nonce: props.request.nonce } });
     props.onRequestHandled?.();
   }, [props.request?.nonce]);
 
@@ -242,6 +244,7 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
 
       {sheet?.kind === 'add' && <AddFlow key={sheet.preset?.nonce ?? 'add'} preset={sheet.preset} onClose={close} />}
       {sheet?.kind === 'edit' && <EditSlotSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
+      {sheet?.kind === 'nextstep' && <NextStepSheet key={sheet.dealershipId} dealershipId={sheet.dealershipId} onClose={close} />}
       {sheet?.kind === 'outcome' && <OutcomeSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
       {sheet?.kind === 'move' && <MoveSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
       {sheet?.kind === 'todo' && <TodoSheet onClose={close} />}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Dealership, PipelineStage, User } from '../../types/crm';
+import { NextStepState, needsNextStep, nextStepText } from '../../utils/nextStepStatus';
 import { 
   Building2, 
   MapPin, 
@@ -24,6 +25,8 @@ interface PipelineViewProps {
   onMoveStage: (dealership: Dealership, newStage: PipelineStage, note?: string) => void;
   onInitiateAssist: (dealership: Dealership) => void;
   allUsers?: User[];
+  nextSteps?: Map<string, NextStepState>;
+  onPlanNextStep?: (dealership: Dealership) => void;
 }
 
 // Section 3: "Handed Off" is removed as a stage. Assist is a badge across HOT, Negotiation, or Contract.
@@ -45,8 +48,12 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   onOpenDealership,
   onMoveStage,
   onInitiateAssist,
-  allUsers = []
+  allUsers = [],
+  nextSteps,
+  onPlanNextStep
 }) => {
+  const [onlyMissing, setOnlyMissing] = useState(false);
+  const ns = (d: Dealership): NextStepState => nextSteps?.get(d.id) ?? { kind: 'not_applicable' };
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRep, setSelectedRep] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
@@ -56,6 +63,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   const filtered = dealerships.filter(d => {
     if (d.stage === 'Pool' || d.stage === 'Lost' || d.stage === 'Client') return false;
     if (selectedRep === 'my' && d.assignedRepId !== currentUser.id && d.originRepId !== currentUser.id) return false;
+    if (selectedRep !== 'all' && selectedRep !== 'my' && d.assignedRepId !== selectedRep) return false;
+    if (onlyMissing && !needsNextStep(ns(d))) return false;
     if (selectedHeat !== 'all' && d.heatLevel !== selectedHeat) return false;
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
@@ -91,6 +100,13 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           >
             <option value="all">All Reps (Full Visibility)</option>
             <option value="my">Just My Accounts</option>
+            {allUsers
+              .filter(u => ['new_rep', 'veteran_rep', 'team_lead'].includes(u.role) && u.active !== false)
+              .map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.firstName} {u.lastName}
+                </option>
+              ))}
           </select>
 
           <select
@@ -107,6 +123,19 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
 
         {/* View Mode & Pipeline Count */}
         <div className="flex items-center gap-3">
+          {nextSteps && (() => {
+            const missing = dealerships.filter(d => !['Pool', 'Lost', 'Client'].includes(d.stage) && (selectedRep === 'all' || (selectedRep === 'my' ? d.assignedRepId === currentUser.id : d.assignedRepId === selectedRep)) && needsNextStep(ns(d))).length;
+            return (
+              <button
+                type="button"
+                onClick={() => setOnlyMissing(v => !v)}
+                aria-pressed={onlyMissing}
+                className={`rounded-xl border px-3 py-1.5 text-xs font-bold ${onlyMissing ? 'border-rose-600 bg-rose-600 text-white' : missing ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-500'}`}
+              >
+                {missing} with no next step{onlyMissing ? ' · show all' : ''}
+              </button>
+            );
+          })()}
           <span className="text-xs font-bold font-mono text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
             {filtered.length} Active Deals
           </span>
@@ -202,6 +231,17 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                               </span>
                             )}
                           </div>
+
+                          {nextSteps && ns(d).kind !== 'not_applicable' && (
+                            <div className={`flex items-center justify-between gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${needsNextStep(ns(d)) ? 'bg-rose-50 text-rose-800' : ns(d).kind === 'waiting' ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
+                              <span className="line-clamp-1">{ns(d).kind === 'planned' ? 'Next: ' : ''}{nextStepText(ns(d))}</span>
+                              {needsNextStep(ns(d)) && onPlanNextStep && (
+                                <button type="button" onClick={e => { e.stopPropagation(); onPlanNextStep(d); }} className="shrink-0 rounded bg-rose-600 px-1.5 py-0.5 font-bold text-white">
+                                  Plan it
+                                </button>
+                              )}
+                            </div>
+                          )}
 
                           {/* Relationship Temperature & Assist Flag */}
                           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
