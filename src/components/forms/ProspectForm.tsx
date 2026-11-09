@@ -421,7 +421,7 @@ export const ProspectForm: React.FC<{
                         type="button"
                         aria-pressed={on}
                         onClick={() => set({ signedProducts: on ? f.signedProducts.filter(x => x !== p.id) : [...f.signedProducts, p.id] })}
-                        className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold ${on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-700'}`}
+                        className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold ${on ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white text-slate-700'}`}
                       >
                         {p.name}
                       </button>
@@ -528,7 +528,7 @@ const RadarPanel: React.FC<{
               setFrom(w);
               void search(w);
             }}
-            className={`min-h-[48px] rounded-xl border-2 px-4 text-[16px] font-semibold ${from === w ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white'}`}
+            className={`min-h-[48px] rounded-xl border-2 px-4 text-[16px] font-semibold ${from === w ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white'}`}
           >
             {w === 'home' ? 'From my home ZIP' : 'From where I am now'}
           </button>
@@ -573,7 +573,7 @@ const RadarPanel: React.FC<{
                   {r.franchiseBrands.length ? ` (${r.franchiseBrands.join(', ')})` : ''}
                 </div>
               </div>
-              <button type="button" onClick={() => onPick(r)} className="min-h-[48px] rounded-xl bg-blue-600 px-4 text-[16px] font-bold text-white hover:bg-blue-700">
+              <button type="button" onClick={() => onPick(r)} className="min-h-[48px] rounded-xl bg-brand px-4 text-[16px] font-bold text-onaccent hover:bg-brand-hover">
                 Add
               </button>
             </div>

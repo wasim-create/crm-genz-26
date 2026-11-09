@@ -65,7 +65,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 p-4 pt-[12vh]" role="dialog" aria-modal="true" aria-label="Search" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-scrim/50 p-4 pt-[12vh]" role="dialog" aria-modal="true" aria-label="Search" onClick={onClose}>
       <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 border-b border-slate-200 px-4">
           <Search className="h-5 w-5 shrink-0 text-slate-400" />

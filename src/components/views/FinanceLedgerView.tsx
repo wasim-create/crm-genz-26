@@ -240,7 +240,7 @@ export const FinanceLedgerView: React.FC<FinanceLedgerViewProps> = ({ incentives
                 <ol className="relative space-y-4 border-l-2 border-slate-200 pl-5">
                   {selected.trail.map((s, k) => (
                     <li key={k} className="relative">
-                      <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white bg-blue-600" />
+                      <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-white bg-brand" />
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <span className="text-[14px] font-semibold text-slate-900">{s.step}</span>
                         <span className="text-[13px] text-slate-500">{formatDay(s.date)}</span>

@@ -73,7 +73,7 @@ export const PeopleAdminPanel: React.FC<{
           </p>
         </div>
         {canEdit && (
-          <button type="button" onClick={() => setAdding(a => !a)} className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">
+          <button type="button" onClick={() => setAdding(a => !a)} className="flex items-center gap-1.5 rounded-xl bg-brand px-3 py-2 text-xs font-bold text-onaccent hover:bg-brand-hover">
             <UserPlus className="h-4 w-4" /> Add a person
           </button>
         )}
@@ -130,7 +130,7 @@ export const PeopleAdminPanel: React.FC<{
               type="button"
               disabled={!f.firstName.trim() || !f.lastName.trim() || !f.email.trim()}
               onClick={add}
-              className="min-h-[48px] rounded-xl bg-blue-600 px-5 text-sm font-bold text-white disabled:bg-slate-300"
+              className="min-h-[48px] rounded-xl bg-brand px-5 text-sm font-bold text-onaccent disabled:bg-slate-300"
             >
               Save person
             </button>
@@ -164,7 +164,7 @@ export const PeopleAdminPanel: React.FC<{
                 ) : confirmRemove === u.id ? (
                   <span className="flex items-center gap-2 text-xs">
                     Remove {u.firstName}?
-                    <button type="button" onClick={() => setActive(u, false)} className="rounded-xl bg-rose-600 px-3 py-2 font-bold text-white">
+                    <button type="button" onClick={() => setActive(u, false)} className="rounded-xl bg-danger px-3 py-2 font-bold text-onaccent">
                       Yes, remove
                     </button>
                     <button type="button" onClick={() => setConfirmRemove(null)} className="rounded-xl px-3 py-2 font-semibold text-slate-600">

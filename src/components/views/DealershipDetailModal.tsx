@@ -118,7 +118,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = props
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-950/60 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={d.dealershipName} onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-scrim/60 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={d.dealershipName} onClick={onClose}>
       <div className="flex h-full w-full max-w-5xl flex-col overflow-hidden bg-slate-50 shadow-2xl sm:h-[92vh] sm:rounded-3xl" onClick={e => e.stopPropagation()}>
         {/* ---------------- Header ---------------- */}
         <header className="shrink-0 border-b border-slate-200 bg-white px-5 pb-0 pt-5 sm:px-6">
@@ -554,10 +554,10 @@ const ActivityTab: React.FC<{ dealership: Dealership; acts: Activity[] }> = ({ d
               type="button"
               aria-pressed={f === x.id}
               onClick={() => setF(x.id)}
-              className={`inline-flex min-h-[32px] cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold ${f === x.id ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-700'}`}
+              className={`inline-flex min-h-[32px] cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold ${f === x.id ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-300 bg-white text-slate-700'}`}
             >
               {x.label}
-              <span className={`rounded-full px-1.5 text-[12px] ${f === x.id ? 'bg-white/25' : 'bg-slate-100'}`}>{n}</span>
+              <span className={`rounded-full px-1.5 text-[12px] ${f === x.id ? 'bg-onaccent/25' : 'bg-slate-100'}`}>{n}</span>
             </button>
           );
         })}
@@ -903,7 +903,7 @@ const TopupDialog: React.FC<{ d: Dealership; onSave: (qty: number, note?: string
         How many units?
         <div className="mt-2 flex flex-wrap gap-2">
           {[100, 150, 200, 250, 300].map(q => (
-            <button key={q} type="button" onClick={() => setQty(q)} className={`min-h-[40px] cursor-pointer rounded-xl border-2 px-3 text-[14px] font-semibold ${qty === q ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white'}`}>
+            <button key={q} type="button" onClick={() => setQty(q)} className={`min-h-[40px] cursor-pointer rounded-xl border-2 px-3 text-[14px] font-semibold ${qty === q ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white'}`}>
               {q}
             </button>
           ))}

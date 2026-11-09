@@ -308,12 +308,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => onNavigate(item.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                      ? 'bg-brand text-onaccent font-semibold shadow-xs'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                   title={item.label}
                 >
-                  <span className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`}>
+                  <span className={`shrink-0 ${isActive ? 'text-onaccent' : 'text-slate-500'}`}>
                     {item.icon}
                   </span>
                   {!isCollapsed && (

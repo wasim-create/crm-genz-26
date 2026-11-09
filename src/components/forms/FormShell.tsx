@@ -10,7 +10,7 @@ export const FormShell: React.FC<{
   children: React.ReactNode;
   wide?: boolean;
 }> = ({ title, icon, onClose, footer, children, wide }) => (
-  <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={title}>
+  <div className="fixed inset-0 z-[80] flex items-end justify-center bg-scrim/50 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={title}>
     <div className={`flex max-h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-3xl ${wide ? 'sm:max-w-3xl' : 'sm:max-w-2xl'}`}>
       <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4">
         <span className="text-blue-600">{icon}</span>

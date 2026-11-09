@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Badge, Btn, PageHeader, Switch } from '../ui/kit';
+import { ThemeChoice } from '../ui/ThemeToggle';
 import { ProductCatalogItem, User } from '../../types/crm';
 import { PeopleAdminPanel } from './PeopleAdminPanel';
 import {
@@ -116,7 +117,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
           { value: 'territory', label: 'Territory & planning' },
           { value: 'people', label: `People (${allUsers.filter(u => u.active !== false).length})` },
           { value: 'fi_systems', label: 'F&I systems' },
-          { value: 'storage', label: 'Data' }
+          { value: 'storage', label: 'Appearance & data' }
         ]}
       />
 
@@ -180,11 +181,18 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
 
       {/* TAB 2: STORAGE */}
       {activeTab === 'storage' && (
+        <div className="space-y-4">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-3 text-[14px]">
+          <h3 className="font-bold text-[16px] text-slate-900">Appearance</h3>
+          <p className="text-slate-600">Auto follows your device, so it goes dark in the evening if your device does. Pick Light or Dark to override it on this device.</p>
+          <ThemeChoice />
+        </div>
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4 text-[14px]">
           <h3 className="font-bold text-[16px] text-slate-900">Where the data lives</h3>
           <p className="text-slate-600">
             This demo keeps everything in this browser ({storageMode}). Use Reset demo data at the top to start again with fresh demo data dated from today.
           </p>
+        </div>
         </div>
       )}
 
@@ -286,7 +294,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                     onChange={e => setRequireTripApproval(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-onaccent after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-onaccent after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand"></div>
                 </label>
               </div>
 
@@ -311,7 +319,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                   setSavedTerritoryNotice(true);
                   setTimeout(() => setSavedTerritoryNotice(false), 3000);
                 }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[14px] cursor-pointer shadow-xs"
+                className="px-4 py-2 bg-brand hover:bg-brand-hover text-onaccent font-bold rounded-xl text-[14px] cursor-pointer shadow-xs"
               >
                 Save
               </button>
@@ -322,7 +330,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
 
       {/* Add New Product Modal (Section 2) */}
       {showAddProductModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-scrim/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl text-[14px]">
             <h3 className="font-bold text-sm text-slate-900">Add a product</h3>
 
@@ -393,7 +401,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               <button
                 type="button"
                 onClick={handleCreateProduct}
-                className="px-4 py-1.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 cursor-pointer"
+                className="px-4 py-1.5 rounded-xl bg-brand text-onaccent font-bold hover:bg-brand-hover cursor-pointer"
               >
                 Add product
               </button>

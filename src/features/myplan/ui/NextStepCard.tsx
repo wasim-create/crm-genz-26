@@ -203,7 +203,7 @@ export const NextStepCard: React.FC<{
                     type="button"
                     aria-pressed={on}
                     onClick={() => set({ taskIds: on ? value.taskIds.filter(x => x !== t.id) : [...value.taskIds, t.id] })}
-                    className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold ${on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-700'}`}
+                    className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold ${on ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white text-slate-700'}`}
                   >
                     {t.label}
                   </button>
@@ -247,7 +247,7 @@ export const NextStepCard: React.FC<{
               <div className="text-[14px] text-slate-600">Best times on {formatDayShort(value.date)}</div>
               <div className="flex flex-wrap gap-2">
                 {value.time && (
-                  <button type="button" className="min-h-[44px] rounded-xl border-2 border-blue-600 bg-blue-600 px-3 text-[15px] font-semibold text-white">
+                  <button type="button" className="min-h-[44px] rounded-xl border-2 border-blue-600 bg-brand px-3 text-[15px] font-semibold text-onaccent">
                     {format12h(value.time)}
                     {value.from.length ? ' (from your note)' : ''}
                   </button>
@@ -261,7 +261,7 @@ export const NextStepCard: React.FC<{
                       type="button"
                       onClick={() => set({ time: undefined, index: b.index })}
                       title={b.reason}
-                      className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold ${sel ? 'border-blue-600 bg-blue-600 text-white' : b.fits ? 'border-slate-200 bg-white text-slate-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}
+                      className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold ${sel ? 'border-blue-600 bg-brand text-onaccent' : b.fits ? 'border-slate-200 bg-white text-slate-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}
                     >
                       ~{format12h(b.start)}
                       {b.fits ? '' : ' · tight'}

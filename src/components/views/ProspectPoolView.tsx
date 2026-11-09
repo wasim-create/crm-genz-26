@@ -248,7 +248,7 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({ dealerships,
       )}
 
       {farDeal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="Claim outside your territory">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/50 p-4" role="dialog" aria-modal="true" aria-label="Claim outside your territory">
           <Panel className="w-full max-w-md space-y-4 p-6 shadow-2xl">
             <div>
               <h2 className="text-[18px] font-bold text-slate-900">Claim outside your territory?</h2>
@@ -281,7 +281,7 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({ dealerships,
       )}
 
       {showImport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label="Import a list">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/50 p-4" role="dialog" aria-modal="true" aria-label="Import a list">
           <Panel className="w-full max-w-lg space-y-4 p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">

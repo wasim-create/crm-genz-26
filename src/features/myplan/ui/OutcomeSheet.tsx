@@ -598,7 +598,7 @@ const TaskOutcomeCard: React.FC<{ task: SlotTask; onChange: (o: TaskOutcome) => 
                     key={q}
                     type="button"
                     onClick={() => onChange({ ...o, quantity: q })}
-                    className={`min-h-[48px] rounded-xl border-2 px-4 text-[16px] font-semibold ${o.quantity === q ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white'}`}
+                    className={`min-h-[48px] rounded-xl border-2 px-4 text-[16px] font-semibold ${o.quantity === q ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white'}`}
                   >
                     {q}
                   </button>
@@ -633,7 +633,7 @@ const TaskOutcomeCard: React.FC<{ task: SlotTask; onChange: (o: TaskOutcome) => 
                     type="button"
                     aria-pressed={on}
                     onClick={() => onChange({ kind: 'signed', productIds: on ? o.productIds.filter(x => x !== p.id) : [...o.productIds, p.id] })}
-                    className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold ${on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white'}`}
+                    className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold ${on ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white'}`}
                   >
                     {p.name}
                   </button>

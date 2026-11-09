@@ -137,18 +137,18 @@ export const DayView: React.FC = () => {
   const dragLabel = (slot: PlanSlot): { text: string; tone: string } | null => {
     if (!drag || drag.id !== slot.id) return null;
     const intent = intentFor(drag);
-    if (intent.mode === 'none') return { text: 'Drag a little to change the time · further to swap', tone: 'bg-slate-800' };
+    if (intent.mode === 'none') return { text: 'Drag a little to change the time · further to swap', tone: 'bg-ink-2' };
     if (intent.mode === 'swap') {
       const other = byId.get((intent.direction === 'up' ? drag.aboveId : drag.belowId)!);
-      return { text: `↕ Release to swap with ${other?.target.name ?? 'the next stop'}`, tone: 'bg-violet-700' };
+      return { text: `↕ Release to swap with ${other?.target.name ?? 'the next stop'}`, tone: 'bg-solid-violet' };
     }
     const p = nudgePreview(slot, intent.minutes);
     const mins = Math.abs(intent.minutes);
     const what = `${mins >= 60 && mins % 60 === 0 ? `${mins / 60} hr` : `${mins} min`} ${intent.minutes < 0 ? 'earlier' : 'later'}`;
-    if (p.actual !== p.desired) return { text: `Earliest possible: ${format12h(p.actual)}`, tone: 'bg-amber-600' };
+    if (p.actual !== p.desired) return { text: `Earliest possible: ${format12h(p.actual)}`, tone: 'bg-solid-amber' };
     return {
       text: `${format12h(p.actual)} · ${what}${p.pushed ? ` · moves ${p.pushed} later stop${p.pushed === 1 ? '' : 's'}` : ''}${p.late ? ' · overlaps a set time' : ''}`,
-      tone: p.late ? 'bg-amber-600' : 'bg-blue-700'
+      tone: p.late ? 'bg-solid-amber' : 'bg-brand-hover'
     };
   };
 
@@ -224,7 +224,7 @@ export const DayView: React.FC = () => {
           style={dragging ? { transform: `translateY(${drag!.dy}px)`, zIndex: 30 } : undefined}
         >
           {label && (
-            <div className={`pointer-events-none absolute -top-11 left-1/2 z-40 -translate-x-1/2 whitespace-nowrap rounded-xl px-3 py-2 text-[15px] font-semibold text-white shadow-lg ${label.tone}`} role="status">
+            <div className={`pointer-events-none absolute -top-11 left-1/2 z-40 -translate-x-1/2 whitespace-nowrap rounded-xl px-3 py-2 text-[15px] font-semibold text-onaccent shadow-lg ${label.tone}`} role="status">
               {label.text}
             </div>
           )}
@@ -371,7 +371,7 @@ export const DayView: React.FC = () => {
             type="button"
             aria-label="Add to my plan"
             onClick={() => openSheet({ kind: 'add', preset: { date, nonce: Date.now() } })}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-white shadow-xl active:scale-95"
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-brand text-onaccent shadow-xl active:scale-95"
           >
             <Plus className="h-8 w-8" />
           </button>
@@ -428,7 +428,7 @@ const DaySummary: React.FC<{ layout: DayLayout; slots: PlanSlot[] }> = ({ layout
       {layout.hasInPerson && layout.leaveBy !== undefined && !isPast ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand text-onaccent">
               <Car className="h-6 w-6" />
             </div>
             <div>
@@ -565,7 +565,7 @@ const NextCard: React.FC<{ sequence: PlanSlot[]; messages: PlanSlot[]; layout: D
             target="_blank"
             rel="noreferrer"
             onClick={() => updateSlot(target.id, { leftAt: new Date().toISOString() }, { undoable: false })}
-            className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-[17px] font-semibold text-white shadow-sm hover:bg-blue-700"
+            className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[17px] font-semibold text-onaccent shadow-sm hover:bg-brand-hover"
           >
             <MapPin className="h-5 w-5" /> Start driving
           </a>
@@ -579,7 +579,7 @@ const NextCard: React.FC<{ sequence: PlanSlot[]; messages: PlanSlot[]; layout: D
       <>
         <a
           href={`tel:${contact?.phone ?? ''}`}
-          className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-[17px] font-semibold text-white shadow-sm hover:bg-blue-700"
+          className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[17px] font-semibold text-onaccent shadow-sm hover:bg-brand-hover"
         >
           <Phone className="h-5 w-5" /> Call now
         </a>
@@ -595,7 +595,7 @@ const NextCard: React.FC<{ sequence: PlanSlot[]; messages: PlanSlot[]; layout: D
           href="https://meet.google.com/new"
           target="_blank"
           rel="noreferrer"
-          className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-[17px] font-semibold text-white shadow-sm hover:bg-blue-700"
+          className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[17px] font-semibold text-onaccent shadow-sm hover:bg-brand-hover"
         >
           <Video className="h-5 w-5" /> Join meeting
         </a>
@@ -616,7 +616,7 @@ const NextCard: React.FC<{ sequence: PlanSlot[]; messages: PlanSlot[]; layout: D
           href={href}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-[17px] font-semibold text-white shadow-sm hover:bg-blue-700"
+          className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[17px] font-semibold text-onaccent shadow-sm hover:bg-brand-hover"
         >
           {target.how === 'email' ? <Mail className="h-5 w-5" /> : <Send className="h-5 w-5" />}
           {target.how === 'email' ? 'Review & send' : 'Send text'}

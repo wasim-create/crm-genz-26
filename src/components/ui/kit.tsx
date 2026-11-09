@@ -41,12 +41,12 @@ export const SectionTitle: React.FC<{ children: React.ReactNode; right?: React.R
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'attention';
 
 const BUTTON: Record<ButtonVariant, string> = {
-  primary: 'bg-blue-600 text-white hover:bg-blue-700 shadow-xs disabled:bg-slate-300',
+  primary: 'bg-brand text-onaccent hover:bg-brand-hover shadow-xs disabled:bg-slate-300',
   secondary: 'bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 disabled:text-slate-400',
   ghost: 'bg-transparent text-slate-700 hover:bg-slate-100',
   danger: 'bg-white text-rose-700 border border-rose-300 hover:bg-rose-50',
-  success: 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs',
-  attention: 'bg-rose-600 text-white hover:bg-rose-700'
+  success: 'bg-success text-onaccent hover:bg-success-hover shadow-xs',
+  attention: 'bg-danger text-onaccent hover:bg-danger-hover'
 };
 
 export const Btn: React.FC<
@@ -164,7 +164,7 @@ export function Switch<T extends string>({ value, options, onChange, label }: { 
 
 /** A simple centred dialog. Click outside or Cancel to close. */
 export const Dialog: React.FC<{ title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }> = ({ title, onClose, children, wide }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label={title} onClick={e => { e.stopPropagation(); onClose(); }}>
+  <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-scrim/50 p-4" role="dialog" aria-modal="true" aria-label={title} onClick={e => { e.stopPropagation(); onClose(); }}>
     <Panel className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'} space-y-4 p-6 shadow-2xl`} onClick={e => e.stopPropagation()}>
       <h2 className="text-[18px] font-bold text-slate-900">{title}</h2>
       {children}
@@ -302,15 +302,15 @@ export const Toolbar: React.FC<{
               className={`inline-flex min-h-[32px] cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition ${
                 c.active
                   ? c.tone === 'attention'
-                    ? 'border-rose-600 bg-rose-600 text-white'
-                    : 'border-blue-600 bg-blue-600 text-white'
+                    ? 'border-rose-600 bg-danger text-onaccent'
+                    : 'border-blue-600 bg-brand text-onaccent'
                   : c.tone === 'attention' && c.count
                     ? 'border-rose-200 bg-rose-50 text-rose-800 hover:border-rose-400'
                     : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
               }`}
             >
               {c.label}
-              {c.count !== undefined && <span className={`rounded-full px-1.5 text-[12px] ${c.active ? 'bg-white/25' : 'bg-slate-100 text-slate-700'}`}>{c.count}</span>}
+              {c.count !== undefined && <span className={`rounded-full px-1.5 text-[12px] ${c.active ? 'bg-onaccent/25' : 'bg-slate-100 text-slate-700'}`}>{c.count}</span>}
             </button>
           ))}
         </div>

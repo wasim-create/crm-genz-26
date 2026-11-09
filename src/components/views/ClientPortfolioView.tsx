@@ -247,7 +247,7 @@ export const ClientPortfolioView: React.FC<ClientPortfolioViewProps> = ({ dealer
                   key={qty}
                   type="button"
                   onClick={() => setTopupQty(qty)}
-                  className={`min-h-[40px] cursor-pointer rounded-xl border-2 px-3 text-[14px] font-semibold ${topupQty === qty ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white'}`}
+                  className={`min-h-[40px] cursor-pointer rounded-xl border-2 px-3 text-[14px] font-semibold ${topupQty === qty ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white'}`}
                 >
                   {qty}
                 </button>

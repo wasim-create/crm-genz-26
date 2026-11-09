@@ -83,7 +83,7 @@ export const PerformanceGamificationView: React.FC<PerformanceGamificationViewPr
             <div className="text-[13px] font-medium text-slate-600">Level {me.level}</div>
             <div className="text-[22px] font-extrabold leading-tight text-slate-900">{me.levelTitle}</div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, me.levelProgressPercent)}%` }} />
+              <div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(100, me.levelProgressPercent)}%` }} />
             </div>
             <div className="mt-1 text-[13px] text-slate-500">{me.pointsToNextLevel > 0 ? `${me.pointsToNextLevel.toLocaleString()} points to the next level` : 'Top level'}</div>
           </Panel>
@@ -214,7 +214,7 @@ export const PerformanceGamificationView: React.FC<PerformanceGamificationViewPr
                   <p className="text-[14px] text-slate-600">{b.description}</p>
                   {!b.unlocked && (
                     <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                      <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, (b.currentProgress / b.targetProgress) * 100)}%` }} />
+                      <div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(100, (b.currentProgress / b.targetProgress) * 100)}%` }} />
                     </div>
                   )}
                 </Panel>

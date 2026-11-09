@@ -36,3 +36,9 @@ Also:
 There is one way to log a visit, call, Meet, email or text: My Plan's "How did it go?" form.
 From anywhere else, call `onLogVisit(dealership)`; it opens that form (today's planned stop if there is one, otherwise an unplanned one).
 Don't build a second visit form.
+
+## Light and dark mode
+
+- Choice is Auto (follows the device), Light or Dark. Top-bar menu and Settings → Appearance & data. Saved per device in `apexdrive_theme`; `src/utils/theme.ts` holds the logic.
+- Write screens with the normal palette (`bg-white`, `text-slate-700`, `bg-amber-50`). `src/index.css` swaps the palette values in dark mode, so nothing is written twice. Do not hard-code hex colours.
+- Colours that must not flip have their own names: `bg-brand`, `bg-danger`, `bg-success` (solid buttons), `text-onaccent` (text on them, never `text-white`), `bg-ink` / `bg-ink-2` (dark toast), `bg-scrim` (dialog backdrop).

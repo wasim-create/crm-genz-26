@@ -1,4 +1,5 @@
 import React from 'react';
+import { ThemeMenu } from '../ui/ThemeToggle';
 import { User, UserRole, GamificationProfile } from '../../types/crm';
 import { 
   Compass, 
@@ -57,8 +58,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'manager': return 'bg-purple-50 text-purple-700 border-purple-200';
       case 'finance': return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'executive': return 'bg-rose-50 text-rose-700 border-rose-200';
-      case 'owner': return 'bg-slate-900 text-white border-slate-700';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
+      case 'owner': return 'bg-ink text-onaccent border-ink-2';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
 
@@ -75,7 +76,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 md:px-5">
       <div className="flex min-w-0 items-center gap-3 md:gap-5">
         <div className="flex shrink-0 items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-onaccent">
             <Compass className="h-5 w-5" />
           </div>
           <span className="hidden text-[18px] font-extrabold tracking-tight text-slate-900 sm:inline">ApexDrive</span>
@@ -110,10 +111,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
             <span className="hidden sm:inline">{profile.points.toLocaleString()} pts</span>
             <span className="hidden h-1.5 w-12 overflow-hidden rounded-full bg-slate-100 lg:block" aria-hidden>
-              <span className="block h-full rounded-full bg-blue-600" style={{ width: `${Math.min(100, (profile.pointsToday / Math.max(1, profile.dailyTarget)) * 100)}%` }} />
+              <span className="block h-full rounded-full bg-brand" style={{ width: `${Math.min(100, (profile.pointsToday / Math.max(1, profile.dailyTarget)) * 100)}%` }} />
             </span>
           </button>
         )}
+
+        <ThemeMenu />
 
         <button
           type="button"
@@ -126,7 +129,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
 
         <label className="flex min-h-[40px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 pl-1.5 pr-1">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[12px] font-bold text-white" aria-hidden>
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-2 text-[12px] font-bold text-onaccent" aria-hidden>
             {currentUser.firstName[0]}
             {currentUser.lastName[0]}
           </span>

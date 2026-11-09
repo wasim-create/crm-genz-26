@@ -247,7 +247,7 @@ export default function App() {
 
   if (!currentUser) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-slate-900 text-white font-mono text-sm">
+      <div className="h-screen w-screen flex items-center justify-center bg-ink text-onaccent font-mono text-sm">
         Loading ApexDrive CRM...
       </div>
     );
@@ -576,16 +576,16 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 flex flex-col antialiased text-slate-800">
       {/* Toast Notification Container with Live Points Burst */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-100 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in slide-in-from-bottom-2 duration-200 border border-slate-700">
+        <div className="fixed bottom-5 right-5 z-100 bg-ink text-onaccent px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in slide-in-from-bottom-2 duration-200 border border-ink-2">
           {toastMessage.points ? (
-            <span className="w-6 h-6 rounded-lg bg-amber-500 text-slate-900 font-mono font-black text-xs flex items-center justify-center shrink-0">
+            <span className="w-6 h-6 rounded-lg bg-amber-500 text-darkink font-mono font-black text-xs flex items-center justify-center shrink-0">
               +{toastMessage.points}
             </span>
           ) : (
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           )}
           <span>{toastMessage.text}</span>
-          <button type="button" onClick={() => setToastMessage(null)} className="ml-2 text-slate-400 hover:text-white">
+          <button type="button" onClick={() => setToastMessage(null)} className="ml-2 text-slate-400 hover:text-onaccent">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>

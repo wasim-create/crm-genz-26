@@ -114,8 +114,8 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
   // Product adoption across clients (from what each client actually signed)
   const clientList = dealerships.filter(d => d.stage === 'Client' || d.stage === 'Onboarding');
   const ADOPTION = [
-    { id: 'prod_3', name: 'Keyfetch', color: 'bg-blue-600' },
-    { id: 'prod_1', name: 'Vehicle Service Contract (VSC)', color: 'bg-emerald-600' },
+    { id: 'prod_3', name: 'Keyfetch', color: 'bg-brand' },
+    { id: 'prod_1', name: 'Vehicle Service Contract (VSC)', color: 'bg-success' },
     { id: 'prod_4', name: 'GAP', color: 'bg-amber-600' },
     { id: 'prod_10', name: 'Ceramic Pro (new launch)', color: 'bg-purple-600' },
     { id: 'prod_5', name: 'Tire & Wheel Protection', color: 'bg-teal-600' },
@@ -316,7 +316,7 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
                     </span>
                   </div>
                   <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full rounded-full bg-blue-600" style={{ width: `${pct}%` }} />
+                    <div className="h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               );

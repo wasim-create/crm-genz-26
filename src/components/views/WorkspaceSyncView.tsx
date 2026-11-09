@@ -56,17 +56,17 @@ export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-scrim/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
+        <div className="p-6 bg-ink text-onaccent flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold">
+            <div className="w-9 h-9 rounded-xl bg-brand flex items-center justify-center text-onaccent font-bold">
               <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
             </div>
             <div>
               <h3 className="font-bold text-lg">Google sync</h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-onink-muted">
                 Emails, meetings and calendar events matched to your dealerships
               </p>
             </div>
@@ -77,7 +77,7 @@ export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
               type="button"
               onClick={onSyncNow}
               disabled={isSyncing}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-brand hover:bg-brand-hover disabled:opacity-50 text-onaccent text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
               <span>{isSyncing ? 'Syncing…' : 'Sync now'}</span>
@@ -85,7 +85,7 @@ export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center font-bold"
+              className="w-8 h-8 rounded-full bg-ink-2 text-onink-muted hover:text-onaccent flex items-center justify-center font-bold"
             >
               ✕
             </button>
@@ -198,7 +198,7 @@ export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
                       <button type="button" className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold">
                         Ignore
                       </button>
-                      <button type="button" className="px-3 py-1 bg-blue-600 text-white rounded-lg font-bold">
+                      <button type="button" className="px-3 py-1 bg-brand text-onaccent rounded-lg font-bold">
                         Link to Dealership
                       </button>
                     </div>

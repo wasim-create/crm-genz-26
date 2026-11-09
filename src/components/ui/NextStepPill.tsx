@@ -23,7 +23,7 @@ export const NextStepPill: React.FC<{ state?: NextStepState; onPlan?: () => void
             e.stopPropagation();
             onPlan();
           }}
-          className="shrink-0 cursor-pointer rounded-md bg-rose-600 px-2 py-0.5 text-[12px] font-bold text-white hover:bg-rose-700"
+          className="shrink-0 cursor-pointer rounded-md bg-danger px-2 py-0.5 text-[12px] font-bold text-onaccent hover:bg-danger-hover"
         >
           Plan it
         </button>

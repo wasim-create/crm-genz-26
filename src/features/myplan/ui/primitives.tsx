@@ -62,7 +62,7 @@ export const Button: React.FC<
   React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: 'md' | 'lg'; icon?: React.ReactNode; block?: boolean }
 > = ({ variant = 'secondary', size = 'md', icon, block, className = '', children, ...rest }) => {
   const v: Record<ButtonVariant, string> = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm disabled:bg-slate-300',
+    primary: 'bg-brand text-onaccent hover:bg-brand-hover shadow-sm disabled:bg-slate-300',
     secondary: 'bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 disabled:text-slate-400',
     ghost: 'bg-transparent text-slate-700 hover:bg-slate-100',
     danger: 'bg-white text-rose-700 border border-rose-300 hover:bg-rose-50',
@@ -162,7 +162,7 @@ export const ChoiceCard: React.FC<{
       <span className="block text-[17px] font-semibold text-slate-900">{title}</span>
       {subtitle && <span className="block text-[14px] text-slate-500">{subtitle}</span>}
     </span>
-    {selected && <span className="shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[12px] font-bold text-white">Chosen</span>}
+    {selected && <span className="shrink-0 rounded-full bg-brand px-2 py-0.5 text-[12px] font-bold text-onaccent">Chosen</span>}
   </button>
 );
 
@@ -212,7 +212,7 @@ export const Segmented = <T extends string>({
         aria-checked={value === o.value}
         onClick={() => onChange(o.value)}
         className={`min-h-[44px] rounded-xl border-2 px-3.5 text-[15px] font-semibold transition ${
-          value === o.value ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+          value === o.value ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
         }`}
       >
         {o.label}

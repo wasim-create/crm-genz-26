@@ -269,16 +269,16 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
       {state.toast && (
         <div
           role="status"
-          className="fixed left-1/2 top-3 z-[70] flex w-[min(92vw,560px)] -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-[16px] text-white shadow-2xl"
+          className="fixed left-1/2 top-3 z-[70] flex w-[min(92vw,560px)] -translate-x-1/2 items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-[16px] text-onaccent shadow-2xl"
         >
-          {state.toast.points ? <span className="rounded-lg bg-amber-500 px-2 font-bold text-slate-900">+{state.toast.points}</span> : null}
+          {state.toast.points ? <span className="rounded-lg bg-amber-500 px-2 font-bold text-darkink">+{state.toast.points}</span> : null}
           <span className="flex-1">{state.toast.text}</span>
           {state.toast.canUndo && (
-            <button type="button" onClick={undo} className="inline-flex min-h-[44px] items-center gap-1 rounded-xl bg-white/15 px-3 font-bold text-amber-300 hover:bg-white/25">
+            <button type="button" onClick={undo} className="inline-flex min-h-[44px] items-center gap-1 rounded-xl bg-onaccent/15 px-3 font-bold text-onink-accent hover:bg-onaccent/25">
               <Undo2 className="h-4 w-4" /> Undo
             </button>
           )}
-          <button type="button" aria-label="Dismiss" onClick={dismissToast} className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-300 hover:bg-white/10">
+          <button type="button" aria-label="Dismiss" onClick={dismissToast} className="flex h-11 w-11 items-center justify-center rounded-xl text-onink-muted hover:bg-onaccent/10">
             <X className="h-5 w-5" />
           </button>
         </div>
