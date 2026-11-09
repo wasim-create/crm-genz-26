@@ -480,7 +480,7 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
                       aria-pressed={batchProducts.includes(p.id)}
                       onClick={() => setBatchProducts(b => (b.includes(p.id) ? b.filter(x => x !== p.id) : [...b, p.id]))}
                       className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold ${
-                        batchProducts.includes(p.id) ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-700'
+                        batchProducts.includes(p.id) ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white text-slate-700'
                       }`}
                     >
                       {p.name}
@@ -657,10 +657,10 @@ const Picker: React.FC<{
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={`min-h-[52px] shrink-0 rounded-xl border-2 px-4 text-[16px] font-bold transition ${
-                tab === t ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700'
+                tab === t ? 'border-ink bg-ink text-onaccent' : 'border-slate-200 bg-white text-slate-700'
               }`}
             >
-              {TAB_LABEL[t]} <span className={`ml-1 rounded-full px-2 text-[14px] ${tab === t ? 'bg-white/20' : 'bg-slate-100'}`}>{counts[t]}</span>
+              {TAB_LABEL[t]} <span className={`ml-1 rounded-full px-2 text-[14px] ${tab === t ? 'bg-onaccent/20' : 'bg-slate-100'}`}>{counts[t]}</span>
             </button>
           ))}
         </div>
@@ -710,7 +710,7 @@ const Picker: React.FC<{
                 aria-pressed={quick === f.id}
                 onClick={() => setQuick(quick === f.id ? null : f.id)}
                 className={`min-h-[40px] rounded-full border px-3 text-[14px] font-semibold ${
-                  quick === f.id ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-700'
+                  quick === f.id ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-300 bg-white text-slate-700'
                 }`}
               >
                 {f.label}
@@ -780,7 +780,7 @@ const Picker: React.FC<{
                   className="flex w-full items-start gap-3 rounded-2xl border-2 border-slate-200 bg-white p-3 text-left hover:border-blue-400"
                 >
                   {body}
-                  <span className="self-center rounded-xl bg-blue-600 px-3 py-2 text-[15px] font-semibold text-white">Choose</span>
+                  <span className="self-center rounded-xl bg-brand px-3 py-2 text-[15px] font-semibold text-onaccent">Choose</span>
                 </button>
               );
             })}

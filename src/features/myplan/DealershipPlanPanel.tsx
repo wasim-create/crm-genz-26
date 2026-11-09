@@ -42,7 +42,7 @@ export const DealershipPlanPanel: React.FC<{ dealership: Dealership; user: User 
       )}
       {aps.length > 0 && (
         <div>
-          <div className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
+          <div className="mb-1 flex items-center gap-1.5 text-[13px] font-semibold text-slate-600">
             <ListTodo className="h-3.5 w-3.5" /> Action points ({open.length} open)
           </div>
           <div className="space-y-1">

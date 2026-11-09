@@ -1,21 +1,8 @@
-import React, { useState } from 'react';
-import { GameRule, GamificationProfile, PointsLedgerEntry, ProductBonus, ProductCatalogItem, User } from '../../types/crm';
-import {
-  Gamepad2,
-  Sparkles,
-  Flame,
-  Plus,
-  CheckCircle2,
-  Calendar,
-  Layers,
-  Sliders,
-  Target,
-  Trophy,
-  RotateCcw,
-  Zap,
-  Play,
-  ShieldAlert
-} from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Gamepad2, Plus } from 'lucide-react';
+import { GameRule, GamificationProfile, PointsLedgerEntry, ProductBonus, ProductCatalogItem, User, UserRole } from '../../types/crm';
+import { Badge, Btn, Dialog, EmptyState, Page, PageHeader, Panel, SectionTitle, Switch, Toolbar } from '../ui/kit';
+import { formatShortDay, matches, plural } from '../../utils/format';
 
 interface GameRulesConsoleViewProps {
   gameRules: GameRule[];
@@ -30,321 +17,359 @@ interface GameRulesConsoleViewProps {
   pointsLedger?: PointsLedgerEntry[];
 }
 
-export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
-  gameRules,
-  productBonuses,
-  catalog,
-  currentUser,
-  users = [],
-  gamification = {},
-  pointsLedger = [],
-  onUpdateRule,
-  onAddProductBonus,
-  onToggleBonus
-}) => {
-  const [activeTab, setActiveTab] = useState<'points_table' | 'product_bonuses' | 'levels_streaks' | 'simulator'>('product_bonuses');
-  
-  // Product bonus creation form
-  const [showBonusModal, setShowBonusModal] = useState(false);
-  const [bonusProductId, setBonusProductId] = useState(catalog[9]?.id || catalog[0]?.id || 'prod_10');
-  const [bonusPoints, setBonusPoints] = useState(150);
-  const [bonusMultiplier, setBonusMultiplier] = useState(1);
-  const [bonusActionType, setBonusActionType] = useState<'upsell_won' | 'signed' | 'interest_recorded'>('upsell_won');
-  const [bonusTargetType, setBonusTargetType] = useState<'all' | 'region' | 'team'>('all');
+const LEVELS = [
+  { level: 1, title: 'Rookie', min: 0 },
+  { level: 2, title: 'Road Warrior', min: 500 },
+  { level: 3, title: 'Lot Legend', min: 1200 },
+  { level: 4, title: 'Closer', min: 2000 },
+  { level: 5, title: 'Territory Boss', min: 3500 },
+  { level: 6, title: 'Hall of Fame', min: 5000 }
+];
 
+const ACTION_WORD: Record<ProductBonus['actionTypes'][number], string> = {
+  upsell_won: 'an upsell is won',
+  signed: 'it’s signed at sign-up',
+  interest_recorded: 'interest is recorded'
+};
+const ROLE_WORD: Partial<Record<UserRole, string>> = { new_rep: 'New reps', veteran_rep: 'Reps', team_lead: 'Team leads', manager: 'Managers', owner: 'Owners' };
+const rolesText = (roles: UserRole[]) => {
+  const reps = ['new_rep', 'veteran_rep', 'team_lead'].every(r => roles.includes(r as UserRole));
+  const rest = roles.filter(r => !reps || !['new_rep', 'veteran_rep', 'team_lead'].includes(r)).map(r => ROLE_WORD[r] ?? r);
+  return [...(reps ? ['All reps'] : []), ...rest].join(', ');
+};
+const today = () => new Date().toISOString().slice(0, 10);
+const bonusStatus = (b: ProductBonus): { label: string; tone: 'green' | 'neutral' | 'amber' } =>
+  !b.isActive ? { label: 'Paused', tone: 'neutral' } : b.endDate < today() ? { label: 'Ended', tone: 'neutral' } : b.startDate > today() ? { label: 'Starts soon', tone: 'amber' } : { label: 'Live', tone: 'green' };
+
+export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({ gameRules, productBonuses, catalog, currentUser, users = [], gamification = {}, pointsLedger = [], onUpdateRule, onAddProductBonus, onToggleBonus }) => {
   const canEditRules = currentUser.role === 'owner' || currentUser.role === 'executive';
   const canManageBonuses = canEditRules || currentUser.role === 'manager';
+  const [tab, setTab] = useState<'bonuses' | 'actions' | 'levels' | 'try'>('bonuses');
+  const [adding, setAdding] = useState(false);
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState('all');
 
-  const handleCreateBonus = () => {
-    const prod = catalog.find(p => p.id === bonusProductId);
-    const newBonus: ProductBonus = {
-      id: `pb_${Date.now()}`,
-      productId: bonusProductId,
-      productName: prod?.name || 'Selected Product',
-      bonusPoints: bonusMultiplier > 1 ? 0 : bonusPoints,
-      multiplier: bonusMultiplier > 1 ? bonusMultiplier : undefined,
-      actionTypes: [bonusActionType],
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10),
-      targetType: bonusTargetType,
-      isActive: true
-    };
-    onAddProductBonus(newBonus);
-    setShowBonusModal(false);
-  };
+  const rules = gameRules.filter(r => (cat === 'all' || r.category === cat) && matches(q, r.label, r.category));
+  const reps = users.filter(u => ['new_rep', 'veteran_rep', 'team_lead'].includes(u.role) && gamification[u.id]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Gamepad2 className="w-5 h-5 text-indigo-600" />
-            <span>Game Rules & Incentive Console</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Configure scorable field actions, create launch multipliers on any catalog product, and tune territory streak targets.
-          </p>
-        </div>
+    <Page>
+      <PageHeader
+        icon={<Gamepad2 className="h-6 w-6" />}
+        title="Points rules"
+        subtitle="What each piece of field work is worth, bonuses running now, and the levels reps climb."
+        actions={
+          canManageBonuses && (
+            <Btn variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>
+              Add a product bonus
+            </Btn>
+          )
+        }
+      />
 
-        {canManageBonuses && (
-          <button
-            type="button"
-            onClick={() => setShowBonusModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-linear-to-r from-orange-600 to-rose-600 hover:from-orange-700 hover:to-rose-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Create Product Bonus</span>
-          </button>
-        )}
-      </div>
+      <Switch
+        label="Section"
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'bonuses', label: `Bonuses (${productBonuses.filter(b => bonusStatus(b).label === 'Live').length} live)` },
+          { value: 'actions', label: 'What earns points' },
+          { value: 'levels', label: 'Levels & streaks' },
+          ...(canManageBonuses ? [{ value: 'try' as const, label: 'Try a change' }] : [])
+        ]}
+      />
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 text-xs font-bold">
-        {[
-          { id: 'product_bonuses', label: '🔥 Active Product Bonuses', count: productBonuses.filter(b => b.isActive).length },
-          { id: 'points_table', label: 'Scorable Actions Table', count: gameRules.length },
-          { id: 'levels_streaks', label: 'Levels & Streak Thresholds' },
-          { id: 'simulator', label: 'Leaderboard Simulation' }
-        ].map(t => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setActiveTab(t.id as any)}
-            className={`py-3 px-4 border-b-2 capitalize transition-colors cursor-pointer flex items-center gap-1.5 ${
-              activeTab === t.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500'
-            }`}
-          >
-            <span>{t.label}</span>
-            {t.count !== undefined && (
-              <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-mono">
-                {t.count}
-              </span>
-            )}
-          </button>
+      {tab === 'bonuses' &&
+        (productBonuses.length === 0 ? (
+          <EmptyState title="No bonuses yet" action={canManageBonuses && <Btn variant="primary" onClick={() => setAdding(true)}>Add a product bonus</Btn>} />
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {[...productBonuses]
+              .sort((a, b) => Number(bonusStatus(b).label === 'Live') - Number(bonusStatus(a).label === 'Live'))
+              .map(b => {
+                const st = bonusStatus(b);
+                return (
+                  <Panel key={b.id} className={`space-y-2 p-4 ${st.label === 'Live' ? '' : 'bg-slate-50'}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <Badge tone={st.tone}>{st.label}</Badge>
+                      {canManageBonuses && (
+                        <Btn size="sm" variant="ghost" onClick={() => onToggleBonus(b.id)}>
+                          {b.isActive ? 'Pause' : 'Turn on'}
+                        </Btn>
+                      )}
+                    </div>
+                    <div className="text-[17px] font-bold text-slate-900">{b.productName}</div>
+                    <div className="text-[22px] font-extrabold text-emerald-700">{b.multiplier ? `${b.multiplier}× points` : `+${b.bonusPoints} points`}</div>
+                    <p className="text-[14px] text-slate-600">
+                      When {b.actionTypes.map(a => ACTION_WORD[a]).join(' or ')} · {b.targetType === 'all' ? 'everyone' : b.targetValue ?? b.targetType}
+                    </p>
+                    <p className="text-[13px] text-slate-500">
+                      {formatShortDay(b.startDate)} – {formatShortDay(b.endDate)}
+                    </p>
+                  </Panel>
+                );
+              })}
+          </div>
         ))}
-      </div>
 
-      {/* TAB 1: PRODUCT BONUSES (Section 6) */}
-      {activeTab === 'product_bonuses' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {productBonuses.map(b => (
-              <div 
-                key={b.id}
-                className={`p-4 rounded-2xl border transition-all ${
-                  b.isActive 
-                    ? 'bg-linear-to-br from-rose-50/50 via-white to-amber-50/50 border-rose-200 shadow-2xs' 
-                    : 'bg-slate-50 border-slate-200 opacity-60'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 bg-rose-100 px-2 py-0.5 rounded">
-                    {b.targetType === 'all' ? 'All Territories' : b.targetType}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onToggleBonus(b.id)}
-                    className="text-[11px] font-bold text-slate-500 hover:text-slate-900 cursor-pointer"
-                  >
-                    {b.isActive ? 'Deactivate' : 'Activate'}
-                  </button>
-                </div>
-
-                <div className="my-3">
-                  <h4 className="font-black text-slate-900 text-base">{b.productName}</h4>
-                  <div className="mt-1 flex items-center gap-2">
-                    {b.multiplier ? (
-                      <span className="text-xl font-black font-mono text-rose-600">
-                        {b.multiplier}x Points
-                      </span>
-                    ) : (
-                      <span className="text-xl font-black font-mono text-emerald-600">
-                        +{b.bonusPoints} Bonus Pts
-                      </span>
-                    )}
-                    <span className="text-xs text-slate-500">on {b.actionTypes.join(', ')}</span>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
-                  <span>Valid: {b.startDate} to {b.endDate}</span>
-                  <span className="font-bold text-orange-600 flex items-center gap-0.5">
-                    <Flame className="w-3 h-3 fill-current" /> Live
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: POINTS TABLE */}
-      {activeTab === 'points_table' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-                <th className="p-3">Category</th>
-                <th className="p-3">Action Description</th>
-                <th className="p-3">Base Points</th>
-                <th className="p-3">Daily Cap</th>
-                <th className="p-3">Status</th>
-                <th className="p-3 text-right">Applicable Roles</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {gameRules.map(r => (
-                <tr key={r.id} className="hover:bg-slate-50/60">
-                  <td className="p-3 font-semibold text-slate-500">{r.category}</td>
-                  <td className="p-3 font-bold text-slate-900">{r.label}</td>
-                  <td className="p-3 font-mono font-bold text-emerald-600">+{r.basePoints} pts</td>
-                  <td className="p-3 font-mono text-slate-500">{r.dailyCap ? `${r.dailyCap} pts/day` : 'No Cap'}</td>
-                  <td className="p-3">
-                    <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-800">
-                      Active
-                    </span>
-                  </td>
-                  <td className="p-3 text-right text-slate-500 font-mono text-[10px]">
-                    {r.applicableRoles.join(', ')}
-                  </td>
+      {tab === 'actions' && (
+        <>
+          <Toolbar
+            search={{ value: q, onChange: setQ, placeholder: 'Search actions' }}
+            filters={[{ id: 'cat', allLabel: 'All kinds', value: cat, onChange: setCat, options: [...new Set(gameRules.map(r => r.category))].map(c => ({ value: c, label: c, count: gameRules.filter(r => r.category === c).length })) }]}
+            count={plural(rules.length, 'action')}
+            onClear={() => {
+              setQ('');
+              setCat('all');
+            }}
+          />
+          <Panel className="overflow-x-auto">
+            <table className="w-full text-left text-[14px]">
+              <thead>
+                <tr className="border-b border-slate-200 text-[13px] font-semibold text-slate-600">
+                  <th className="px-4 py-3">Action</th>
+                  <th className="px-4 py-3">Kind</th>
+                  <th className="px-4 py-3 text-right">Points</th>
+                  <th className="px-4 py-3 text-right">Most per day</th>
+                  <th className="px-4 py-3">Who</th>
+                  {canEditRules && <th className="px-4 py-3">On</th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rules.map(r => (
+                  <tr key={r.id} className={r.enabled ? '' : 'text-slate-400'}>
+                    <td className="px-4 py-3 font-semibold text-slate-900">{r.label}</td>
+                    <td className="px-4 py-3 text-slate-600">{r.category}</td>
+                    <td className="px-4 py-3 text-right">
+                      {canEditRules ? (
+                        <input
+                          type="number"
+                          min={0}
+                          aria-label={`Points for ${r.label}`}
+                          value={r.basePoints}
+                          onChange={e => onUpdateRule({ ...r, basePoints: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                          className="min-h-[36px] w-20 rounded-lg border border-slate-300 px-2 text-right font-semibold"
+                        />
+                      ) : (
+                        <span className="font-bold text-emerald-700">+{r.basePoints}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-600">{r.dailyCap ? r.dailyCap : 'No limit'}</td>
+                    <td className="px-4 py-3 text-slate-600">{rolesText(r.applicableRoles)}</td>
+                    {canEditRules && (
+                      <td className="px-4 py-3">
+                        <input type="checkbox" aria-label={`${r.label} on`} checked={r.enabled} onChange={e => onUpdateRule({ ...r, enabled: e.target.checked })} className="h-5 w-5 accent-blue-600" />
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+          {!canEditRules && <p className="text-[13px] text-slate-500">Only owners can change these points.</p>}
+        </>
+      )}
+
+      {tab === 'levels' && (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <Panel className="p-4 lg:col-span-2">
+            <SectionTitle>Levels</SectionTitle>
+            <table className="mt-2 w-full text-left text-[14px]">
+              <thead>
+                <tr className="border-b border-slate-200 text-[13px] font-semibold text-slate-600">
+                  <th className="py-2">Level</th>
+                  <th className="py-2">From</th>
+                  <th className="py-2">Reps there now</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {LEVELS.map(l => {
+                  const here = reps.filter(u => gamification[u.id].level === l.level);
+                  return (
+                    <tr key={l.level}>
+                      <td className="py-2.5 font-semibold text-slate-900">
+                        {l.level} · {l.title}
+                      </td>
+                      <td className="py-2.5 text-slate-700">{l.min.toLocaleString()} pts</td>
+                      <td className="py-2.5 text-slate-700">{here.length ? here.map(u => u.firstName).join(', ') : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Panel>
+          <Panel className="space-y-2 p-4 text-[14px] text-slate-700">
+            <SectionTitle>Streaks</SectionTitle>
+            <p>A streak counts working days in a row with at least one visit, call or Google Meet between 10 AM and 4 PM.</p>
+            <p>Weekends and booked days off don’t break it. A day with no live contact does.</p>
+            <p>The daily target is 100 points; reps see their progress in the top bar.</p>
+          </Panel>
         </div>
       )}
 
-      {/* TAB 3: LEVELS & STREAKS */}
-      {activeTab === 'levels_streaks' && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4 text-xs">
-          <h3 className="font-bold text-sm text-slate-900">Professional Field Sales Levels</h3>
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-            {[
-              { level: 1, title: 'Rookie', min: 0 },
-              { level: 2, title: 'Road Warrior', min: 500 },
-              { level: 3, title: 'Lot Legend', min: 1200 },
-              { level: 4, title: 'Closer', min: 2000 },
-              { level: 5, title: 'Territory Boss', min: 3500 },
-              { level: 6, title: 'Hall of Fame', min: 5000 }
-            ].map(l => (
-              <div key={l.level} className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-center space-y-1">
-                <span className="font-mono font-bold text-indigo-600 block text-[10px]">LEVEL {l.level}</span>
-                <span className="font-bold text-slate-900 block">{l.title}</span>
-                <span className="text-[10px] text-slate-400 font-mono">{l.min}+ pts</span>
-              </div>
+      {tab === 'try' && <TryAChange catalog={catalog} reps={reps} gamification={gamification} pointsLedger={pointsLedger} />}
+
+      {adding && (
+        <AddBonus
+          catalog={catalog}
+          onClose={() => setAdding(false)}
+          onAdd={b => {
+            onAddProductBonus(b);
+            setAdding(false);
+          }}
+        />
+      )}
+    </Page>
+  );
+};
+
+const field = 'mt-1 min-h-[40px] w-full rounded-xl border border-slate-300 bg-white px-3 text-[14px] font-normal';
+const labelCls = 'block text-[14px] font-semibold text-slate-800';
+
+const AddBonus: React.FC<{ catalog: ProductCatalogItem[]; onClose: () => void; onAdd: (b: ProductBonus) => void }> = ({ catalog, onClose, onAdd }) => {
+  const [productId, setProductId] = useState(catalog.find(p => p.isNewLaunch)?.id ?? catalog[0]?.id ?? '');
+  const [kind, setKind] = useState<'points' | 'multiply'>('points');
+  const [points, setPoints] = useState(150);
+  const [mult, setMult] = useState(2);
+  const [action, setAction] = useState<ProductBonus['actionTypes'][number]>('upsell_won');
+  const [start, setStart] = useState(today());
+  const [end, setEnd] = useState(new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10));
+  return (
+    <Dialog title="Add a product bonus" onClose={onClose}>
+      <label className={labelCls}>
+        Product
+        <select value={productId} onChange={e => setProductId(e.target.value)} className={field}>
+          {catalog.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+              {p.isNewLaunch ? ' (new)' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={labelCls}>
+        When
+        <select value={action} onChange={e => setAction(e.target.value as typeof action)} className={field}>
+          <option value="upsell_won">An upsell is won on a client</option>
+          <option value="signed">It’s signed at sign-up</option>
+          <option value="interest_recorded">Interest is recorded on a visit</option>
+        </select>
+      </label>
+      <div>
+        <Switch
+          label="Bonus kind"
+          value={kind}
+          onChange={setKind}
+          options={[
+            { value: 'points', label: 'Extra points' },
+            { value: 'multiply', label: 'Multiply points' }
+          ]}
+        />
+        <input
+          type="number"
+          min={kind === 'points' ? 1 : 2}
+          aria-label={kind === 'points' ? 'Extra points' : 'Multiply by'}
+          value={kind === 'points' ? points : mult}
+          onChange={e => (kind === 'points' ? setPoints(parseInt(e.target.value, 10) || 0) : setMult(parseInt(e.target.value, 10) || 2))}
+          className={`${field} mt-2`}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className={labelCls}>
+          From
+          <input type="date" value={start} onChange={e => setStart(e.target.value)} className={field} />
+        </label>
+        <label className={labelCls}>
+          Until
+          <input type="date" value={end} onChange={e => setEnd(e.target.value)} className={field} />
+        </label>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Btn variant="ghost" onClick={onClose}>
+          Cancel
+        </Btn>
+        <Btn
+          variant="primary"
+          disabled={!productId || end < start}
+          onClick={() =>
+            onAdd({
+              id: `pb_${Date.now()}`,
+              productId,
+              productName: catalog.find(p => p.id === productId)?.name ?? 'Product',
+              bonusPoints: kind === 'points' ? points : 0,
+              multiplier: kind === 'multiply' ? mult : undefined,
+              actionTypes: [action],
+              startDate: start,
+              endDate: end,
+              targetType: 'all',
+              isActive: true
+            })
+          }
+        >
+          Start bonus
+        </Btn>
+      </div>
+    </Dialog>
+  );
+};
+
+const TryAChange: React.FC<{ catalog: ProductCatalogItem[]; reps: User[]; gamification: Record<string, GamificationProfile>; pointsLedger: PointsLedgerEntry[] }> = ({ catalog, reps, gamification, pointsLedger }) => {
+  const [productId, setProductId] = useState(catalog.find(p => p.isNewLaunch)?.id ?? catalog[0]?.id ?? '');
+  const [extra, setExtra] = useState(150);
+  const name = catalog.find(p => p.id === productId)?.name ?? '';
+  const rows = useMemo(() => {
+    const hits = (id: string) => pointsLedger.filter(l => l.userId === id && name && l.description.includes(name)).length;
+    const now = [...reps].sort((a, b) => gamification[b.id].points - gamification[a.id].points);
+    const then = [...reps].sort((a, b) => gamification[b.id].points + hits(b.id) * extra - (gamification[a.id].points + hits(a.id) * extra));
+    return then.map((u, i) => ({ u, before: now.indexOf(u) + 1, after: i + 1, add: hits(u.id) * extra, total: gamification[u.id].points + hits(u.id) * extra }));
+  }, [reps, gamification, pointsLedger, name, extra]);
+  return (
+    <Panel className="space-y-4 p-5">
+      <div>
+        <SectionTitle>What if every {name || 'product'} entry earned extra?</SectionTitle>
+        <p className="text-[14px] text-slate-500">Uses the last 30 days of real points. Nothing changes until you add a bonus.</p>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className={labelCls}>
+          Product
+          <select value={productId} onChange={e => setProductId(e.target.value)} className={field}>
+            {catalog.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: LEADERBOARD SIMULATOR */}
-      {activeTab === 'simulator' && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4 text-xs">
-          <div className="flex items-center gap-2 text-indigo-600 font-bold">
-            <Zap className="w-5 h-5" />
-            <span>Rule Impact Simulator</span>
-          </div>
-          <p className="text-slate-500">
-            Preview how recent leaderboard standings would shift if you increase the Ceramic Pro launch bonus or double the Golden Window visit weight.
-          </p>
-
-          <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-200 space-y-2">
-            <span className="font-bold text-indigo-900">Simulated Change: +150 Ceramic Pro Upsell Bonus</span>
-            <p className="text-indigo-800 text-[11px]">
-              {(() => {
-                const reps = users.filter(u => ['new_rep', 'veteran_rep', 'team_lead'].includes(u.role) && gamification[u.id]);
-                const extra = (id: string) => pointsLedger.filter(l => l.userId === id && /Ceramic Pro/.test(l.description)).length * 150;
-                const now = [...reps].sort((a, b) => gamification[b.id].points - gamification[a.id].points);
-                const then = [...reps].sort((a, b) => gamification[b.id].points + extra(b.id) - (gamification[a.id].points + extra(a.id)));
-                if (!now.length) return 'No reps to simulate yet.';
-                const moved = then.filter((u, i) => now.indexOf(u) !== i);
-                const lead = then[0];
-                return `Projected: ${lead.firstName} ${lead.lastName} ${now[0] === lead ? 'stays' : 'moves to'} #1 (+${extra(lead.id)} pts). ${moved.length ? `${moved.length} rep${moved.length > 1 ? 's' : ''} change position: ${moved.map(u => `${u.firstName} ${u.lastName} → #${then.indexOf(u) + 1}`).join(', ')}.` : 'No other positions change.'}`;
-              })()}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Create Product Bonus Modal */}
-      {showBonusModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl text-xs">
-            <h3 className="font-bold text-sm text-slate-900">
-              Create Launch or Territory Product Bonus
-            </h3>
-
-            <div className="space-y-3">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Target Product:</label>
-                <select
-                  value={bonusProductId}
-                  onChange={(e) => setBonusProductId(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-xl bg-white"
-                >
-                  {catalog.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} {p.isNewLaunch ? '(🔥 NEW Launch)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Bonus Points (+pts):</label>
-                  <input
-                    type="number"
-                    value={bonusPoints}
-                    onChange={(e) => setBonusPoints(parseInt(e.target.value, 10) || 0)}
-                    className="w-full p-2 border border-slate-300 rounded-xl font-mono font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Or Multiplier (e.g. 2x):</label>
-                  <input
-                    type="number"
-                    value={bonusMultiplier}
-                    onChange={(e) => setBonusMultiplier(parseInt(e.target.value, 10) || 1)}
-                    className="w-full p-2 border border-slate-300 rounded-xl font-mono font-bold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Eligible Action:</label>
-                <select
-                  value={bonusActionType}
-                  onChange={(e) => setBonusActionType(e.target.value as any)}
-                  className="w-full p-2 border border-slate-300 rounded-xl bg-white"
-                >
-                  <option value="upsell_won">Upsell Won on Active Client</option>
-                  <option value="signed">Product Signed at Deal Sign-Up</option>
-                  <option value="interest_recorded">Interest Recorded During Discovery</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowBonusModal(false)}
-                className="px-3 py-1.5 rounded-xl text-slate-600 hover:bg-slate-100 font-bold cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateBonus}
-                className="px-4 py-1.5 rounded-xl bg-orange-600 text-white font-bold hover:bg-orange-700 cursor-pointer"
-              >
-                Activate Bonus
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+          </select>
+        </label>
+        <label className={labelCls}>
+          Extra points each time
+          <input type="number" min={0} value={extra} onChange={e => setExtra(parseInt(e.target.value, 10) || 0)} className={`${field} w-32`} />
+        </label>
+      </div>
+      <table className="w-full text-left text-[14px]">
+        <thead>
+          <tr className="border-b border-slate-200 text-[13px] font-semibold text-slate-600">
+            <th className="py-2">Rank</th>
+            <th className="py-2">Rep</th>
+            <th className="py-2 text-right">Extra</th>
+            <th className="py-2 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map(r => (
+            <tr key={r.u.id}>
+              <td className="py-2.5">
+                {r.after}
+                {r.after !== r.before && <span className={`ml-2 text-[13px] font-semibold ${r.after < r.before ? 'text-emerald-700' : 'text-rose-700'}`}>{r.after < r.before ? `▲ from ${r.before}` : `▼ from ${r.before}`}</span>}
+              </td>
+              <td className="py-2.5 font-semibold text-slate-900">
+                {r.u.firstName} {r.u.lastName}
+              </td>
+              <td className="py-2.5 text-right text-emerald-700">{r.add ? `+${r.add}` : '—'}</td>
+              <td className="py-2.5 text-right font-semibold">{r.total.toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Panel>
   );
 };

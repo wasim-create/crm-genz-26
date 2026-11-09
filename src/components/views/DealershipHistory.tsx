@@ -55,7 +55,7 @@ export const AccountStatusBanner: React.FC<{ dealership: Dealership; users: User
   return (
     <div className="space-y-2">
       {items.map((it, i) => (
-        <div key={i} className={`flex items-start gap-2 rounded-xl border p-3 text-xs font-medium ${TONE[it.tone]}`}>
+        <div key={i} className={`flex items-start gap-2 rounded-xl border p-3 text-[14px] font-medium ${TONE[it.tone]}`}>
           <span className="mt-0.5 shrink-0">{it.icon}</span>
           <span>{it.text}</span>
         </div>
@@ -72,10 +72,10 @@ export const ActivityTimeline: React.FC<{ dealership: Dealership; activities: Ac
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-bold text-slate-900">Activity history</h4>
-        <span className="text-[11px] text-slate-500">{list.length} logged · times in the dealership’s local time</span>
+        <span className="text-[13px] text-slate-500">{list.length} logged · times in the dealership’s local time</span>
       </div>
       {list.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-xs text-slate-500">Nothing logged yet.</p>
+        <p className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-[14px] text-slate-500">Nothing logged yet.</p>
       ) : (
         <ol className="relative space-y-3 border-l-2 border-slate-200 pl-4">
           {shown.map(a => {
@@ -87,7 +87,7 @@ export const ActivityTimeline: React.FC<{ dealership: Dealership; activities: Ac
                   <Icon className="h-3 w-3" />
                 </span>
                 <div className={`rounded-xl border p-3 ${a.status === 'cancelled' ? 'border-slate-200 bg-slate-50 opacity-70' : 'border-slate-200 bg-white'}`}>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
                     <span className="font-bold text-slate-900">{a.activityType}</span>
                     <span className="text-slate-500">{fmtWhen(a, dealership.timeZone)}</span>
                     <span className="text-slate-500">· {a.userName}</span>
@@ -95,16 +95,16 @@ export const ActivityTimeline: React.FC<{ dealership: Dealership; activities: Ac
                     {a.status === 'cancelled' && <span className="rounded bg-slate-200 px-1.5 font-semibold text-slate-700">Cancelled</span>}
                     {live && a.status !== 'cancelled' && a.isGoodWindow === false && <span className="rounded bg-rose-100 px-1.5 font-semibold text-rose-700">Outside 10–4</span>}
                     {a.tags?.includes('voicemail') && <span className="rounded bg-slate-100 px-1.5 font-semibold text-slate-600">Voicemail · no points</span>}
-                    {!!a.pointsEarned && <span className="ml-auto rounded bg-amber-100 px-1.5 font-mono font-bold text-amber-800">+{a.pointsEarned} pts</span>}
+                    {!!a.pointsEarned && <span className="ml-auto rounded bg-amber-100 px-1.5 font-bold text-amber-800">+{a.pointsEarned} pts</span>}
                   </div>
-                  <p className="mt-1.5 text-xs leading-relaxed text-slate-700">{a.notes}</p>
+                  <p className="mt-1.5 text-[14px] leading-relaxed text-slate-700 whitespace-pre-line">{a.notes}</p>
                   {a.voiceNotesTranscript && (
-                    <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-slate-50 p-2 text-[11px] italic text-slate-600">
+                    <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-slate-50 p-2 text-[13px] italic text-slate-600">
                       <Mic className="mt-0.5 h-3 w-3 shrink-0" /> Voice note: “{a.voiceNotesTranscript}”
                     </p>
                   )}
                   {(a.productsDiscussed.length > 0 || a.nextAction) && (
-                    <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-[12px]">
                       {a.productsDiscussed.map(p => (
                         <span key={p} className="rounded-full bg-blue-50 px-2 py-0.5 font-semibold text-blue-800">
                           {p}
@@ -126,7 +126,7 @@ export const ActivityTimeline: React.FC<{ dealership: Dealership; activities: Ac
         </ol>
       )}
       {list.length > 8 && (
-        <button type="button" onClick={() => setShowAll(v => !v)} className="w-full rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+        <button type="button" onClick={() => setShowAll(v => !v)} className="w-full rounded-xl border border-slate-200 py-2 text-[14px] font-semibold text-slate-700 hover:bg-slate-50">
           {showAll ? 'Show fewer' : `Show all ${list.length}`}
         </button>
       )}
@@ -142,7 +142,7 @@ export const OnboardingChecklist: React.FC<{ dealership: Dealership; users: User
     <div className="space-y-2 rounded-2xl border border-teal-200 bg-teal-50/50 p-4">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-bold text-slate-900">Onboarding checklist</h4>
-        <span className="text-[11px] font-semibold text-teal-800">
+        <span className="text-[13px] font-semibold text-teal-800">
           {done} of {tasks.length} done
         </span>
       </div>
@@ -150,10 +150,10 @@ export const OnboardingChecklist: React.FC<{ dealership: Dealership; users: User
         {tasks.map(t => {
           const owner = users.find(u => u.id === t.ownerUserId);
           return (
-            <li key={t.id} className="flex items-center gap-2 text-xs">
+            <li key={t.id} className="flex items-center gap-2 text-[14px]">
               {t.completed ? <CheckCircle2 className="h-4 w-4 text-teal-600" /> : <Circle className="h-4 w-4 text-slate-400" />}
               <span className={t.completed ? 'text-slate-500 line-through' : 'font-medium text-slate-800'}>{t.title}</span>
-              <span className="ml-auto text-[11px] text-slate-500">
+              <span className="ml-auto text-[13px] text-slate-500">
                 {owner?.firstName} · due {new Date(`${t.dueDate}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </span>
             </li>
@@ -170,8 +170,8 @@ export const LotHistory: React.FC<{ dealership: Dealership; users: User[] }> = (
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <h4 className="mb-2 text-sm font-bold text-slate-900">Lot counts</h4>
-      <table className="w-full text-left text-xs">
-        <thead className="text-[10px] uppercase text-slate-500">
+      <table className="w-full text-left text-[14px]">
+        <thead className="text-[12px] text-slate-500">
           <tr>
             <th className="py-1">Date</th>
             <th>Used cars on lot</th>
@@ -185,8 +185,8 @@ export const LotHistory: React.FC<{ dealership: Dealership; users: User[] }> = (
             return (
               <tr key={i} className="border-t border-slate-100">
                 <td className="py-1.5">{new Date(`${r.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                <td className="font-mono font-bold">{r.count}</td>
-                <td className="font-mono">{r.monthlySales ?? '—'}</td>
+                <td className=" font-bold">{r.count}</td>
+                <td className="">{r.monthlySales ?? '—'}</td>
                 <td>{u ? `${u.firstName} ${u.lastName}` : r.recordedBy}</td>
               </tr>
             );
@@ -198,13 +198,13 @@ export const LotHistory: React.FC<{ dealership: Dealership; users: User[] }> = (
 };
 
 export const AuditList: React.FC<{ logs: AuditLogRecord[]; timeZone?: string }> = ({ logs, timeZone }) => {
-  if (!logs.length) return <p className="text-xs text-slate-500">No audit entries yet.</p>;
+  if (!logs.length) return <p className="text-[14px] text-slate-500">No audit entries yet.</p>;
   return (
     <ul className="space-y-2">
       {[...logs]
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
         .map(l => (
-          <li key={l.id} className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+          <li key={l.id} className="rounded-xl border border-slate-200 bg-white p-3 text-[14px]">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-900">{l.action}</span>
               <span className="text-slate-500">{new Date(l.timestamp).toLocaleString('en-US', { timeZone, month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>

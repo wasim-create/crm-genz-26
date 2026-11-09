@@ -1,22 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { Briefcase, Car, Columns3, Flame, MapPin, Table } from 'lucide-react';
 import { Dealership, PipelineStage, User } from '../../types/crm';
-import { NextStepState, needsNextStep, nextStepText } from '../../utils/nextStepStatus';
-import { 
-  Building2, 
-  MapPin, 
-  Car, 
-  Flame, 
-  Search, 
-  Plus, 
-  CheckCircle2, 
-  AlertCircle,
-  Table,
-  Columns3,
-  CalendarCheck,
-  Briefcase,
-  Users
-} from 'lucide-react';
-import { formatUSDate } from '../../utils/territory';
+import { NextStepState, needsNextStep } from '../../utils/nextStepStatus';
+import { Badge, EmptyState, Page, PageHeader, Panel, Switch, Toolbar, useSticky } from '../ui/kit';
+import { NextStepPill, nextStepSortKey } from '../ui/NextStepPill';
+import { PIPELINE_STAGES, STAGE_META, stageLabel, stageTone } from '../../utils/stages';
+import { daysSince, formatRelative, lastContactText, matches, plural } from '../../utils/format';
 
 interface PipelineViewProps {
   dealerships: Dealership[];
@@ -29,323 +18,234 @@ interface PipelineViewProps {
   onPlanNextStep?: (dealership: Dealership) => void;
 }
 
-// Section 3: "Handed Off" is removed as a stage. Assist is a badge across HOT, Negotiation, or Contract.
-const ORDERED_STAGES: { id: PipelineStage; label: string; color: string; badge: string }[] = [
-  { id: 'Claimed', label: 'Claimed / Assigned', color: 'border-slate-300 bg-slate-50', badge: 'bg-slate-100 text-slate-700' },
-  { id: 'Visit Planned', label: 'Visit Planned', color: 'border-blue-200 bg-blue-50/30', badge: 'bg-blue-100 text-blue-700' },
-  { id: 'Visited', label: 'Visited / Met', color: 'border-indigo-200 bg-indigo-50/30', badge: 'bg-indigo-100 text-indigo-700' },
-  { id: 'Follow-up', label: 'Active Follow-up', color: 'border-sky-200 bg-sky-50/30', badge: 'bg-sky-100 text-sky-700' },
-  { id: 'HOT', label: 'HOT Deals 🔥', color: 'border-rose-300 bg-rose-50/30', badge: 'bg-rose-100 text-rose-800' },
-  { id: 'Negotiation', label: 'Negotiation', color: 'border-purple-300 bg-purple-50/30', badge: 'bg-purple-100 text-purple-800' },
-  { id: 'Won', label: 'Verbal Won', color: 'border-emerald-300 bg-emerald-50/30', badge: 'bg-emerald-100 text-emerald-800' },
-  { id: 'Signed', label: 'Signed Contract', color: 'border-teal-300 bg-teal-50/30', badge: 'bg-teal-100 text-teal-800' },
-  { id: 'Onboarding', label: 'Onboarding', color: 'border-indigo-300 bg-indigo-50/30', badge: 'bg-indigo-100 text-indigo-800' }
+const REP_ROLES = ['new_rep', 'veteran_rep', 'team_lead'];
+const STUCK_DAYS = 14;
+
+const SORTS = [
+  { value: 'next', label: 'Next step (soonest)' },
+  { value: 'stale', label: 'Last contact (oldest first)' },
+  { value: 'temp', label: 'Temperature (warmest first)' },
+  { value: 'lot', label: 'Lot size (largest first)' },
+  { value: 'name', label: 'Name (A–Z)' }
 ];
 
-export const PipelineView: React.FC<PipelineViewProps> = ({
-  dealerships,
-  currentUser,
-  onOpenDealership,
-  onMoveStage,
-  onInitiateAssist,
-  allUsers = [],
-  nextSteps,
-  onPlanNextStep
-}) => {
-  const [onlyMissing, setOnlyMissing] = useState(false);
-  const ns = (d: Dealership): NextStepState => nextSteps?.get(d.id) ?? { kind: 'not_applicable' };
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRep, setSelectedRep] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
-  const [selectedHeat, setSelectedHeat] = useState<string>('all');
+export const PipelineView: React.FC<PipelineViewProps> = ({ dealerships, currentUser, onOpenDealership, onInitiateAssist, allUsers = [], nextSteps, onPlanNextStep }) => {
+  const isRep = REP_ROLES.includes(currentUser.role);
+  const key = `pipeline_${currentUser.id}`;
+  const [q, setQ] = useState('');
+  const defaultRep = isRep ? currentUser.id : currentUser.role === 'manager' ? 'team' : 'all';
+  const [rep, setRep] = useSticky(`${key}_rep`, defaultRep);
+  const [stage, setStage] = useState('all');
+  const [group, setGroup] = useState('all');
+  const [chips, setChips] = useState<Record<string, boolean>>({});
+  const [sort, setSort] = useSticky(`${key}_sort`, 'next');
+  const [mode, setMode] = useSticky<'board' | 'table'>(`${key}_mode`, 'board');
 
-  // Filter dealerships (strictly non-monetary)
-  const filtered = dealerships.filter(d => {
-    if (d.stage === 'Pool' || d.stage === 'Lost' || d.stage === 'Client') return false;
-    if (selectedRep === 'my' && d.assignedRepId !== currentUser.id && d.originRepId !== currentUser.id) return false;
-    if (selectedRep !== 'all' && selectedRep !== 'my' && d.assignedRepId !== selectedRep) return false;
-    if (onlyMissing && !needsNextStep(ns(d))) return false;
-    if (selectedHeat !== 'all' && d.heatLevel !== selectedHeat) return false;
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      return (
-        d.dealershipName.toLowerCase().includes(q) ||
-        d.city.toLowerCase().includes(q) ||
-        d.state.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
+  const ns = (d: Dealership) => nextSteps?.get(d.id);
+  const userName = (id?: string | null) => {
+    const u = allUsers.find(x => x.id === id);
+    return u ? `${u.firstName} ${u.lastName}` : '—';
+  };
+  const team = useMemo(() => {
+    const reps = allUsers.filter(u => REP_ROLES.includes(u.role) && u.active !== false);
+    return currentUser.role === 'manager' ? reps.filter(u => u.managerId === currentUser.id) : reps;
+  }, [allUsers, currentUser]);
+
+  // Everything live on the Pipeline, before the user's filters.
+  const live = useMemo(() => dealerships.filter(d => PIPELINE_STAGES.includes(d.stage)), [dealerships]);
+  const byRep = useMemo(() => {
+    if (rep === 'all') return live;
+    if (rep === 'team') return live.filter(d => team.some(u => u.id === d.assignedRepId));
+    return live.filter(d => d.assignedRepId === rep);
+  }, [live, rep, team]);
+
+  const CHIP_TESTS: Record<string, (d: Dealership) => boolean> = {
+    missing: d => !!ns(d) && needsNextStep(ns(d)!),
+    hot: d => d.heatLevel === 'Hot' || d.stage === 'HOT',
+    assist: d => !!d.hasActiveAssist,
+    stuck: d => (daysSince(d.lastTouchpointDate) ?? 999) >= STUCK_DAYS
+  };
+
+  const filtered = useMemo(() => {
+    const list = byRep.filter(d => {
+      if (stage !== 'all' && d.stage !== stage) return false;
+      if (group === 'group' && !d.groupId) return false;
+      if (group === 'standalone' && d.groupId) return false;
+      if (!matches(q, d.dealershipName, d.city, d.state, d.zipCode, d.groupName)) return false;
+      return Object.entries(chips).every(([id, on]) => !on || CHIP_TESTS[id](d));
+    });
+    const cmp: Record<string, (a: Dealership, b: Dealership) => number> = {
+      next: (a, b) => nextStepSortKey(ns(a)).localeCompare(nextStepSortKey(ns(b))),
+      stale: (a, b) => (a.lastTouchpointDate ?? '').localeCompare(b.lastTouchpointDate ?? ''),
+      temp: (a, b) => (b.relationshipTemperature?.score ?? 0) - (a.relationshipTemperature?.score ?? 0),
+      lot: (a, b) => b.usedCarsOnLot - a.usedCarsOnLot,
+      name: (a, b) => a.dealershipName.localeCompare(b.dealershipName)
+    };
+    return [...list].sort((a, b) => cmp[sort](a, b) || a.dealershipName.localeCompare(b.dealershipName));
+  }, [byRep, stage, group, q, chips, sort, nextSteps]);
+
+  const count = (id: string) => byRep.filter(CHIP_TESTS[id]).length;
+  const toggle = (id: string) => setChips(c => ({ ...c, [id]: !c[id] }));
+  const clear = () => {
+    setQ('');
+    setRep(defaultRep);
+    setStage('all');
+    setGroup('all');
+    setChips({});
+  };
+
+  const repOptions = [
+    ...(isRep ? [{ value: currentUser.id, label: 'My deals' }] : []),
+    ...(currentUser.role === 'manager' ? [{ value: 'team', label: 'My team' }] : []),
+    ...team.filter(u => u.id !== currentUser.id).map(u => ({ value: u.id, label: `${u.firstName} ${u.lastName}`, count: live.filter(d => d.assignedRepId === u.id).length }))
+  ];
+  const columns = PIPELINE_STAGES.filter(s => (stage === 'all' || s === stage) && filtered.some(d => d.stage === s));
+  const hiddenEmpty = stage === 'all' ? PIPELINE_STAGES.filter(s => s !== 'Not Now' && !columns.includes(s)).length : 0;
 
   return (
-    <div className="space-y-4">
-      {/* Controls Header */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Filter deals..."
-              className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-blue-500 w-56"
-            />
-          </div>
+    <Page>
+      <PageHeader
+        title="Pipeline"
+        subtitle="Every live deal by stage. Click a deal to open it."
+        actions={
+          <Switch
+            label="View"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: 'board', label: <><Columns3 className="h-4 w-4" /> Board</> },
+              { value: 'table', label: <><Table className="h-4 w-4" /> Table</> }
+            ]}
+          />
+        }
+      />
 
-          <select
-            value={selectedRep}
-            onChange={(e) => setSelectedRep(e.target.value)}
-            className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 font-medium focus:outline-hidden"
-          >
-            <option value="all">All Reps (Full Visibility)</option>
-            <option value="my">Just My Accounts</option>
-            {allUsers
-              .filter(u => ['new_rep', 'veteran_rep', 'team_lead'].includes(u.role) && u.active !== false)
-              .map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.firstName} {u.lastName}
-                </option>
-              ))}
-          </select>
+      <Toolbar
+        search={{ value: q, onChange: setQ, placeholder: 'Search name, city, ZIP or group' }}
+        filters={[
+          { id: 'rep', allLabel: isRep ? 'Everyone’s deals' : 'All reps', defaultValue: defaultRep, value: rep, onChange: setRep, options: repOptions },
+          { id: 'stage', allLabel: 'All stages', value: stage, onChange: setStage, options: PIPELINE_STAGES.map(s => ({ value: s, label: stageLabel(s), count: byRep.filter(d => d.stage === s).length })) },
+          { id: 'group', allLabel: 'Groups and standalone', value: group, onChange: setGroup, options: [{ value: 'group', label: 'Dealer groups only' }, { value: 'standalone', label: 'Standalone only' }] }
+        ]}
+        chips={[
+          ...(nextSteps ? [{ id: 'missing', label: 'No next step', count: count('missing'), active: !!chips.missing, onClick: () => toggle('missing'), tone: 'attention' as const }] : []),
+          { id: 'hot', label: 'Hot', count: count('hot'), active: !!chips.hot, onClick: () => toggle('hot') },
+          { id: 'assist', label: 'Manager assist', count: count('assist'), active: !!chips.assist, onClick: () => toggle('assist') },
+          { id: 'stuck', label: `No contact in ${STUCK_DAYS}+ days`, count: count('stuck'), active: !!chips.stuck, onClick: () => toggle('stuck') }
+        ]}
+        sort={{ value: sort, onChange: setSort, options: SORTS }}
+        count={`${plural(filtered.length, 'deal')}${filtered.length !== byRep.length ? ` of ${byRep.length}` : ''}`}
+        onClear={clear}
+      />
 
-          <select
-            value={selectedHeat}
-            onChange={(e) => setSelectedHeat(e.target.value)}
-            className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-slate-700 font-medium focus:outline-hidden"
-          >
-            <option value="all">All Heat Levels</option>
-            <option value="Hot">🔥 Hot Deals Only</option>
-            <option value="Warm">Warm Leads</option>
-            <option value="Cold">Cold</option>
-          </select>
-        </div>
-
-        {/* View Mode & Pipeline Count */}
-        <div className="flex items-center gap-3">
-          {nextSteps && (() => {
-            const missing = dealerships.filter(d => !['Pool', 'Lost', 'Client'].includes(d.stage) && (selectedRep === 'all' || (selectedRep === 'my' ? d.assignedRepId === currentUser.id : d.assignedRepId === selectedRep)) && needsNextStep(ns(d))).length;
+      {filtered.length === 0 ? (
+        <EmptyState title="No deals match" hint="Try clearing a filter." />
+      ) : mode === 'board' ? (
+        <>
+        {hiddenEmpty > 0 && <p className="-mt-2 text-[13px] text-slate-500">{plural(hiddenEmpty, 'empty stage')} hidden.</p>}
+        <div className="flex snap-x gap-3 overflow-x-auto pb-4">
+          {columns.map(s => {
+            const deals = filtered.filter(d => d.stage === s);
             return (
-              <button
-                type="button"
-                onClick={() => setOnlyMissing(v => !v)}
-                aria-pressed={onlyMissing}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-bold ${onlyMissing ? 'border-rose-600 bg-rose-600 text-white' : missing ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-500'}`}
-              >
-                {missing} with no next step{onlyMissing ? ' · show all' : ''}
-              </button>
-            );
-          })()}
-          <span className="text-xs font-bold font-mono text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
-            {filtered.length} Active Deals
-          </span>
-
-          <div className="flex bg-slate-100 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setViewMode('kanban')}
-              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                viewMode === 'kanban' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
-              }`}
-              title="Kanban Board"
-            >
-              <Columns3 className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('table')}
-              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                viewMode === 'table' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
-              }`}
-              title="Table View"
-            >
-              <Table className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* KANBAN BOARD VIEW */}
-      {viewMode === 'kanban' ? (
-        <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x">
-          {ORDERED_STAGES.map(stageObj => {
-            const stageDeals = filtered.filter(d => d.stage === stageObj.id);
-
-            return (
-              <div
-                key={stageObj.id}
-                className={`w-72 shrink-0 rounded-2xl border p-3 flex flex-col max-h-[calc(100vh-14rem)] ${stageObj.color}`}
-              >
-                {/* Stage Header */}
-                <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-200/60">
-                  <span className="font-bold text-xs text-slate-800 tracking-tight">
-                    {stageObj.label}
-                  </span>
-                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${stageObj.badge}`}>
-                    {stageDeals.length}
-                  </span>
+              <section key={s} aria-label={stageLabel(s)} className={`flex max-h-[calc(100vh-17rem)] w-[272px] shrink-0 snap-start flex-col rounded-2xl border border-slate-200 ${STAGE_META[s].column}`}>
+                <div className="flex items-center justify-between px-3 py-2.5">
+                  <span className="text-[14px] font-bold text-slate-900">{stageLabel(s)}</span>
+                  <Badge tone={stageTone(s)}>{deals.length}</Badge>
                 </div>
-
-                {/* Cards Container */}
-                <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
-                  {stageDeals.length === 0 ? (
-                    <div className="h-28 border border-dashed border-slate-200 rounded-xl flex items-center justify-center text-[11px] text-slate-400">
-                      No deals in this stage
-                    </div>
-                  ) : (
-                    stageDeals.map(d => {
-                      const isHot = d.heatLevel === 'Hot';
-                      const hasAssist = d.hasActiveAssist;
-
-                      return (
-                        <div
-                          key={d.id}
-                          onClick={() => onOpenDealership(d)}
-                          className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-blue-400 transition-all cursor-pointer space-y-2"
-                        >
-                          <div className="flex items-start justify-between gap-1">
-                            <span className="font-bold text-xs text-slate-900 leading-tight">
-                              {d.dealershipName}
-                            </span>
-                            {isHot && (
-                              <span className="shrink-0 text-orange-600" title="Hot Deal">
-                                <Flame className="w-3.5 h-3.5 fill-current" />
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Location & Rooftops */}
-                          <div className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-                            <span className="flex items-center gap-0.5">
-                              <MapPin className="w-3 h-3 text-slate-400" />
-                              {d.city}, {d.state}
-                            </span>
-                            <span>•</span>
-                            <span className="flex items-center gap-0.5">
-                              <Car className="w-3 h-3 text-slate-400" />
-                              {d.usedCarsOnLot} lot
-                            </span>
-                            {d.rooftopCount > 1 && (
-                              <span className="font-bold text-indigo-700 bg-indigo-50 px-1 rounded text-[10px]">
-                                {d.rooftopCount} stores
-                              </span>
-                            )}
-                          </div>
-
-                          {nextSteps && ns(d).kind !== 'not_applicable' && (
-                            <div className={`flex items-center justify-between gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${needsNextStep(ns(d)) ? 'bg-rose-50 text-rose-800' : ns(d).kind === 'waiting' ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
-                              <span className="line-clamp-1">{ns(d).kind === 'planned' ? 'Next: ' : ''}{nextStepText(ns(d))}</span>
-                              {needsNextStep(ns(d)) && onPlanNextStep && (
-                                <button type="button" onClick={e => { e.stopPropagation(); onPlanNextStep(d); }} className="shrink-0 rounded bg-rose-600 px-1.5 py-0.5 font-bold text-white">
-                                  Plan it
-                                </button>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Relationship Temperature & Assist Flag */}
-                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px]">
-                            {/* Manager Assist Badge (Section 3) */}
-                            {hasAssist ? (
-                              <span className="inline-flex items-center gap-1 font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md animate-pulse">
-                                <Briefcase className="w-3 h-3" />
-                                <span>Manager Assist</span>
-                              </span>
-                            ) : (
-                              (stageObj.id === 'HOT' || stageObj.id === 'Negotiation') && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onInitiateAssist(d);
-                                  }}
-                                  className="text-purple-600 hover:text-purple-800 font-bold hover:underline"
-                                >
-                                  + Request Assist
-                                </button>
-                              )
-                            )}
-
-                            {/* Relationship Temperature Score */}
-                            {d.relationshipTemperature && (
-                              <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
-                                Temp {d.relationshipTemperature.score}°
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
+                <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2">
+                  {deals.map(d => (
+                    <DealCard key={d.id} d={d} state={ns(d)} repName={!isRep || rep !== currentUser.id ? userName(d.assignedRepId) : undefined} onOpen={() => onOpenDealership(d)} onPlan={onPlanNextStep ? () => onPlanNextStep(d) : undefined} onAssist={() => onInitiateAssist(d)} />
+                  ))}
                 </div>
-              </div>
+              </section>
             );
           })}
         </div>
+        </>
       ) : (
-        /* TABLE VIEW (Strictly Non-Monetary) */
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
-          <table className="w-full text-left border-collapse text-xs">
+        <Panel className="overflow-x-auto">
+          <table className="w-full border-collapse text-left text-[14px]">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-                <th className="p-3">Dealership</th>
-                <th className="p-3">Location</th>
-                <th className="p-3">Used Inventory</th>
-                <th className="p-3">Stage</th>
-                <th className="p-3">Assist Status</th>
-                <th className="p-3">Relationship Temp</th>
-                <th className="p-3">Attribution</th>
-                <th className="p-3 text-right">Actions</th>
+              <tr className="border-b border-slate-200 text-[13px] font-semibold text-slate-600">
+                <th className="px-4 py-3">Dealership</th>
+                <th className="px-4 py-3">Stage</th>
+                <th className="px-4 py-3">Rep</th>
+                <th className="px-4 py-3">Next step</th>
+                <th className="px-4 py-3">Last contact</th>
+                <th className="px-4 py-3 text-right">Temp</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map(d => (
-                <tr 
-                  key={d.id} 
-                  onClick={() => onOpenDealership(d)}
-                  className="hover:bg-slate-50/80 transition-colors cursor-pointer"
-                >
-                  <td className="p-3 font-bold text-slate-900">{d.dealershipName}</td>
-                  <td className="p-3 text-slate-600">{d.city}, {d.state}</td>
-                  <td className="p-3 font-mono font-bold">{d.usedCarsOnLot} cars</td>
-                  <td className="p-3">
-                    <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-blue-100 text-blue-800">
-                      {d.stage}
+                <tr key={d.id} onClick={() => onOpenDealership(d)} className="cursor-pointer hover:bg-slate-50">
+                  <td className="px-4 py-3">
+                    <div className="font-semibold text-slate-900">{d.dealershipName}</div>
+                    <div className="text-[13px] text-slate-500">
+                      {d.city}, {d.state}
+                      {d.groupName ? ` · ${d.groupName}` : ''}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex flex-wrap gap-1">
+                      <Badge tone={stageTone(d.stage)}>{stageLabel(d.stage)}</Badge>
+                      {d.hasActiveAssist && <Badge tone="violet">Assist</Badge>}
                     </span>
                   </td>
-                  <td className="p-3">
-                    {d.hasActiveAssist ? (
-                      <span className="inline-flex items-center gap-1 font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded text-[10px]">
-                        <Briefcase className="w-3 h-3" /> Active Assist
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 text-[10px]">Solo Deal</span>
-                    )}
+                  <td className="px-4 py-3 text-slate-700">{userName(d.assignedRepId)}</td>
+                  <td className="max-w-[320px] px-4 py-3">
+                    <NextStepPill state={ns(d)} onPlan={onPlanNextStep ? () => onPlanNextStep(d) : undefined} />
                   </td>
-                  <td className="p-3 font-mono font-bold text-indigo-600">
-                    {d.relationshipTemperature?.score || 50}°
-                  </td>
-                  <td className="p-3 text-slate-500 text-[11px]">
-                    Origin: {(() => { const o = allUsers.find(u => u.id === d.originRepId); return o ? `${o.firstName} ${o.lastName}` : '—'; })()}
-                  </td>
-                  <td className="p-3 text-right">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenDealership(d);
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold hover:bg-blue-100"
-                    >
-                      View
-                    </button>
-                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-700">{formatRelative(d.lastTouchpointDate)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-slate-700">{d.relationshipTemperature ? `${d.relationshipTemperature.score}°` : '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Panel>
       )}
-    </div>
+    </Page>
+  );
+};
+
+const DealCard: React.FC<{ d: Dealership; state?: NextStepState; repName?: string; onOpen: () => void; onPlan?: () => void; onAssist: () => void }> = ({ d, state, repName, onOpen, onPlan, onAssist }) => {
+  return (
+    <Panel interactive onClick={onOpen} className="space-y-2 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[14px] font-bold leading-snug text-slate-900">{d.dealershipName}</span>
+        {(d.heatLevel === 'Hot' || d.stage === 'HOT') && <Flame aria-label="Hot" className="h-4 w-4 shrink-0 fill-current text-orange-500" />}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-slate-600">
+        <span className="inline-flex items-center gap-1">
+          <MapPin className="h-3.5 w-3.5 text-slate-400" />
+          {d.city}, {d.state}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Car className="h-3.5 w-3.5 text-slate-400" />
+          {d.usedCarsOnLot} cars
+        </span>
+      </div>
+      <NextStepPill state={state} onPlan={onPlan} />
+      <div className="flex flex-wrap items-center justify-between gap-1 text-[12px] text-slate-500">
+        <span>{repName ? `${repName} · ` : ''}{lastContactText(d.lastTouchpointDate)}</span>
+        {d.hasActiveAssist ? (
+          <Badge tone="violet">
+            <Briefcase className="h-3 w-3" /> Assist
+          </Badge>
+        ) : (
+          (d.stage === 'HOT' || d.stage === 'Negotiation') && (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                onAssist();
+              }}
+              className="cursor-pointer font-semibold text-violet-700 hover:underline"
+            >
+              Ask for assist
+            </button>
+          )
+        )}
+      </div>
+    </Panel>
   );
 };

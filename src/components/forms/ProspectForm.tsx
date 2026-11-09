@@ -9,7 +9,8 @@ import { DealerGroup, Dealership, ProductCatalogItem, ReferralInfo, User } from 
 import { approximateCoords, findDuplicateDealerships, makeDealership, newRecordId, US_STATES } from '../../utils/dealershipFactory';
 import { getCurrentLocation, RadarResult, searchNearbyDealerships } from '../../utils/radar';
 import { distanceBand, milesBetween } from '../../features/myplan/engine/geo';
-import { Field, FormShell, inputCls } from './FormShell';
+import { Field, FormShell, FormSection, inputCls } from './FormShell';
+import { Btn, Switch } from '../ui/kit';
 import { ROLE_LABEL } from '../views/PeopleAdminPanel';
 
 export interface ProspectFormResult {
@@ -64,6 +65,7 @@ export const ProspectForm: React.FC<{
   const [showRadar, setShowRadar] = useState(!!startWithRadar);
   const [radarFrom, setRadarFrom] = useState<'home' | 'current'>('home');
   const [confirmDuplicate, setConfirmDuplicate] = useState(false);
+  const [showReferral, setShowReferral] = useState(false);
   const set = (p: Partial<typeof f>) => setF(prev => ({ ...prev, ...p }));
 
   const located = useMemo(() => {
@@ -213,24 +215,24 @@ export const ProspectForm: React.FC<{
 
   return (
     <FormShell
-      title={showRadar ? 'Open Radar — dealerships near you' : isClient ? 'Add New Client' : 'Add New Prospect'}
+      title={showRadar ? 'Open Radar — dealerships near you' : isClient ? 'Add a client' : 'Add a prospect'}
       icon={showRadar ? <Radar className="h-6 w-6" /> : <Building2 className="h-6 w-6" />}
       onClose={onCancel}
       wide={showRadar}
       footer={
         showRadar ? (
-          <button type="button" onClick={() => setShowRadar(false)} className="inline-flex min-h-[48px] items-center gap-2 rounded-xl px-5 text-[16px] font-semibold text-slate-700 hover:bg-slate-200">
-            <ArrowLeft className="h-5 w-5" /> Back to the form
-          </button>
+          <Btn variant="ghost" icon={<ArrowLeft className="h-4 w-4" />} onClick={() => setShowRadar(false)}>
+            Back to the form
+          </Btn>
         ) : (
           <>
-            {stillNeeded.length > 0 && <span className="mr-auto text-xs font-medium text-slate-500">Still needed: {stillNeeded.join(', ')}</span>}
-            <button type="button" onClick={onCancel} className="min-h-[48px] rounded-xl px-5 text-[16px] font-semibold text-slate-600 hover:bg-slate-200">
+            {stillNeeded.length > 0 && <span className="mr-auto text-[13px] text-slate-500">Still needed: {stillNeeded.join(', ')}</span>}
+            <Btn variant="ghost" onClick={onCancel}>
               Cancel
-            </button>
-            <button type="button" onClick={save} disabled={!valid || !located} className="min-h-[48px] rounded-xl bg-blue-600 px-6 text-[16px] font-bold text-white shadow hover:bg-blue-700 disabled:bg-slate-300">
-              {confirmDuplicate ? 'Save anyway' : isClient ? 'Save Client' : 'Save Prospect'}
-            </button>
+            </Btn>
+            <Btn variant="primary" onClick={save} disabled={!valid || !located}>
+              {confirmDuplicate ? 'Save anyway' : isClient ? 'Add client' : 'Add prospect'}
+            </Btn>
           </>
         )
       }
@@ -238,151 +240,61 @@ export const ProspectForm: React.FC<{
       {showRadar ? (
         <RadarPanel from={radarFrom} setFrom={setRadarFrom} currentUser={currentUser} dealerships={dealerships} onPick={useRadarResult} />
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-6">
           <div className="flex flex-col gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center">
-            <div className="flex-1">
-              <div className="text-[16px] font-bold text-blue-950">Need a prospect?</div>
-              <div className="text-[14px] text-blue-800">Find nearby dealerships that aren’t in the CRM yet, and fill this form in one tap.</div>
+            <div className="flex-1 text-[14px] text-blue-900">
+              <span className="font-semibold">Don’t have the details?</span> Open Radar finds dealerships near you that aren’t in the system yet and fills this in.
             </div>
-            <select className={`${inputCls} sm:w-44`} value={radarFrom} onChange={e => setRadarFrom(e.target.value as 'home' | 'current')} aria-label="Search from">
-              <option value="home">Home ZIP</option>
-              <option value="current">Current location</option>
-            </select>
-            <button type="button" onClick={() => setShowRadar(true)} className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-[16px] font-bold text-white hover:bg-blue-700">
-              <Radar className="h-5 w-5" /> Open Radar
-            </button>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Dealership Name" required className="sm:col-span-2">
-              <input className={inputCls} value={f.dealershipName} onChange={e => set({ dealershipName: e.target.value })} />
-            </Field>
-            <Field label="Main Phone">
-              <input className={inputCls} type="tel" inputMode="tel" placeholder="(555) 555-5555" value={f.phone} onChange={e => set({ phone: e.target.value })} />
-            </Field>
-            <Field label="Street Address">
-              <input className={inputCls} value={f.address} onChange={e => set({ address: e.target.value })} />
-            </Field>
-            <Field label="City" required>
-              <input className={inputCls} value={f.city} onChange={e => { set({ city: e.target.value }); setRadarCoords(null); }} />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="State" required>
-                <select className={inputCls} value={f.state} onChange={e => { set({ state: e.target.value }); setRadarCoords(null); }}>
-                  <option value="">—</option>
-                  {US_STATES.map(s => (
-                    <option key={s}>{s}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="ZIP Code" required>
-                <input className={inputCls} inputMode="numeric" maxLength={10} value={f.zipCode} onChange={e => { set({ zipCode: e.target.value }); setRadarCoords(null); }} />
-              </Field>
-            </div>
-            {located && band && miles !== undefined && (
-              <div className="flex flex-wrap items-center gap-2 text-[15px] sm:col-span-2">
-                <MapPin className="h-5 w-5 text-slate-500" />
-                <span className={`rounded-full border px-2.5 py-0.5 font-semibold ${band === 'home' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : band === 'edge' ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-rose-300 bg-rose-50 text-rose-800'}`}>
-                  {band === 'home' ? '🟢' : band === 'edge' ? '🟡' : '🔴'} {Math.round(miles)} mi from your home{band === 'edge' ? ' · edge of region' : band === 'out_of_town' ? ' · out of town' : ''}
-                </span>
-                {located.approximate && <span className="text-slate-500">(approximate until the address is checked)</span>}
-              </div>
-            )}
-            <Field label="Dealership Type">
-              <select className={inputCls} value={f.franchiseType} onChange={e => set({ franchiseType: e.target.value as 'Franchise' | 'Independent' })}>
-                <option>Franchise</option>
-                <option>Independent</option>
+            <div className="flex gap-2">
+              <select className="min-h-[40px] rounded-xl border border-blue-200 bg-white px-3 text-[14px]" value={radarFrom} onChange={e => setRadarFrom(e.target.value as 'home' | 'current')} aria-label="Search from">
+                <option value="home">Near my home</option>
+                <option value="current">Near me now</option>
               </select>
-            </Field>
-            <Field label="Used Cars on Lot">
-              <input className={inputCls} inputMode="numeric" placeholder="e.g. 75" value={f.usedCarsOnLot} onChange={e => set({ usedCarsOnLot: e.target.value })} />
-            </Field>
-            {f.franchiseType === 'Franchise' && (
-              <Field label="Brand(s)" hint="Separate with commas, e.g. Ford, Lincoln" className="sm:col-span-2">
-                <input className={inputCls} value={f.brands} onChange={e => set({ brands: e.target.value })} />
-              </Field>
-            )}
-            <Field label="Website Domain" className="sm:col-span-2">
-              <input className={inputCls} placeholder="www.dealership.com" value={f.website} onChange={e => set({ website: e.target.value })} />
-            </Field>
+              <Btn variant="primary" icon={<Radar className="h-4 w-4" />} onClick={() => setShowRadar(true)}>
+                Open Radar
+              </Btn>
+            </div>
           </div>
 
-          {isClient && catalog.length > 0 && (
-            <div className="rounded-2xl border border-slate-200 p-4">
-              <div className="mb-2 text-[16px] font-bold text-slate-900">
-                Products they’ve signed up for <span className="text-rose-600">*</span>
+          {dupes.length > 0 && (
+            <div className="space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-[14px] text-amber-950">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                <span>
+                  This may already be in the system: {dupes.map(d => `${d.dealershipName} (${d.city}, ${d.state} · ${d.stage})`).join('; ')}.
+                </span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {catalog
-                  .filter(p => p.isActive)
-                  .map(p => {
-                    const on = f.signedProducts.includes(p.id);
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => set({ signedProducts: on ? f.signedProducts.filter(x => x !== p.id) : [...f.signedProducts, p.id] })}
-                        className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold ${on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-700'}`}
-                      >
-                        {p.name}
-                      </button>
-                    );
-                  })}
-              </div>
+              {onOpenExisting && (
+                <Btn size="sm" onClick={() => onOpenExisting(dupes[0])}>
+                  Open the existing one
+                </Btn>
+              )}
             </div>
           )}
 
-          <div className="border-t border-slate-100 pt-4">
-            <div className="mb-3 flex items-center gap-2 text-[16px] font-bold text-slate-900">
-              <UserRoundPlus className="h-5 w-5 text-blue-600" /> Referral Information (Optional)
-            </div>
+          <FormSection title="The dealership">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Internal Referral">
-                <select className={inputCls} value={f.internalReferral} onChange={e => set({ internalReferral: e.target.value })}>
-                  <option value="">-- None --</option>
-                  {activeUsers.map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.firstName} {u.lastName}
-                      {` — ${u.title ?? ROLE_LABEL[u.role]}`}
-                    </option>
-                  ))}
-                </select>
+              <Field label="Name" required className="sm:col-span-2">
+                <input className={inputCls} value={f.dealershipName} onChange={e => set({ dealershipName: e.target.value })} placeholder="e.g. Route 1 Nissan" />
               </Field>
-              <Field label="External Referral">
-                <input className={inputCls} placeholder="e.g. John Doe" value={f.externalReferral} onChange={e => set({ externalReferral: e.target.value })} />
-              </Field>
-              {f.externalReferral.trim() && (
-                <>
-                  <Field label="Their company">
-                    <input className={inputCls} value={f.externalCompany} onChange={e => set({ externalCompany: e.target.value })} />
-                  </Field>
-                  <Field label="Relationship">
-                    <select className={inputCls} value={f.relationship} onChange={e => set({ relationship: e.target.value })}>
-                      <option value="">—</option>
-                      {RELATIONSHIPS.map(r => (
-                        <option key={r}>{r}</option>
-                      ))}
-                    </select>
-                  </Field>
-                </>
-              )}
+              <div className="sm:col-span-2">
+                <span className="mb-1.5 block text-[14px] font-semibold text-slate-700">One store, or part of a dealer group?</span>
+                <Switch
+                  label="One store or a group"
+                  value={f.structure}
+                  onChange={v => set({ structure: v })}
+                  options={[
+                    { value: 'single', label: 'One store' },
+                    { value: 'group', label: 'Part of a dealer group' }
+                  ]}
+                />
+              </div>
             </div>
-            <p className="mt-2 text-[13px] text-slate-500">Saved on the dealership’s history so there’s always a trail of who introduced it.</p>
-          </div>
-
-          <div className="border-t border-slate-100 pt-4">
-            <Field label="Structure Type">
-              <select className={inputCls} value={f.structure} onChange={e => set({ structure: e.target.value as 'single' | 'group' })}>
-                <option value="single">Single Rooftop</option>
-                <option value="group">Dealer Group</option>
-              </select>
-            </Field>
             {f.structure === 'group' && (
               <div className="mt-3 space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <Field label="Which group?" required>
                   <select className={inputCls} value={f.groupChoice} onChange={e => set({ groupChoice: e.target.value })}>
-                    <option value="">-- Choose --</option>
+                    <option value="">Choose…</option>
                     <option value="new">+ A new dealer group</option>
                     {groups.map(g => (
                       <option key={g.id} value={g.id}>
@@ -393,13 +305,13 @@ export const ProspectForm: React.FC<{
                 </Field>
                 {f.groupChoice === 'new' && (
                   <div className="grid gap-4 sm:grid-cols-3">
-                    <Field label="Group Name" required>
+                    <Field label="Group name" required>
                       <input className={inputCls} value={f.groupName} onChange={e => set({ groupName: e.target.value })} />
                     </Field>
-                    <Field label="Group Domain">
+                    <Field label="Group website">
                       <input className={inputCls} placeholder="www.group.com" value={f.groupDomain} onChange={e => set({ groupDomain: e.target.value })} />
                     </Field>
-                    <Field label="# of Rooftops">
+                    <Field label="How many stores">
                       <input className={inputCls} inputMode="numeric" value={f.rooftops} onChange={e => set({ rooftops: e.target.value })} />
                     </Field>
                     <Field label="Group decision maker" className="sm:col-span-3">
@@ -433,23 +345,134 @@ export const ProspectForm: React.FC<{
                 )}
               </div>
             )}
-          </div>
-
-          {confirmDuplicate && dupes.length > 0 && (
-            <div className="space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-[15px] text-amber-950">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-                <span>
-                  Looks like this may already be in the CRM: {dupes.map(d => `${d.dealershipName} (${d.city}, ${d.state} · ${d.stage})`).join('; ')}.
-                </span>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <span className="mb-1.5 block text-[14px] font-semibold text-slate-700">Type</span>
+                <Switch
+                  label="Franchise or independent"
+                  value={f.franchiseType}
+                  onChange={v => set({ franchiseType: v })}
+                  options={[
+                    { value: 'Franchise', label: 'Franchise' },
+                    { value: 'Independent', label: 'Independent' }
+                  ]}
+                />
               </div>
-              {onOpenExisting && (
-                <button type="button" onClick={() => onOpenExisting(dupes[0])} className="min-h-[44px] rounded-xl border border-amber-400 bg-white px-4 font-semibold">
-                  Open the existing one
-                </button>
+              <Field label="Used cars on the lot">
+                <input className={inputCls} inputMode="numeric" placeholder="e.g. 75" value={f.usedCarsOnLot} onChange={e => set({ usedCarsOnLot: e.target.value })} />
+              </Field>
+              {f.franchiseType === 'Franchise' && (
+                <Field label="Brands" hint="Separate with commas, e.g. Ford, Lincoln" className="sm:col-span-2">
+                  <input className={inputCls} value={f.brands} onChange={e => set({ brands: e.target.value })} />
+                </Field>
+              )}
+              <Field label="Main phone">
+                <input className={inputCls} type="tel" inputMode="tel" placeholder="(555) 555-5555" value={f.phone} onChange={e => set({ phone: e.target.value })} />
+              </Field>
+              <Field label="Website">
+                <input className={inputCls} placeholder="www.dealership.com" value={f.website} onChange={e => set({ website: e.target.value })} />
+              </Field>
+            </div>
+          </FormSection>
+
+          <FormSection title="Where it is">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Street address" className="sm:col-span-2">
+                <input className={inputCls} value={f.address} onChange={e => set({ address: e.target.value })} />
+              </Field>
+              <Field label="City" required>
+                <input className={inputCls} value={f.city} onChange={e => { set({ city: e.target.value }); setRadarCoords(null); }} />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="State" required>
+                  <select className={inputCls} value={f.state} onChange={e => { set({ state: e.target.value }); setRadarCoords(null); }}>
+                    <option value="">—</option>
+                    {US_STATES.map(s => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="ZIP" required>
+                  <input className={inputCls} inputMode="numeric" maxLength={10} value={f.zipCode} onChange={e => { set({ zipCode: e.target.value }); setRadarCoords(null); }} />
+                </Field>
+              </div>
+            {located && band && miles !== undefined && (
+              <div className="flex flex-wrap items-center gap-2 text-[15px] sm:col-span-2">
+                <MapPin className="h-5 w-5 text-slate-500" />
+                <span className={`rounded-full border px-2.5 py-0.5 font-semibold ${band === 'home' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : band === 'edge' ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-rose-300 bg-rose-50 text-rose-800'}`}>
+                  {band === 'home' ? '🟢' : band === 'edge' ? '🟡' : '🔴'} {Math.round(miles)} mi from your home{band === 'edge' ? ' · edge of region' : band === 'out_of_town' ? ' · out of town' : ''}
+                </span>
+                {located.approximate && <span className="text-slate-500">(approximate until the address is checked)</span>}
+              </div>
+            )}
+            </div>
+          </FormSection>
+
+          {isClient && catalog.length > 0 && (
+            <FormSection title="Products they’ve signed up for" required>
+              <div className="flex flex-wrap gap-2">
+                {catalog
+                  .filter(p => p.isActive)
+                  .map(p => {
+                    const on = f.signedProducts.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => set({ signedProducts: on ? f.signedProducts.filter(x => x !== p.id) : [...f.signedProducts, p.id] })}
+                        className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold ${on ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white text-slate-700'}`}
+                      >
+                        {p.name}
+                      </button>
+                    );
+                  })}
+              </div>
+            </FormSection>
+          )}
+
+          <FormSection title="Who introduced it?" optional>
+            {showReferral || f.internalReferral || f.externalReferral ? (
+              <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Someone at GenZ">
+                <select className={inputCls} value={f.internalReferral} onChange={e => set({ internalReferral: e.target.value })}>
+                  <option value="">Nobody</option>
+                  {activeUsers.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.firstName} {u.lastName}
+                      {` — ${u.title ?? ROLE_LABEL[u.role]}`}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Someone outside GenZ">
+                <input className={inputCls} placeholder="e.g. John Doe" value={f.externalReferral} onChange={e => set({ externalReferral: e.target.value })} />
+              </Field>
+              {f.externalReferral.trim() && (
+                <>
+                  <Field label="Their company">
+                    <input className={inputCls} value={f.externalCompany} onChange={e => set({ externalCompany: e.target.value })} />
+                  </Field>
+                  <Field label="Relationship">
+                    <select className={inputCls} value={f.relationship} onChange={e => set({ relationship: e.target.value })}>
+                      <option value="">—</option>
+                      {RELATIONSHIPS.map(r => (
+                        <option key={r}>{r}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </>
               )}
             </div>
-          )}
+                <p className="mt-2 text-[13px] text-slate-500">Kept on the dealership’s history so there’s always a record of who introduced it.</p>
+              </>
+            ) : (
+              <Btn size="sm" icon={<UserRoundPlus className="h-4 w-4" />} onClick={() => setShowReferral(true)}>
+                Add who introduced it
+              </Btn>
+            )}
+          </FormSection>
         </div>
       )}
     </FormShell>
@@ -505,7 +528,7 @@ const RadarPanel: React.FC<{
               setFrom(w);
               void search(w);
             }}
-            className={`min-h-[48px] rounded-xl border-2 px-4 text-[16px] font-semibold ${from === w ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white'}`}
+            className={`min-h-[48px] rounded-xl border-2 px-4 text-[16px] font-semibold ${from === w ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white'}`}
           >
             {w === 'home' ? 'From my home ZIP' : 'From where I am now'}
           </button>
@@ -550,7 +573,7 @@ const RadarPanel: React.FC<{
                   {r.franchiseBrands.length ? ` (${r.franchiseBrands.join(', ')})` : ''}
                 </div>
               </div>
-              <button type="button" onClick={() => onPick(r)} className="min-h-[48px] rounded-xl bg-blue-600 px-4 text-[16px] font-bold text-white hover:bg-blue-700">
+              <button type="button" onClick={() => onPick(r)} className="min-h-[48px] rounded-xl bg-brand px-4 text-[16px] font-bold text-onaccent hover:bg-brand-hover">
                 Add
               </button>
             </div>

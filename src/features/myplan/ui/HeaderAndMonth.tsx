@@ -45,7 +45,7 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
             <CircleHelp className="h-6 w-6" />
           </button>
           {offline && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-3 py-1 text-[13px] font-semibold text-white">
+            <span className="inline-flex items-center gap-1 rounded-full bg-ink-2 px-3 py-1 text-[13px] font-semibold text-onaccent">
               <WifiOff className="h-4 w-4" /> Offline — will sync when you’re back online
             </span>
           )}
@@ -70,7 +70,7 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
             </label>
           )}
           <Button variant="secondary" aria-label="To do" onClick={() => openSheet({ kind: 'todo' })} icon={<ListTodo className="h-5 w-5" />}>
-            <span className="hidden sm:inline">To do</span>{todo ? <span className="ml-1 rounded-full bg-rose-600 px-2 text-[13px] text-white">{todo}</span> : null}
+            <span className="hidden sm:inline">To do</span>{todo ? <span className="ml-1 rounded-full bg-danger px-2 text-[13px] text-onaccent">{todo}</span> : null}
           </Button>
           <Button variant="secondary" aria-label="Basket" onClick={() => openSheet({ kind: 'basket' })} icon={<Inbox className="h-5 w-5" />}>
             <span className="hidden sm:inline">Basket</span> <span className="ml-1 rounded-full bg-slate-100 px-2 text-[13px]">{basket.length}</span>
@@ -202,7 +202,7 @@ export const MonthView: React.FC = () => {
                 <div className="mt-1 flex flex-wrap gap-0.5">
                   {order.map((w, i) =>
                     counts[i] ? (
-                      <span key={w} className={`inline-flex items-center gap-0.5 rounded-full px-1 text-[12px] font-bold text-white ${WORK_STYLE[w].dot}`}>
+                      <span key={w} className={`inline-flex items-center gap-0.5 rounded-full px-1 text-[12px] font-bold text-onaccent ${WORK_STYLE[w].dot}`}>
                         {counts[i]}
                       </span>
                     ) : null

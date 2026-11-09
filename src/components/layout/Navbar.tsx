@@ -1,4 +1,5 @@
 import React from 'react';
+import { ThemeMenu } from '../ui/ThemeToggle';
 import { User, UserRole, GamificationProfile } from '../../types/crm';
 import { 
   Compass, 
@@ -39,11 +40,11 @@ export const Navbar: React.FC<NavbarProps> = ({
     switch (role) {
       case 'new_rep': return 'New Sales Rep';
       case 'veteran_rep': return 'Veteran Sales Rep';
-      case 'team_lead': return 'Team Lead';
-      case 'manager': return 'Regional Manager';
-      case 'finance': return 'Finance Controller';
-      case 'executive': return 'Executive / C-Level';
-      case 'owner': return 'Company Owner';
+      case 'team_lead': return 'Team lead';
+      case 'manager': return 'Manager';
+      case 'finance': return 'Finance';
+      case 'executive': return 'Executive';
+      case 'owner': return 'Owner';
       case 'admin': return 'Administrator';
       default: return role;
     }
@@ -57,197 +58,105 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'manager': return 'bg-purple-50 text-purple-700 border-purple-200';
       case 'finance': return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'executive': return 'bg-rose-50 text-rose-700 border-rose-200';
-      case 'owner': return 'bg-slate-900 text-white border-slate-700';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
+      case 'owner': return 'bg-ink text-onaccent border-ink-2';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
 
   const profile = gamificationProfile;
+  const roleWord = (u: User) => (u.role === 'new_rep' ? 'New rep' : u.role === 'veteran_rep' ? 'Rep' : getRoleLabel(u.role));
+  const groupsList: { label: string; roles: UserRole[] }[] = [
+    { label: 'Reps', roles: ['veteran_rep', 'new_rep', 'team_lead'] },
+    { label: 'Managers', roles: ['manager'] },
+    { label: 'Owners & finance', roles: ['owner', 'executive', 'finance'] },
+    { label: 'Admin', roles: ['admin'] }
+  ];
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-3 md:px-5 flex items-center justify-between sticky top-0 z-30 shadow-xs gap-2">
-      {/* Brand & Command Bar Trigger */}
-      <div className="flex items-center gap-2 md:gap-4 shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 bg-linear-to-br from-blue-600 to-indigo-700 rounded-lg flex items-center justify-center text-white shadow-xs font-black">
-            <Compass className="w-5 h-5" />
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 md:px-5">
+      <div className="flex min-w-0 items-center gap-3 md:gap-5">
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-onaccent">
+            <Compass className="h-5 w-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-base md:text-lg tracking-tight text-slate-900">ApexDrive</span>
-              <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200">CRM</span>
-            </div>
-            <p className="text-[10px] text-slate-400 hidden sm:block">Dealership Field Sales</p>
-          </div>
+          <span className="hidden text-[18px] font-extrabold tracking-tight text-slate-900 sm:inline">ApexDrive</span>
         </div>
 
-        {/* Global Quick Search / Command Button */}
         <button
           type="button"
           onClick={onOpenCommand}
-          className="hidden sm:flex items-center gap-2 text-xs bg-slate-100 hover:bg-slate-200/80 text-slate-600 px-2.5 py-1.5 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-          title="Open Natural Language Command Bar (Cmd+K)"
+          className="flex min-h-[40px] min-w-0 cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-[14px] text-slate-500 transition hover:border-slate-400 md:w-80"
+          title="Search (Ctrl+K or Cmd+K)"
+          aria-label="Search"
         >
-          <Search className="w-3.5 h-3.5 text-slate-400" />
-          <span className="hidden xl:inline font-medium">Quick search or AI command...</span>
-          <kbd className="hidden 2xl:inline-flex items-center gap-0.5 text-[10px] font-mono bg-white px-1.5 py-0.5 rounded border border-slate-300 text-slate-500 shadow-2xs">
-            <Command className="w-2.5 h-2.5" /> K
+          <Search className="h-4 w-4 shrink-0" />
+          <span className="hidden truncate md:inline">Search dealerships, people, pages…</span>
+          <kbd className="ml-auto hidden items-center gap-0.5 rounded border border-slate-300 bg-slate-50 px-1.5 text-[12px] text-slate-500 lg:inline-flex">
+            <Command className="h-3 w-3" />K
           </kbd>
         </button>
       </div>
 
-      {/* PERSISTENT GAME STRIP (Section 5) */}
-      {profile && (
-        <div 
-          onClick={onOpenGamification}
-          className="flex min-w-0 flex-1 md:flex-none items-center gap-2 md:gap-3 px-2.5 py-1 bg-linear-to-r from-amber-50/80 via-indigo-50/50 to-blue-50/80 rounded-xl border border-amber-200/70 shadow-2xs cursor-pointer hover:border-amber-300 transition-all text-xs overflow-x-auto no-scrollbar"
-          title="Click to view full Game Day Scorecard & Leaderboards"
-        >
-          {/* Level Title */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="font-black text-amber-700 bg-amber-200/70 px-1.5 py-0.5 rounded text-[11px] font-mono">
-              LVL {profile.level}
+      <div className="flex shrink-0 items-center gap-2">
+        {profile && (
+          <button
+            type="button"
+            onClick={onOpenGamification}
+            className="flex min-h-[40px] cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[14px] font-semibold text-slate-800 transition hover:border-slate-400"
+            title={`Level ${profile.level} · ${profile.levelTitle} · ${profile.pointsToday} of ${profile.dailyTarget} points today${profile.activeMultiplier ? ` · ${profile.activeMultiplier.label}` : ''}`}
+          >
+            <span className="inline-flex items-center gap-0.5 text-orange-600">
+              <Flame className="h-4 w-4 fill-orange-500 text-orange-500" />
+              {profile.streakDays}
             </span>
-            <span className="font-bold text-slate-800 text-[11px] hidden md:inline">
-              {profile.levelTitle}
+            <span className="hidden sm:inline">{profile.points.toLocaleString()} pts</span>
+            <span className="hidden h-1.5 w-12 overflow-hidden rounded-full bg-slate-100 lg:block" aria-hidden>
+              <span className="block h-full rounded-full bg-brand" style={{ width: `${Math.min(100, (profile.pointsToday / Math.max(1, profile.dailyTarget)) * 100)}%` }} />
             </span>
-          </div>
+          </button>
+        )}
 
-          <div className="h-4 w-px bg-slate-200 hidden sm:block" />
+        <ThemeMenu />
 
-          {/* Points Progress */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <div className="text-right">
-              <span className="font-black font-mono text-slate-900 text-xs">
-                {profile.points.toLocaleString()}
-              </span>
-              <span className="text-[10px] text-slate-400 ml-0.5">pts</span>
-            </div>
-            {/* Progress bar to next level */}
-            <div className="w-14 h-2 bg-slate-200 rounded-full overflow-hidden hidden lg:block">
-              <div 
-                className="h-full bg-linear-to-r from-amber-500 to-indigo-600 rounded-full" 
-                style={{ width: `${Math.min(100, profile.levelProgressPercent)}%` }} 
-              />
-            </div>
-          </div>
-
-          <div className="h-4 w-px bg-slate-200 hidden sm:block" />
-
-          {/* Points Today vs Target */}
-          <div className="flex items-center gap-1 shrink-0 bg-white/80 px-2 py-0.5 rounded-lg border border-slate-200/60">
-            <Zap className="w-3 h-3 text-indigo-600 fill-indigo-600" />
-            <span className="font-bold font-mono text-[11px] text-indigo-950">
-              {profile.pointsToday}/{profile.dailyTarget}
-            </span>
-            <span className="text-[9px] text-slate-400 hidden xl:inline">today</span>
-          </div>
-
-          {/* Streak Flame */}
-          <div className="flex items-center gap-1 shrink-0 text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-200">
-            <Flame className="w-3.5 h-3.5 fill-orange-500 text-orange-500" />
-            <span className="font-mono text-[11px]">{profile.streakDays}d</span>
-          </div>
-
-          {/* Team Rank */}
-          <div className="flex items-center gap-1 shrink-0 text-slate-700 bg-white/80 px-2 py-0.5 rounded-lg border border-slate-200/60 hidden sm:flex">
-            <Trophy className="w-3 h-3 text-amber-500" />
-            <span className="text-[11px] font-semibold font-mono">#{profile.weeklyRank}</span>
-          </div>
-
-          {/* Active Product Bonus / Multiplier Badge */}
-          {profile.activeMultiplier && (
-            <div className="flex items-center gap-1 shrink-0 text-rose-700 font-black bg-rose-100/90 px-2 py-0.5 rounded-lg border border-rose-300 text-[10px] animate-pulse">
-              <Sparkles className="w-3 h-3" />
-              <span>{profile.activeMultiplier.label}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Action shortcuts & Role switcher */}
-      <div className="flex items-center gap-1.5 md:gap-2.5 shrink-0">
-        {/* Mobile Work Day Button */}
-        <button
-          type="button"
-          onClick={onOpenMobileWorkDay}
-          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors cursor-pointer"
-          title="Launch Field Execution Mode for today's visits"
-        >
-          <Smartphone className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Work My Day</span>
-        </button>
-
-        {/* Google Workspace Sync */}
         <button
           type="button"
           onClick={onOpenWorkspaceSync}
-          className="hidden sm:flex items-center gap-1 text-xs text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-slate-100 px-2 py-1.5 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-          title="Google Workspace weekly data sync"
+          className="hidden min-h-[40px] cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-2.5 text-slate-600 transition hover:border-slate-400 sm:flex"
+          title={`Google Calendar & Tasks sync${syncState.lastSyncTime ? ` · last ${syncState.lastSyncTime}` : ''}`}
+          aria-label="Google sync"
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${syncState.isSyncing ? 'animate-spin' : ''}`} />
-          <span className="hidden 2xl:inline text-[11px] text-slate-500">Workspace Synced</span>
+          <RefreshCw className={`h-4 w-4 ${syncState.isSyncing ? 'animate-spin text-blue-600' : ''}`} />
         </button>
 
-        {/* Role Switcher (Preview Persona) */}
-        <div className="flex items-center gap-2 bg-slate-100/90 pl-2 pr-1.5 py-1 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="hidden lg:flex flex-col text-right">
-            <span className="text-xs font-bold text-slate-900 leading-tight">
-              {currentUser.firstName} {currentUser.lastName}
-            </span>
-            <span className="text-[10px] text-slate-500 flex items-center justify-end gap-1">
-              <span>{currentUser.region}</span>
-              <span>•</span>
-              <span className={`px-1 rounded text-[9px] font-bold border ${getRoleBadgeColor(currentUser.role)}`}>
-                {getRoleLabel(currentUser.role)}
-              </span>
-            </span>
-          </div>
-
+        <label className="flex min-h-[40px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 pl-1.5 pr-1">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-2 text-[12px] font-bold text-onaccent" aria-hidden>
+            {currentUser.firstName[0]}
+            {currentUser.lastName[0]}
+          </span>
+          <span className="hidden text-[12px] text-slate-500 xl:inline">Viewing as</span>
           <select
             value={currentUser.id}
-            onChange={(e) => {
+            onChange={e => {
               const u = allUsers.find(x => x.id === e.target.value);
               if (u) onSelectUser(u);
             }}
-            className="max-w-[110px] sm:max-w-none text-xs bg-white text-slate-800 font-semibold px-2 py-1 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs"
+            className="max-w-[140px] cursor-pointer bg-transparent py-1 text-[14px] font-semibold text-slate-900 focus:outline-hidden sm:max-w-[280px]"
             aria-label="Switch Role Persona"
           >
-            <optgroup label="Sales Reps">
-              {allUsers.filter(u => u.role === 'veteran_rep' || u.role === 'new_rep').map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.firstName} {u.lastName} ({u.role === 'new_rep' ? 'Rookie Rep' : 'Vet Rep'} - {u.region})
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Management & Leadership">
-              {allUsers.filter(u => u.role === 'manager').map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.firstName} {u.lastName} (Manager - {u.region})
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Finance & Executives">
-              {allUsers.filter(u => u.role === 'finance').map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.firstName} {u.lastName} (Finance Controller)
-                </option>
-              ))}
-              {allUsers.filter(u => u.role === 'owner' || u.role === 'executive').map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.firstName} {u.lastName} ({u.role === 'owner' ? 'Owner' : 'Executive'} / C-Level)
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Team Leads & Admin">
-              {allUsers.filter(u => u.role === 'team_lead' || u.role === 'admin').map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.firstName} {u.lastName} ({u.role === 'admin' ? 'Admin login' : 'Team Lead'})
-                </option>
-              ))}
-            </optgroup>
+            {groupsList.map(g => (
+              <optgroup key={g.label} label={g.label}>
+                {allUsers
+                  .filter(u => g.roles.includes(u.role))
+                  .map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.firstName} {u.lastName} — {roleWord(u)}
+                      {u.region && u.role !== 'admin' ? `, ${u.region}` : ''}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
           </select>
-        </div>
+        </label>
       </div>
     </header>
   );

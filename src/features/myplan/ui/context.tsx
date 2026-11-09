@@ -35,7 +35,7 @@ export interface AddPreset {
 export type SheetState =
   | { kind: 'add'; preset?: AddPreset }
   | { kind: 'edit'; slotId: string }
-  | { kind: 'outcome'; slotId: string }
+  | { kind: 'outcome'; slotId: string; draft?: PlanSlot }
   | { kind: 'move'; slotId: string }
   | { kind: 'todo' }
   | { kind: 'basket' }

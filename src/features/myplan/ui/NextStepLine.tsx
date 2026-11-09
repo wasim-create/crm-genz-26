@@ -26,7 +26,7 @@ export const NextStepLine: React.FC<{ dealershipId: string }> = ({ dealershipId 
       <span className="font-semibold">{state.kind === 'planned' ? 'Next: ' : ''}</span>
       <span className="min-w-0 flex-1">{nextStepText(state)}</span>
       {missing && !readOnly && (
-        <button type="button" onClick={() => openSheet({ kind: 'nextstep', dealershipId })} className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-rose-600 px-3 text-[13px] font-bold text-white">
+        <button type="button" onClick={() => openSheet({ kind: 'nextstep', dealershipId })} className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-danger px-3 text-[13px] font-bold text-onaccent">
           Plan it <ArrowRight className="h-3.5 w-3.5" />
         </button>
       )}

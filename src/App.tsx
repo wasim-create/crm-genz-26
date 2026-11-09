@@ -21,7 +21,7 @@ import {
 } from './types/crm';
 import { LocalStorageAdapter } from './services/storageAdapter';
 import { Navbar } from './components/layout/Navbar';
-import { Sidebar, ActiveView } from './components/layout/Sidebar';
+import { Sidebar, ActiveView, pagesFor } from './components/layout/Sidebar';
 import { MyPlanModule } from './features/myplan/MyPlanModule';
 import { DealershipPlanPanel } from './features/myplan/DealershipPlanPanel';
 import { resetMyPlan, setCrmBridge } from './features/myplan/data/store';
@@ -76,7 +76,7 @@ export default function App() {
   // Shared "Add New Prospect / Client" and "Add Contact" forms (used everywhere)
   const [prospectForm, setProspectForm] = useState<{ mode: 'prospect' | 'client'; radar?: boolean } | null>(null);
   const [contactFormFor, setContactFormFor] = useState<Dealership | null>(null);
-  const [planRequest, setPlanRequest] = useState<{ dealershipId: string; planLater?: boolean; nextStep?: boolean; nonce: number } | null>(null);
+  const [planRequest, setPlanRequest] = useState<{ dealershipId: string; planLater?: boolean; nextStep?: boolean; logVisit?: boolean; nonce: number } | null>(null);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isWorkspaceSyncOpen, setIsWorkspaceSyncOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -230,7 +230,7 @@ export default function App() {
     else if (u.role === 'executive' || u.role === 'owner') setCurrentView('executive_desk');
     else if (u.role === 'admin') setCurrentView('settings');
     
-    showToast(`Switched persona to ${u.firstName} ${u.lastName} (${u.role})`);
+    showToast(`Now viewing as ${u.firstName} ${u.lastName}`);
   };
 
   // Keyboard shortcut Cmd+K / Ctrl+K
@@ -247,7 +247,7 @@ export default function App() {
 
   if (!currentUser) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-slate-900 text-white font-mono text-sm">
+      <div className="h-screen w-screen flex items-center justify-center bg-ink text-onaccent font-mono text-sm">
         Loading ApexDrive CRM...
       </div>
     );
@@ -305,28 +305,6 @@ export default function App() {
     }
   };
 
-  const handleAddActivity = (act: Activity) => {
-    const newActs = [act, ...activities];
-    setActivities(newActs);
-    storage.saveActivity(act);
-
-    // Live points award (Section 5)
-    awardPoints('visit_good_window', act.dealershipId, act.dealershipName, `Field visit at ${act.dealershipName}`);
-
-    // Audit log
-    const audit: AuditLogRecord = {
-      id: `aud_${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      userId: currentUser.id,
-      userName: `${currentUser.firstName} ${currentUser.lastName}`,
-      dealershipId: act.dealershipId,
-      dealershipName: act.dealershipName,
-      action: `${act.activityType} Logged`,
-      details: act.notes
-    };
-    setAuditLogs([audit, ...auditLogs]);
-    storage.saveAuditLog(audit);
-  };
 
   const handleClaimDealership = (deal: Dealership, reason?: string) => {
     const updated: Dealership = {
@@ -355,9 +333,10 @@ export default function App() {
     storage.saveAuditLog(audit);
   };
 
-  const handleMoveStage = (deal: Dealership, newStage: PipelineStage) => {
+  const handleMoveStage = (deal: Dealership, newStage: PipelineStage, note?: string, patch: Partial<Dealership> = {}) => {
     const updated: Dealership = {
       ...deal,
+      ...patch,
       stage: newStage,
       lastTouchpointDate: new Date().toISOString()
     };
@@ -371,7 +350,7 @@ export default function App() {
       dealershipId: deal.id,
       dealershipName: deal.dealershipName,
       action: `Stage Changed to ${newStage}`,
-      details: `Moved from ${deal.stage} to ${newStage}`
+      details: `Moved from ${deal.stage} to ${newStage}${note ? `. ${note}` : ''}`
     };
     setAuditLogs([audit, ...auditLogs]);
     storage.saveAuditLog(audit);
@@ -597,16 +576,16 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 flex flex-col antialiased text-slate-800">
       {/* Toast Notification Container with Live Points Burst */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-100 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in slide-in-from-bottom-2 duration-200 border border-slate-700">
+        <div className="fixed bottom-5 right-5 z-100 bg-ink text-onaccent px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in slide-in-from-bottom-2 duration-200 border border-ink-2">
           {toastMessage.points ? (
-            <span className="w-6 h-6 rounded-lg bg-amber-500 text-slate-900 font-mono font-black text-xs flex items-center justify-center shrink-0">
+            <span className="w-6 h-6 rounded-lg bg-amber-500 text-darkink font-mono font-black text-xs flex items-center justify-center shrink-0">
               +{toastMessage.points}
             </span>
           ) : (
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           )}
           <span>{toastMessage.text}</span>
-          <button type="button" onClick={() => setToastMessage(null)} className="ml-2 text-slate-400 hover:text-white">
+          <button type="button" onClick={() => setToastMessage(null)} className="ml-2 text-slate-400 hover:text-onaccent">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -851,7 +830,11 @@ export default function App() {
           allUsers={users}
           onClose={() => setSelectedDealership(null)}
           onUpdateDealership={handleUpdateDealership}
-          onAddActivity={handleAddActivity}
+          onLogVisit={currentUser.role === 'finance' || currentUser.role === 'admin' ? undefined : (d) => {
+            setSelectedDealership(null);
+            setPlanRequest({ dealershipId: d.id, logVisit: true, nonce: Date.now() });
+            setCurrentView('planner');
+          }}
           onRequestAssist={handleRequestAssist}
           onAddContact={(c) => {
             const list = [c, ...contacts];
@@ -874,6 +857,7 @@ export default function App() {
           onRequestAddContact={(d) => setContactFormFor(d)}
           nextStep={nextSteps.get(selectedDealership.id)}
           onPlanNextStep={planNextStep}
+          onMoveStage={currentUser.role === 'finance' ? undefined : handleMoveStage}
         />
       )}
 
@@ -883,6 +867,9 @@ export default function App() {
         onClose={() => setIsCommandOpen(false)}
         dealerships={dealerships}
         onSelectDealership={(d) => setSelectedDealership(d)}
+        contacts={contacts}
+        pages={pagesFor(currentUser.role)}
+        onNavigate={id => setCurrentView(id as ActiveView)}
       />
 
       {/* Google Workspace Sync Modal */}

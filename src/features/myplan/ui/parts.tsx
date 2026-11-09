@@ -101,7 +101,7 @@ export const TasksEditor: React.FC<{
                           aria-pressed={chosen}
                           onClick={() => toggleProduct(def.id, p.id)}
                           className={`min-h-[44px] rounded-xl border-2 px-3 text-[15px] font-semibold transition ${
-                            chosen ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                            chosen ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                           }`}
                         >
                           {p.name}
@@ -229,7 +229,7 @@ export const DayChooser: React.FC<{ value?: string; onChange: (d: string) => voi
             onClick={() => onChange(x)}
             aria-pressed={value === x}
             className={`min-h-[52px] rounded-xl border-2 px-4 text-[16px] font-semibold transition ${
-              value === x ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300'
+              value === x ? 'border-blue-600 bg-brand text-onaccent' : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300'
             }`}
           >
             {relativeDayLabel(x, today) === formatDayShort(x) ? formatDayShort(x) : `${relativeDayLabel(x, today)} · ${formatDayShort(x).split(', ')[0]}`}

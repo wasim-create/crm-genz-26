@@ -1,23 +1,8 @@
-import React, { useState } from 'react';
-import { ManagerAssist, Dealership, User } from '../../types/crm';
-import { formatUSDate } from '../../utils/territory';
-import {
-  Briefcase,
-  Flame,
-  CheckCircle2,
-  Clock,
-  Sparkles,
-  UserCheck,
-  Building,
-  Phone,
-  ArrowRight,
-  ShieldCheck,
-  Calendar,
-  AlertCircle,
-  FileSignature,
-  ArrowRightLeft,
-  XCircle
-} from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowRightLeft, Briefcase, CalendarClock, CheckCircle2, ExternalLink, Sparkles } from 'lucide-react';
+import { AssistType, Dealership, ManagerAssist, User } from '../../types/crm';
+import { Badge, Btn, Dialog, EmptyState, Page, PageHeader, Panel, Stat, Toolbar, Tone, useSticky } from '../ui/kit';
+import { formatDayTime, formatRelative, matches, plural } from '../../utils/format';
 
 interface ManagerAssistViewProps {
   assists: ManagerAssist[];
@@ -30,405 +15,341 @@ interface ManagerAssistViewProps {
   onTransferOwnership: (dealershipId: string, toRepId: string, reason: string) => void;
 }
 
-export const ManagerAssistView: React.FC<ManagerAssistViewProps> = ({
-  assists,
-  dealerships,
-  users,
-  currentUser,
-  onOpenDealership,
-  onUpdateAssist,
-  onSignDealWithAssist,
-  onTransferOwnership
-}) => {
-  const [selectedAssist, setSelectedAssist] = useState<ManagerAssist | null>(assists[0] || null);
-  const [showTransferModal, setShowTransferModal] = useState(false);
-  const [transferToRepId, setTransferToRepId] = useState('');
-  const [transferReason, setTransferReason] = useState('');
-  const [rescheduleTime, setRescheduleTime] = useState('14:00');
-  const [rescheduleDate, setRescheduleDate] = useState(() => {
-    const d = new Date();
-    do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
-  const [showRescheduleInput, setShowRescheduleInput] = useState(false);
+export const ASSIST_TYPE_LABEL: Record<AssistType, string> = {
+  join_call: 'Join a call',
+  in_person_visit: 'Join a visit',
+  google_meet: 'Join a Google Meet',
+  terms_approval: 'Approve terms',
+  strategy_session: 'Plan the close',
+  contract_signing_support: 'Help sign the contract'
+};
 
+const STATUS: Record<ManagerAssist['status'], { label: string; tone: Tone }> = {
+  Pending: { label: 'Waiting for reply', tone: 'amber' },
+  Accepted: { label: 'Booked', tone: 'blue' },
+  'Reschedule Proposed': { label: 'New time suggested', tone: 'violet' },
+  Declined: { label: 'Declined', tone: 'neutral' },
+  Completed: { label: 'Done', tone: 'green' }
+};
+
+type StatusFilter = 'open' | 'pending' | 'booked' | 'done' | 'declined' | 'all';
+const inStatus = (a: ManagerAssist, f: StatusFilter) =>
+  f === 'all' ||
+  (f === 'open' && ['Pending', 'Accepted', 'Reschedule Proposed'].includes(a.status)) ||
+  (f === 'pending' && a.status === 'Pending') ||
+  (f === 'booked' && (a.status === 'Accepted' || a.status === 'Reschedule Proposed')) ||
+  (f === 'done' && a.status === 'Completed') ||
+  (f === 'declined' && a.status === 'Declined');
+
+const when = (a: ManagerAssist) => ({ date: a.rescheduledDate ?? a.proposedDate, time: a.rescheduledTime ?? a.proposedTime });
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const nextWorkday = () => {
+  const d = new Date();
+  do d.setDate(d.getDate() + 1);
+  while (d.getDay() === 0 || d.getDay() === 6);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+export const ManagerAssistView: React.FC<ManagerAssistViewProps> = ({ assists, dealerships, users, currentUser, onOpenDealership, onUpdateAssist, onSignDealWithAssist, onTransferOwnership }) => {
   const isManager = ['manager', 'owner', 'executive'].includes(currentUser.role);
+  const key = `assists_${currentUser.id}`;
+  const mineOnly = (a: ManagerAssist) => (isManager ? currentUser.role !== 'manager' || a.assignedManagerId === currentUser.id : a.originRepId === currentUser.id);
 
-  // Filter assists
-  const displayAssists = isManager
-    ? assists
-    : assists.filter(a => a.originRepId === currentUser.id);
+  const [q, setQ] = useState('');
+  const [scope, setScope] = useSticky(`${key}_scope`, currentUser.role === 'manager' ? 'mine' : 'all');
+  const [status, setStatus] = useState<StatusFilter>(() => (isManager && assists.some(a => mineOnly(a) && a.status === 'Pending') ? 'pending' : 'open'));
+  const [type, setType] = useState('all');
+  const [rep, setRep] = useState('all');
+  const [sort, setSort] = useSticky(`${key}_sort`, 'soonest');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferTo, setTransferTo] = useState('');
+  const [transferReason, setTransferReason] = useState('');
+  const [reschedOpen, setReschedOpen] = useState(false);
+  const [reschedDate, setReschedDate] = useState(nextWorkday);
+  const [reschedTime, setReschedTime] = useState('14:00');
 
-  const pendingAssists = displayAssists.filter(a => a.status === 'Pending');
-  const activeAssists = displayAssists.filter(a => a.status === 'Accepted' || a.status === 'Reschedule Proposed');
-  const completedAssists = displayAssists.filter(a => a.status === 'Completed');
+  const visible = useMemo(() => assists.filter(a => (isManager ? scope === 'all' || mineOnly(a) : a.originRepId === currentUser.id)), [assists, scope, isManager, currentUser]);
 
-  const handleAcceptAssist = (a: ManagerAssist) => {
-    const updated: ManagerAssist = {
-      ...a,
-      status: 'Accepted',
-      managerNotes: 'Manager accepted assist request. Added to joint schedule inside Golden Window.'
+  const list = useMemo(() => {
+    const today = todayISO();
+    const rows = visible.filter(
+      a => inStatus(a, status) && (type === 'all' || a.assistType === type) && (rep === 'all' || a.originRepId === rep) && matches(q, a.dealershipName, a.originRepName, a.assignedManagerName, a.decisionMakerName)
+    );
+    const cmp: Record<string, (a: ManagerAssist, b: ManagerAssist) => number> = {
+      soonest: (a, b) => {
+        // upcoming first (soonest), then past ones (most recent)
+        const A = when(a).date, B = when(b).date;
+        const fa = A >= today, fb = B >= today;
+        if (fa !== fb) return fa ? -1 : 1;
+        return fa ? `${A}${when(a).time}`.localeCompare(`${B}${when(b).time}`) : B.localeCompare(A);
+      },
+      requested: (a, b) => b.requestDate.localeCompare(a.requestDate),
+      name: (a, b) => a.dealershipName.localeCompare(b.dealershipName)
     };
-    onUpdateAssist(updated);
-    if (selectedAssist?.id === a.id) setSelectedAssist(updated);
-  };
+    return [...rows].sort(cmp[sort]);
+  }, [visible, status, type, rep, q, sort]);
 
-  const handleProposeReschedule = (a: ManagerAssist) => {
-    const updated: ManagerAssist = {
-      ...a,
-      status: 'Reschedule Proposed',
-      rescheduledDate: rescheduleDate,
-      rescheduledTime: rescheduleTime,
-      managerNotes: `Manager proposed new time: ${rescheduleDate} at ${rescheduleTime}`
-    };
-    onUpdateAssist(updated);
-    setShowRescheduleInput(false);
-    if (selectedAssist?.id === a.id) setSelectedAssist(updated);
-  };
+  useEffect(() => {
+    if (!list.some(a => a.id === selectedId)) setSelectedId(list[0]?.id ?? null);
+  }, [list, selectedId]);
 
-  const handleDeclineAssist = (a: ManagerAssist) => {
-    const updated: ManagerAssist = {
-      ...a,
-      status: 'Declined',
-      managerNotes: 'Manager declined assist: Rep recommended to handle directly with standard product collateral.'
-    };
-    onUpdateAssist(updated);
-    if (selectedAssist?.id === a.id) setSelectedAssist(updated);
-  };
+  const selected = assists.find(a => a.id === selectedId) ?? null;
+  const deal = selected ? dealerships.find(d => d.id === selected.dealershipId) : undefined;
+  const count = (f: StatusFilter) => visible.filter(a => inStatus(a, f)).length;
 
-  const handleJointClosingWon = (a: ManagerAssist) => {
-    const deal = dealerships.find(d => d.id === a.dealershipId);
-    if (!deal) return;
-
-    const updated: ManagerAssist = {
-      ...a,
-      status: 'Completed',
-      completedAt: new Date().toISOString(),
-      outcomeNotes: `Deal successfully closed with joint assist from ${currentUser.firstName} ${currentUser.lastName}. Client placed in origin rep's book.`
-    };
-    onUpdateAssist(updated);
-    if (selectedAssist?.id === a.id) setSelectedAssist(updated);
-
-    onSignDealWithAssist(deal, currentUser);
-  };
-
-  const handleExecuteTransfer = () => {
-    if (!selectedAssist || !transferToRepId || !transferReason.trim()) return;
-    onTransferOwnership(selectedAssist.dealershipId, transferToRepId, transferReason);
-    setShowTransferModal(false);
-    setTransferReason('');
-  };
+  const update = (a: ManagerAssist, patch: Partial<ManagerAssist>) => onUpdateAssist({ ...a, ...patch });
+  const reps = users.filter(u => ['new_rep', 'veteran_rep', 'team_lead'].includes(u.role) && visible.some(a => a.originRepId === u.id));
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Briefcase className="w-5 h-5 text-purple-600" />
-            <span>{isManager ? 'Manager Assist Requests & Joint Closings' : 'My Assist Requests'}</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Reps keep full deal ownership through closure. Managers join high-urgency calls and visits to provide executive support.
-          </p>
-        </div>
+    <Page>
+      <PageHeader
+        icon={<Briefcase className="h-6 w-6" />}
+        title={isManager ? 'Assist requests' : 'My assist requests'}
+        subtitle={isManager ? 'Reps ask you to join a visit, call or signing. The rep keeps the deal and the credit.' : 'When you ask a manager to help, it shows here. You keep the deal and the credit.'}
+      />
 
-        <div className="flex items-center gap-2 font-mono text-xs">
-          <span className="bg-amber-50 text-amber-800 font-bold px-3 py-1.5 rounded-xl border border-amber-200">
-            {pendingAssists.length} Pending Review
-          </span>
-          <span className="bg-indigo-50 text-indigo-800 font-bold px-3 py-1.5 rounded-xl border border-indigo-200">
-            {activeAssists.length} Active / Scheduled
-          </span>
-          <span className="bg-emerald-50 text-emerald-800 font-bold px-3 py-1.5 rounded-xl border border-emerald-200">
-            {completedAssists.length} Closed with Assist
-          </span>
-        </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label={isManager ? 'Waiting for your reply' : 'Waiting for a reply'} value={count('pending')} tone={count('pending') ? 'amber' : 'neutral'} active={status === 'pending'} onClick={() => setStatus(status === 'pending' ? 'open' : 'pending')} />
+        <Stat label="Booked" value={count('booked')} tone="blue" active={status === 'booked'} onClick={() => setStatus(status === 'booked' ? 'open' : 'booked')} />
+        <Stat label="Done" value={count('done')} tone="green" active={status === 'done'} onClick={() => setStatus(status === 'done' ? 'open' : 'done')} />
+        <Stat label="Declined" value={count('declined')} active={status === 'declined'} onClick={() => setStatus(status === 'declined' ? 'open' : 'declined')} />
       </div>
 
-      {/* Main 2-Column Assist Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Assist Queue (5 cols) */}
-        <div className="lg:col-span-5 space-y-3">
-          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 px-2 py-1">
-              Assist Requests Stream
-            </h3>
+      <Toolbar
+        search={{ value: q, onChange: setQ, placeholder: 'Search dealership, rep or contact' }}
+        filters={[
+          {
+            id: 'status',
+            allLabel: 'Any status',
+            defaultValue: 'open',
+            value: status,
+            onChange: v => setStatus(v as StatusFilter),
+            options: [
+              { value: 'open', label: 'Open (waiting or booked)', count: count('open') },
+              { value: 'pending', label: 'Waiting for reply', count: count('pending') },
+              { value: 'booked', label: 'Booked', count: count('booked') },
+              { value: 'done', label: 'Done', count: count('done') },
+              { value: 'declined', label: 'Declined', count: count('declined') }
+            ]
+          },
+          ...(currentUser.role === 'manager' ? [{ id: 'scope', allLabel: 'All managers', defaultValue: 'mine', value: scope, onChange: setScope, options: [{ value: 'mine', label: 'Asked of me' }] }] : []),
+          ...(isManager ? [{ id: 'rep', allLabel: 'All reps', value: rep, onChange: setRep, options: reps.map(u => ({ value: u.id, label: `${u.firstName} ${u.lastName}`, count: visible.filter(a => a.originRepId === u.id).length })) }] : []),
+          { id: 'type', allLabel: 'Any kind of help', value: type, onChange: setType, options: (Object.keys(ASSIST_TYPE_LABEL) as AssistType[]).map(t => ({ value: t, label: ASSIST_TYPE_LABEL[t], count: visible.filter(a => a.assistType === t).length })) }
+        ]}
+        sort={{ value: sort, onChange: setSort, options: [{ value: 'soonest', label: 'Date (soonest first)' }, { value: 'requested', label: 'Asked (newest first)' }, { value: 'name', label: 'Dealership (A–Z)' }] }}
+        count={plural(list.length, 'request')}
+        onClear={() => {
+          setQ('');
+          setStatus('open');
+          setType('all');
+          setRep('all');
+          setScope(currentUser.role === 'manager' ? 'mine' : 'all');
+        }}
+      />
 
-            {displayAssists.length === 0 ? (
-              <div className="text-center py-8 text-xs text-slate-400">
-                No assist requests found.
-              </div>
-            ) : (
-              <div className="space-y-2 mt-2">
-                {displayAssists.map(a => {
-                  const isSelected = selectedAssist?.id === a.id;
-                  const deal = dealerships.find(d => d.id === a.dealershipId);
-
-                  return (
-                    <div
-                      key={a.id}
-                      onClick={() => setSelectedAssist(a)}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-purple-600 bg-purple-50/40 shadow-xs'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="font-bold text-sm text-slate-900">{a.dealershipName}</span>
-                          <div className="text-[11px] text-slate-500 mt-0.5">
-                            Rep: <strong className="text-slate-700">{a.originRepName}</strong> → Manager: {a.assignedManagerName}
-                          </div>
-                        </div>
-
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                          a.status === 'Accepted' ? 'bg-indigo-100 text-indigo-800' :
-                          a.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' :
-                          a.status === 'Declined' ? 'bg-rose-100 text-rose-800' :
-                          'bg-amber-100 text-amber-800'
-                        }`}>
-                          {a.status}
-                        </span>
-                      </div>
-
-                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-400" />
-                          {a.proposedDate} at {a.proposedTime}
-                        </span>
-                        <span className="capitalize font-medium text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded text-[10px]">
-                          {a.assistType.replace(/_/g, ' ')}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Detail, Brief & Action Execution (7 cols) */}
-        <div className="lg:col-span-7">
-          {selectedAssist ? (
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-6">
-              {/* Header Info */}
-              <div className="flex items-start justify-between border-b border-slate-100 pb-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs uppercase font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                      Assist Mode: {selectedAssist.assistType.replace(/_/g, ' ')}
-                    </span>
-                    <span className="text-xs text-slate-400">ID: {selectedAssist.id}</span>
+      {list.length === 0 ? (
+        <EmptyState title="Nothing here" hint={status === 'pending' ? 'No requests are waiting for a reply.' : 'Try another status or clear the filters.'} />
+      ) : (
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+          <div className="space-y-2 lg:col-span-5">
+            {list.map(a => {
+              const w = when(a);
+              const on = a.id === selectedId;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => setSelectedId(a.id)}
+                  aria-pressed={on}
+                  className={`w-full cursor-pointer rounded-2xl border bg-white p-4 text-left transition ${on ? 'border-blue-600 ring-2 ring-blue-600/20' : 'border-slate-200 hover:border-slate-300'}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[15px] font-bold text-slate-900">{a.dealershipName}</span>
+                    <Badge tone={STATUS[a.status].tone}>{STATUS[a.status].label}</Badge>
                   </div>
-                  <h3 className="text-xl font-bold text-slate-900 mt-1">
-                    {selectedAssist.dealershipName}
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Origin Rep: <strong>{selectedAssist.originRepName}</strong> (Retains Ownership & Commission Attribution)
+                  <div className="mt-1 text-[13px] text-slate-600">
+                    {ASSIST_TYPE_LABEL[a.assistType]} · {isManager ? a.originRepName : a.assignedManagerName}
+                  </div>
+                  <div className="mt-1 flex items-center gap-1 text-[13px] text-slate-500">
+                    <CalendarClock className="h-3.5 w-3.5" />
+                    {formatDayTime(w.date, w.time)}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {selected && (
+            <Panel className="space-y-5 p-5 lg:col-span-7">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={STATUS[selected.status].tone}>{STATUS[selected.status].label}</Badge>
+                    <span className="text-[13px] text-slate-500">Asked {formatRelative(selected.requestDate).toLowerCase()}</span>
+                  </div>
+                  <h2 className="mt-1 text-[22px] font-extrabold text-slate-900">{selected.dealershipName}</h2>
+                  <p className="text-[14px] text-slate-600">
+                    {ASSIST_TYPE_LABEL[selected.assistType]} · {selected.originRepName} asked {selected.assignedManagerName}
                   </p>
                 </div>
-
-                {isManager && (
-                  <button
-                    type="button"
-                    onClick={() => setShowTransferModal(true)}
-                    className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl border border-slate-200 font-bold transition-colors cursor-pointer"
-                    title="Transfer deal ownership with mandatory audited reason"
-                  >
-                    <ArrowRightLeft className="w-3.5 h-3.5" />
-                    <span>Transfer Ownership</span>
-                  </button>
-                )}
-              </div>
-
-              {/* AI Briefing Box (Strictly Non-Monetary) */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                  <Sparkles className="w-4 h-4 text-purple-600" />
-                  <span>AI Pre-Assist Executive Briefing</span>
-                </div>
-                <p className="text-xs text-slate-700 whitespace-pre-line leading-relaxed font-mono">
-                  {selectedAssist.aiBriefing}
-                </p>
-              </div>
-
-              {/* Proposed Meeting Parameters */}
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-slate-400 font-medium block text-[10px]">Decision Maker</span>
-                  <span className="font-bold text-slate-900">{selectedAssist.decisionMakerName}</span>
-                  <span className="text-slate-500 block text-[11px]">{selectedAssist.decisionMakerTitle}</span>
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-slate-400 font-medium block text-[10px]">Proposed Session Window</span>
-                  <span className="font-bold text-slate-900">{selectedAssist.proposedDate} at {selectedAssist.proposedTime}</span>
-                  <span className="text-emerald-700 block text-[11px] font-semibold">Inside 10 AM-4 PM Golden Window</span>
+                <div className="flex flex-wrap gap-2">
+                  {deal && (
+                    <Btn size="sm" icon={<ExternalLink className="h-4 w-4" />} onClick={() => onOpenDealership(deal)}>
+                      Open dealership
+                    </Btn>
+                  )}
+                  {isManager && (
+                    <Btn size="sm" icon={<ArrowRightLeft className="h-4 w-4" />} onClick={() => setTransferOpen(true)}>
+                      Move to another rep
+                    </Btn>
+                  )}
                 </div>
               </div>
 
-              {/* Objections & Products of Interest */}
-              <div className="space-y-2 text-xs">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Fact label="When">
+                  {formatDayTime(when(selected).date, when(selected).time)}
+                  {selected.status === 'Reschedule Proposed' && <div className="text-[13px] font-normal text-violet-700">New time suggested (was {formatDayTime(selected.proposedDate, selected.proposedTime)})</div>}
+                </Fact>
+                <Fact label="Decision maker">
+                  {selected.decisionMakerName}
+                  <div className="text-[13px] font-normal text-slate-500">{selected.decisionMakerTitle}</div>
+                </Fact>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-[14px] font-semibold text-slate-800">
+                  <Sparkles className="h-4 w-4 text-blue-600" /> Brief
+                </div>
+                <p className="whitespace-pre-line rounded-xl bg-slate-50 p-3 text-[14px] leading-relaxed text-slate-700">{selected.aiBriefing}</p>
+              </div>
+
+              {selected.objections && (
                 <div>
-                  <span className="font-bold text-slate-800">Primary Customer Objections / Needs:</span>
-                  <p className="text-slate-600 mt-0.5">{selectedAssist.objections || 'Wants reassurance regarding warranty claims turnaround speed.'}</p>
+                  <div className="text-[14px] font-semibold text-slate-800">What they need to hear</div>
+                  <p className="mt-0.5 text-[14px] text-slate-700">{selected.objections}</p>
                 </div>
-
+              )}
+              {selected.productsOfInterest.length > 0 && (
                 <div>
-                  <span className="font-bold text-slate-800">Products Under Evaluation:</span>
-                  <div className="flex flex-wrap gap-1.5 mt-1">
-                    {selectedAssist.productsOfInterest.map((p, i) => (
-                      <span key={i} className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-semibold text-[11px]">
+                  <div className="text-[14px] font-semibold text-slate-800">Products</div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {selected.productsOfInterest.map(p => (
+                      <Badge key={p} tone="blue">
                         {p}
-                      </span>
+                      </Badge>
                     ))}
                   </div>
                 </div>
-              </div>
+              )}
+              {(selected.managerNotes || selected.outcomeNotes) && (
+                <div className="rounded-xl bg-slate-50 p-3 text-[14px] text-slate-700">{selected.outcomeNotes ?? selected.managerNotes}</div>
+              )}
 
-              {/* Manager Actions / Joint Closing */}
-              <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-                {selectedAssist.status === 'Pending' && isManager ? (
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <button
-                      type="button"
-                      onClick={() => handleAcceptAssist(selectedAssist)}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
+              {isManager && (selected.status === 'Pending' || selected.status === 'Accepted' || selected.status === 'Reschedule Proposed') && (
+                <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+                  {selected.status === 'Pending' && (
+                    <>
+                      <Btn variant="primary" onClick={() => update(selected, { status: 'Accepted', managerNotes: `${currentUser.firstName} accepted. Added to both calendars.` })}>
+                        Accept
+                      </Btn>
+                      <Btn onClick={() => setReschedOpen(o => !o)}>Suggest another time</Btn>
+                      <Btn variant="danger" onClick={() => update(selected, { status: 'Declined', managerNotes: `${currentUser.firstName} declined: the rep can handle this one with the standard pack.` })}>
+                        Decline
+                      </Btn>
+                    </>
+                  )}
+                  {selected.status !== 'Pending' && deal && (
+                    <Btn
+                      variant="success"
+                      icon={<CheckCircle2 className="h-4 w-4" />}
+                      onClick={() => {
+                        update(selected, { status: 'Completed', completedAt: new Date().toISOString(), outcomeNotes: `Signed with ${currentUser.firstName} ${currentUser.lastName}'s help. ${selected.originRepName} keeps the client and the credit.` });
+                        onSignDealWithAssist(deal, currentUser);
+                      }}
                     >
-                      Accept & Sync Calendar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowRescheduleInput(!showRescheduleInput)}
-                      className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold cursor-pointer"
-                    >
-                      Propose Alternate Time
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeclineAssist(selectedAssist)}
-                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold cursor-pointer"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                ) : selectedAssist.status === 'Accepted' ? (
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleJointClosingWon(selectedAssist)}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Execute Contract & Win Deal (Rep Kept Protected)</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Status: {selectedAssist.status}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Reschedule Picker Modal Drawer */}
-              {showRescheduleInput && (
-                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-center gap-3 text-xs">
-                  <input
-                    type="date"
-                    value={rescheduleDate}
-                    onChange={(e) => setRescheduleDate(e.target.value)}
-                    className="p-1.5 border border-slate-300 rounded-lg bg-white"
-                  />
-                  <input
-                    type="time"
-                    value={rescheduleTime}
-                    onChange={(e) => setRescheduleTime(e.target.value)}
-                    className="p-1.5 border border-slate-300 rounded-lg bg-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleProposeReschedule(selectedAssist)}
-                    className="px-3 py-1.5 bg-amber-600 text-white font-bold rounded-lg cursor-pointer"
-                  >
-                    Send Proposal
-                  </button>
+                      Mark as signed
+                    </Btn>
+                  )}
                 </div>
               )}
-            </div>
-          ) : (
-            <div className="h-64 bg-white rounded-2xl border border-slate-200 flex items-center justify-center text-xs text-slate-400">
-              Select an assist request from the queue to view details.
-            </div>
+              {reschedOpen && selected.status === 'Pending' && (
+                <div className="flex flex-wrap items-end gap-2 rounded-xl bg-violet-50 p-3">
+                  <label className="text-[13px] font-semibold text-slate-700">
+                    Day
+                    <input type="date" value={reschedDate} onChange={e => setReschedDate(e.target.value)} className="mt-1 block min-h-[40px] rounded-xl border border-slate-300 bg-white px-3 text-[14px]" />
+                  </label>
+                  <label className="text-[13px] font-semibold text-slate-700">
+                    Time
+                    <input type="time" value={reschedTime} onChange={e => setReschedTime(e.target.value)} className="mt-1 block min-h-[40px] rounded-xl border border-slate-300 bg-white px-3 text-[14px]" />
+                  </label>
+                  <Btn
+                    variant="primary"
+                    onClick={() => {
+                      update(selected, { status: 'Reschedule Proposed', rescheduledDate: reschedDate, rescheduledTime: reschedTime, managerNotes: `${currentUser.firstName} suggested ${formatDayTime(reschedDate, reschedTime)}.` });
+                      setReschedOpen(false);
+                    }}
+                  >
+                    Send
+                  </Btn>
+                </div>
+              )}
+            </Panel>
           )}
         </div>
-      </div>
-
-      {/* Ownership Transfer Modal (Section 3: Manager action with required audited reason) */}
-      {showTransferModal && selectedAssist && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
-            <div className="flex items-center gap-2 text-slate-900 font-bold">
-              <ArrowRightLeft className="w-5 h-5 text-indigo-600" />
-              <span>Transfer Deal Ownership</span>
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Reassign active ownership for <strong>{selectedAssist.dealershipName}</strong>. 
-              Origin attribution will forever remain locked to <strong>{selectedAssist.originRepName}</strong>.
-            </p>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Reassign To Rep:</label>
-                <select
-                  value={transferToRepId}
-                  onChange={(e) => setTransferToRepId(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-xl bg-white"
-                >
-                  <option value="">Select Target Sales Rep...</option>
-                  {users.filter(u => u.role === 'veteran_rep' || u.role === 'new_rep').map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.firstName} {u.lastName} ({u.region})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Mandatory Transfer Reason (Audited):</label>
-                <textarea
-                  value={transferReason}
-                  onChange={(e) => setTransferReason(e.target.value)}
-                  placeholder="e.g. Territory boundary realignment or rep medical leave..."
-                  className="w-full p-2 border border-slate-300 rounded-xl bg-white h-20"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowTransferModal(false)}
-                className="px-3 py-1.5 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-bold cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!transferToRepId || !transferReason.trim()}
-                onClick={handleExecuteTransfer}
-                className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold cursor-pointer disabled:opacity-50"
-              >
-                Confirm Transfer & Notify
-              </button>
-            </div>
-          </div>
-        </div>
       )}
-    </div>
+
+      {transferOpen && selected && (
+        <Dialog title="Move this dealership to another rep" onClose={() => setTransferOpen(false)}>
+          <p className="text-[14px] text-slate-600">
+            {selected.originRepName} stays the rep who found {selected.dealershipName}; that credit never moves. The reason is recorded.
+          </p>
+          <label className="block text-[14px] font-semibold text-slate-800">
+            New rep
+            <select value={transferTo} onChange={e => setTransferTo(e.target.value)} className="mt-1 min-h-[40px] w-full rounded-xl border border-slate-300 bg-white px-3 text-[14px] font-normal">
+              <option value="">Choose a rep…</option>
+              {users
+                .filter(u => (u.role === 'veteran_rep' || u.role === 'new_rep') && u.id !== deal?.assignedRepId)
+                .map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.firstName} {u.lastName} ({u.region})
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="block text-[14px] font-semibold text-slate-800">
+            Reason
+            <textarea value={transferReason} onChange={e => setTransferReason(e.target.value)} placeholder="e.g. Territory change, or the rep is on leave" rows={3} className="mt-1 w-full rounded-xl border border-slate-300 p-3 text-[14px] font-normal" />
+          </label>
+          <div className="flex justify-end gap-2">
+            <Btn variant="ghost" onClick={() => setTransferOpen(false)}>
+              Cancel
+            </Btn>
+            <Btn
+              variant="primary"
+              disabled={!transferTo || !transferReason.trim()}
+              onClick={() => {
+                onTransferOwnership(selected.dealershipId, transferTo, transferReason.trim());
+                setTransferOpen(false);
+                setTransferReason('');
+              }}
+            >
+              Move it
+            </Btn>
+          </div>
+        </Dialog>
+      )}
+    </Page>
   );
 };
+
+const Fact: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div className="rounded-xl bg-slate-50 p-3">
+    <div className="text-[13px] text-slate-500">{label}</div>
+    <div className="text-[15px] font-semibold text-slate-900">{children}</div>
+  </div>
+);

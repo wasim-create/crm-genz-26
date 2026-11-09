@@ -101,6 +101,8 @@ export interface PlanSlot {
   spokeWithContactIds?: string[];
   spokeWithNames?: string[];
   outcomeNote?: string;
+  /** Logged after it happened, without being planned first. */
+  unplanned?: boolean;
   pointsAwarded?: number;
   skippedReason?: string;
   corrections?: { at: string; byName: string; note: string }[];

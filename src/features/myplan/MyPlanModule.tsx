@@ -34,6 +34,7 @@ import { WeekView } from './ui/WeekView';
 import { AddFlow } from './ui/AddFlow';
 import { EditSlotSheet, MoveSheet } from './ui/SlotSheets';
 import { OutcomeSheet } from './ui/OutcomeSheet';
+import { buildLoggedSlot } from './ui/logVisit';
 import { BasketSheet, ReminderBanner, SettingsSheet, TodoSheet, Walkthrough } from './ui/OtherSheets';
 import { LunchSheet, QuickViewSheet, ReplanSheet, TimeSheet } from './ui/DaySheets';
 
@@ -51,7 +52,7 @@ export interface MyPlanModuleProps {
   assists?: ManagerAssist[];
   workspaceItems?: WorkspaceItem[];
   /** Opened from elsewhere in the CRM ("Add to my plan" / "Plan later"). */
-  request?: { dealershipId: string; planLater?: boolean; nextStep?: boolean; nonce: number } | null;
+  request?: { dealershipId: string; planLater?: boolean; nextStep?: boolean; logVisit?: boolean; nonce: number } | null;
   onRequestHandled?: () => void;
   onAddContact: (c: Contact) => void;
   onSaveProspect: (r: ProspectFormResult) => void;
@@ -153,7 +154,16 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
   useEffect(() => {
     if (!props.request) return;
     setViewUserId(currentUser.id);
-    if (props.request.nextStep) setSheet({ kind: 'nextstep', dealershipId: props.request.dealershipId });
+    const d = dealershipById.get(props.request.dealershipId);
+    if (props.request.logVisit && d) {
+      // Today's planned visit for this dealership if there is one; otherwise log it as unplanned.
+      const open = state.slots.find(s => s.userId === currentUser.id && s.date === today && s.status === 'planned' && !isMessage(s.how) && s.target.kind === 'dealership' && s.target.id === d.id);
+      if (open) setSheet({ kind: 'outcome', slotId: open.id });
+      else {
+        const draft = buildLoggedSlot(d, currentUser.id, contacts, catalog, today, new Date());
+        setSheet({ kind: 'outcome', slotId: draft.id, draft });
+      }
+    } else if (props.request.nextStep) setSheet({ kind: 'nextstep', dealershipId: props.request.dealershipId });
     else setSheet({ kind: 'add', preset: { dealershipId: props.request.dealershipId, planLater: props.request.planLater, nonce: props.request.nonce } });
     props.onRequestHandled?.();
   }, [props.request?.nonce]);
@@ -245,7 +255,7 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
       {sheet?.kind === 'add' && <AddFlow key={sheet.preset?.nonce ?? 'add'} preset={sheet.preset} onClose={close} />}
       {sheet?.kind === 'edit' && <EditSlotSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
       {sheet?.kind === 'nextstep' && <NextStepSheet key={sheet.dealershipId} dealershipId={sheet.dealershipId} onClose={close} />}
-      {sheet?.kind === 'outcome' && <OutcomeSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
+      {sheet?.kind === 'outcome' && <OutcomeSheet key={sheet.slotId} slotId={sheet.slotId} draft={sheet.draft} onClose={close} />}
       {sheet?.kind === 'move' && <MoveSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
       {sheet?.kind === 'todo' && <TodoSheet onClose={close} />}
       {sheet?.kind === 'basket' && <BasketSheet onClose={close} />}
@@ -259,16 +269,16 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
       {state.toast && (
         <div
           role="status"
-          className="fixed left-1/2 top-3 z-[70] flex w-[min(92vw,560px)] -translate-x-1/2 items-center gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-[16px] text-white shadow-2xl"
+          className="fixed left-1/2 top-3 z-[70] flex w-[min(92vw,560px)] -translate-x-1/2 items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-[16px] text-onaccent shadow-2xl"
         >
-          {state.toast.points ? <span className="rounded-lg bg-amber-500 px-2 font-bold text-slate-900">+{state.toast.points}</span> : null}
+          {state.toast.points ? <span className="rounded-lg bg-amber-500 px-2 font-bold text-darkink">+{state.toast.points}</span> : null}
           <span className="flex-1">{state.toast.text}</span>
           {state.toast.canUndo && (
-            <button type="button" onClick={undo} className="inline-flex min-h-[44px] items-center gap-1 rounded-xl bg-white/15 px-3 font-bold text-amber-300 hover:bg-white/25">
+            <button type="button" onClick={undo} className="inline-flex min-h-[44px] items-center gap-1 rounded-xl bg-onaccent/15 px-3 font-bold text-onink-accent hover:bg-onaccent/25">
               <Undo2 className="h-4 w-4" /> Undo
             </button>
           )}
-          <button type="button" aria-label="Dismiss" onClick={dismissToast} className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-300 hover:bg-white/10">
+          <button type="button" aria-label="Dismiss" onClick={dismissToast} className="flex h-11 w-11 items-center justify-center rounded-xl text-onink-muted hover:bg-onaccent/10">
             <X className="h-5 w-5" />
           </button>
         </div>

@@ -33,6 +33,35 @@ export type ActiveView =
   | 'groups'
   | 'settings';
 
+/** Pages each role can open, in menu order (also used by search). */
+export function pagesFor(role: string): { id: ActiveView; label: string }[] {
+  const L: Record<ActiveView, string> = {
+    planner: 'My plan',
+    pipeline: 'Pipeline',
+    bench: 'My prospects',
+    pool: 'Prospect pool',
+    clients: 'Clients',
+    assists: ['manager', 'owner', 'executive'].includes(role) ? 'Assist requests' : 'My assist requests',
+    executive_desk: 'Executive desk',
+    finance: 'Introduction incentives',
+    gamification: 'Points & leaderboard',
+    game_rules: 'Points rules',
+    groups: 'Dealer groups',
+    settings: 'Settings'
+  };
+  const ids: ActiveView[] =
+    role === 'new_rep' || role === 'veteran_rep'
+      ? ['planner', 'bench', 'pipeline', 'pool', 'clients', 'assists', 'gamification', 'groups', 'game_rules', 'settings']
+      : role === 'manager' || role === 'team_lead'
+        ? ['assists', 'pipeline', 'planner', 'bench', 'clients', 'pool', 'groups', 'executive_desk', 'gamification', 'game_rules', 'settings']
+        : role === 'finance'
+          ? ['finance', 'assists', 'executive_desk', 'clients', 'pipeline', 'bench', 'settings']
+          : role === 'admin'
+            ? ['settings', 'game_rules', 'bench', 'pool', 'clients', 'groups']
+            : ['executive_desk', 'pipeline', 'assists', 'finance', 'planner', 'bench', 'clients', 'groups', 'pool', 'gamification', 'game_rules', 'settings'];
+  return ids.map(id => ({ id, label: L[id] }));
+}
+
 interface SidebarProps {
   currentView: ActiveView;
   onNavigate: (view: ActiveView) => void;
@@ -67,13 +96,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Section 3: Navigation renaming
   const isManagerOrOwner = ['manager', 'owner', 'executive'].includes(role);
-  const assistLabel = isManagerOrOwner ? 'Assist Requests' : 'My Assists';
+  const assistLabel = isManagerOrOwner ? 'Assist requests' : 'My assist requests';
   const assistBadge = isManagerOrOwner && pendingAssistCount > 0 ? pendingAssistCount : undefined;
 
   const getNavSections = (): { title: string; items: NavItem[] }[] => {
     const plannerItem: NavItem = {
       id: 'planner',
-      label: 'My Plan',
+      label: 'My plan',
       icon: <CalendarDays className="w-4 h-4" />,
       description: 'Today, this week, contacts & travel'
     };
@@ -82,28 +111,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'pipeline',
       label: 'Pipeline',
       icon: <KanbanSquare className="w-4 h-4" />,
-      badge: hotDealCount > 0 ? `${hotDealCount} HOT` : undefined,
+      badge: hotDealCount > 0 ? `${hotDealCount} hot` : undefined,
       badgeColor: 'bg-rose-100 text-rose-700 font-bold',
       description: 'Stage flow with Assist badges'
     };
 
     const benchItem: NavItem = {
       id: 'bench',
-      label: 'My Prospects (Bench)',
+      label: 'My prospects',
       icon: <Building2 className="w-4 h-4" />,
       description: 'Claimed dealership targets'
     };
 
     const poolItem: NavItem = {
       id: 'pool',
-      label: 'Prospect Pool & Map',
+      label: 'Prospect pool',
       icon: <Compass className="w-4 h-4" />,
       description: '60-mile radius search'
     };
 
     const clientsItem: NavItem = {
       id: 'clients',
-      label: 'Client Portfolio',
+      label: 'Clients',
       icon: <Users2 className="w-4 h-4" />,
       description: 'Keyfetch top-ups & catalog upsells'
     };
@@ -119,28 +148,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const gamificationItem: NavItem = {
       id: 'gamification',
-      label: role === 'new_rep' ? 'Rookie League & Points' : 'Game Day Scorecard',
+      label: 'Points & leaderboard',
       icon: <Trophy className="w-4 h-4" />,
       description: 'Leaderboards, streaks & badges'
     };
 
     const gameRulesItem: NavItem = {
       id: 'game_rules',
-      label: 'Game Rules Console',
+      label: 'Points rules',
       icon: <Gamepad2 className="w-4 h-4" />,
       description: 'Points table, product bonuses & quests'
     };
 
     const groupsItem: NavItem = {
       id: 'groups',
-      label: 'Dealer Groups',
+      label: 'Dealer groups',
       icon: <Layers className="w-4 h-4" />,
       description: 'Multi-store group networks'
     };
 
     const financeItem: NavItem = {
       id: 'finance',
-      label: 'Introduction Incentives',
+      label: 'Introduction incentives',
       icon: <FileCheck2 className="w-4 h-4" />,
       badge: pendingFinanceCount > 0 ? pendingFinanceCount : undefined,
       badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
@@ -149,14 +178,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const executiveDeskItem: NavItem = {
       id: 'executive_desk',
-      label: 'Executive Desk',
+      label: 'Executive desk',
       icon: <TrendingUp className="w-4 h-4" />,
       description: 'Storytelling rollups (Counts & Rates)'
     };
 
     const settingsItem: NavItem = {
       id: 'settings',
-      label: 'Settings & Catalog',
+      label: 'Settings',
       icon: <Settings className="w-4 h-4" />,
       description: '10 catalog products & open admin'
     };
@@ -164,15 +193,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (role === 'new_rep' || role === 'veteran_rep') {
       return [
         {
-          title: 'Daily Field Work',
+          title: 'Daily work',
           items: [plannerItem, benchItem, pipelineItem, poolItem]
         },
         {
-          title: 'Accounts & Assists',
+          title: 'Accounts',
           items: [clientsItem, assistsItem, gamificationItem]
         },
         {
-          title: 'System & Rules',
+          title: 'Setup',
           items: [groupsItem, gameRulesItem, settingsItem]
         }
       ];
@@ -181,15 +210,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (role === 'manager' || role === 'team_lead') {
       return [
         {
-          title: 'Management & Assists',
+          title: 'Team',
           items: [assistsItem, pipelineItem, plannerItem]
         },
         {
-          title: 'Territory Coverage',
+          title: 'Accounts',
           items: [benchItem, clientsItem, poolItem, groupsItem]
         },
         {
-          title: 'Performance & Rules',
+          title: 'Results & setup',
           items: [executiveDeskItem, gamificationItem, gameRulesItem, settingsItem]
         }
       ];
@@ -198,11 +227,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (role === 'finance') {
       return [
         {
-          title: 'Finance Controller Queue',
+          title: 'Finance',
           items: [financeItem, assistsItem, executiveDeskItem]
         },
         {
-          title: 'Company Records',
+          title: 'Records',
           items: [clientsItem, pipelineItem, benchItem, settingsItem]
         }
       ];
@@ -211,11 +240,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (role === 'admin') {
       return [
         {
-          title: 'System Admin',
+          title: 'Admin',
           items: [settingsItem, gameRulesItem]
         },
         {
-          title: 'Company Records',
+          title: 'Records',
           items: [benchItem, poolItem, clientsItem, groupsItem]
         }
       ];
@@ -224,15 +253,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     // Executive & Owner
     return [
       {
-        title: 'Executive Oversight',
+        title: 'Overview',
         items: [executiveDeskItem, pipelineItem, assistsItem, financeItem]
       },
       {
-        title: 'Field Operations',
+        title: 'Field work',
         items: [plannerItem, benchItem, clientsItem, groupsItem, poolItem]
       },
       {
-        title: 'Game & System Admin',
+        title: 'Points & setup',
         items: [gamificationItem, gameRulesItem, settingsItem]
       }
     ];
@@ -249,9 +278,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Collapse Toggle Button */}
       <div className="p-3 border-b border-slate-100 flex items-center justify-between">
         {!isCollapsed && (
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            {role === 'new_rep' ? 'Rookie Station' : 'Navigation'}
-          </span>
+          <span className="text-[13px] font-semibold text-slate-500">Menu</span>
         )}
         <button
           type="button"
@@ -264,11 +291,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Nav List */}
-      <nav className="flex-1 overflow-y-auto p-2 space-y-4 text-xs font-medium">
+      <nav className="flex-1 overflow-y-auto p-2 space-y-4 text-[14px] font-medium">
         {sections.map((section, sIdx) => (
           <div key={sIdx} className="space-y-1">
             {!isCollapsed && (
-              <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <div className="px-3 pt-2 pb-1 text-[12px] font-semibold text-slate-500">
                 {section.title}
               </div>
             )}
@@ -281,19 +308,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClick={() => onNavigate(item.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                      ? 'bg-brand text-onaccent font-semibold shadow-xs'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                   title={item.label}
                 >
-                  <span className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-500'}`}>
+                  <span className={`shrink-0 ${isActive ? 'text-onaccent' : 'text-slate-500'}`}>
                     {item.icon}
                   </span>
                   {!isCollapsed && (
                     <div className="flex-1 flex items-center justify-between truncate">
                       <span className="truncate">{item.label}</span>
                       {item.badge !== undefined && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${item.badgeColor || 'bg-slate-200 text-slate-700'}`}>
+                        <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${item.badgeColor || 'bg-slate-200 text-slate-700'}`}>
                           {item.badge}
                         </span>
                       )}
@@ -308,14 +335,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Rep Territory Radius Badge (Bottom) */}
       {!isCollapsed && (
-        <div className="p-3 m-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-[11px] space-y-1">
+        <div className="p-3 m-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-[13px] space-y-0.5">
           <div className="flex items-center gap-1.5 font-bold text-slate-800">
             <MapPin className="w-3.5 h-3.5 text-blue-600" />
-            <span>Home Base: {currentUser.homeZipCode}</span>
+            <span>Home ZIP {currentUser.homeZipCode}</span>
           </div>
-          <p className="text-[10px] text-slate-500">
-            Territory radius: <strong>60 miles</strong> standard
-          </p>
+          <p className="text-[12px] text-slate-500">Territory: 60 miles</p>
         </div>
       )}
     </aside>

@@ -88,7 +88,7 @@ export const SlotCard: React.FC<SlotCardProps> = ({
               </span>
             )}
             {slot.status === 'in_progress' && (
-              <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[13px] font-semibold text-white">You're here</span>
+              <span className="rounded-full bg-brand px-2 py-0.5 text-[13px] font-semibold text-onaccent">You're here</span>
             )}
           </div>
 
