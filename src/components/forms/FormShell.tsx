@@ -14,7 +14,7 @@ export const FormShell: React.FC<{
     <div className={`flex max-h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-3xl ${wide ? 'sm:max-w-3xl' : 'sm:max-w-2xl'}`}>
       <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4">
         <span className="text-blue-600">{icon}</span>
-        <h2 className="flex-1 text-[20px] font-bold text-slate-900">{title}</h2>
+        <h2 className="flex-1 text-[20px] font-extrabold text-slate-900">{title}</h2>
         <button type="button" onClick={onClose} aria-label="Close" className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-200 hover:text-slate-700">
           <X className="h-6 w-6" />
         </button>
@@ -27,7 +27,7 @@ export const FormShell: React.FC<{
 
 export const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode; hint?: string; className?: string }> = ({ label, required, children, hint, className = '' }) => (
   <label className={`block ${className}`}>
-    <span className="mb-1.5 block text-[15px] font-bold text-slate-700">
+    <span className="mb-1.5 block text-[14px] font-semibold text-slate-700">
       {label}
       {required && <span className="text-rose-600"> *</span>}
     </span>
@@ -36,4 +36,16 @@ export const Field: React.FC<{ label: string; required?: boolean; children: Reac
   </label>
 );
 
-export const inputCls = 'min-h-[50px] w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[16px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500';
+export const inputCls = 'min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[16px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500';
+
+/** A titled group of fields inside a form. */
+export const FormSection: React.FC<{ title: string; optional?: boolean; required?: boolean; children: React.ReactNode }> = ({ title, optional, required, children }) => (
+  <section className="space-y-3 border-t border-slate-100 pt-5 first:border-t-0 first:pt-0">
+    <h3 className="text-[16px] font-bold text-slate-900">
+      {title}
+      {required && <span className="text-rose-600"> *</span>}
+      {optional && <span className="ml-1.5 text-[13px] font-normal text-slate-500">optional</span>}
+    </h3>
+    {children}
+  </section>
+);
