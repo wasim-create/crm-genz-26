@@ -116,10 +116,10 @@ export const RouteMap: React.FC<RouteMapProps> = ({
 
       const popupHtml = `
         <div style="font-family: inherit; font-size: 12px; min-width: 180px;">
-          <div style="font-weight: 800; color: #0f172a; margin-bottom: 2px;">
+          <div style="font-weight: 800; color: var(--color-slate-900); margin-bottom: 2px;">
             Stop ${idx + 1}: ${dealership.dealershipName}
           </div>
-          <div style="color: #64748b; margin-bottom: 6px;">
+          <div style="color: var(--color-slate-500); margin-bottom: 6px;">
             ${dealership.address}, ${dealership.city}
           </div>
           <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px;">

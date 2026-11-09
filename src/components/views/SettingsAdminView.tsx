@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Badge, Btn, PageHeader, Switch } from '../ui/kit';
+import { BackLayer, Badge, Btn, PageHeader, Switch } from '../ui/kit';
 import { ThemeChoice } from '../ui/ThemeToggle';
 import { ProductCatalogItem, User } from '../../types/crm';
 import { PeopleAdminPanel } from './PeopleAdminPanel';
@@ -331,6 +331,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
       {/* Add New Product Modal (Section 2) */}
       {showAddProductModal && (
         <div className="fixed inset-0 bg-scrim/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <BackLayer onBack={() => setShowAddProductModal(false)} />
           <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl text-[14px]">
             <h3 className="font-bold text-sm text-slate-900">Add a product</h3>
 

@@ -1,7 +1,7 @@
 // Small, accessible building blocks used across My Plan.
 // Big tap targets (≥ 48px), words with every icon, high contrast.
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ArrowLeft, Building2, Car, Coffee, Mail, MessageSquare, Phone, Users, Video, X } from 'lucide-react';
 import { DistanceBand, HowType, WorkType } from '../types';
 import { HOW_LABEL, WORK_TYPE_LABEL } from '../engine/tasks';
@@ -81,7 +81,16 @@ export const Button: React.FC<
   );
 };
 
-/** Full-screen panel (no pop-ups on pop-ups). */
+/**
+ * The phone/browser Back button inside a multi-step sheet: steps back instead of
+ * closing. Set by the open Sheet, read by MyPlanModule.
+ */
+export const sheetStepBack: { current: (() => void) | null } = { current: null };
+
+/**
+ * A form or detail panel. Full screen on a phone; on a computer it slides in on
+ * the right, over whatever screen you were on, so closing it puts you back there.
+ */
 export const Sheet: React.FC<{
   title: string;
   step?: { current: number; total: number };
@@ -91,43 +100,52 @@ export const Sheet: React.FC<{
   footer?: React.ReactNode;
   wide?: boolean;
   children: React.ReactNode;
-}> = ({ title, step, summary, onBack, onClose, footer, wide, children }) => (
-  <div className="fixed inset-0 z-[60] flex flex-col bg-slate-50" role="dialog" aria-modal="true" aria-label={title}>
-    <div className="border-b border-slate-200 bg-white">
-      <div className={`mx-auto flex items-center gap-2 px-3 py-2 ${wide ? 'max-w-5xl' : 'max-w-2xl'}`}>
-        {onBack ? (
-          <Button variant="ghost" onClick={onBack} icon={<ArrowLeft className="h-5 w-5" />} aria-label="Back">
-            Back
-          </Button>
-        ) : (
-          <span className="w-2" />
-        )}
-        <div className="min-w-0 flex-1 text-center">
-          <div className="truncate text-[18px] font-bold text-slate-900">{title}</div>
-          {step && (
-            <div className="text-[13px] font-medium text-slate-500">
-              Step {step.current} of {step.total}
+}> = ({ title, step, summary, onBack, onClose, footer, wide, children }) => {
+  useEffect(() => {
+    sheetStepBack.current = onBack ?? null;
+  });
+  useEffect(() => () => {
+    sheetStepBack.current = null;
+  }, []);
+  return (
+    <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="hidden flex-1 bg-scrim/50 md:block" aria-hidden />
+      <div className={`sheet-panel flex h-full w-full flex-col bg-slate-50 md:max-w-[94vw] md:border-l md:border-slate-200 md:shadow-2xl ${wide ? 'md:w-[960px]' : 'md:w-[680px]'}`}>
+        <div className="border-b border-slate-200 bg-white">
+          <div className="mx-auto flex max-w-2xl items-center gap-2 px-3 py-2 md:max-w-none">
+            {onBack ? (
+              <Button variant="ghost" onClick={onBack} icon={<ArrowLeft className="h-5 w-5" />} aria-label="Back">
+                Back
+              </Button>
+            ) : (
+              <span className="w-2" />
+            )}
+            <div className="min-w-0 flex-1 text-center">
+              <div className="truncate text-[18px] font-bold text-slate-900">{title}</div>
+              {step && (
+                <div className="text-[13px] font-medium text-slate-500">
+                  Step {step.current} of {step.total}
+                </div>
+              )}
             </div>
-          )}
+            <Button variant="ghost" onClick={onClose} icon={<X className="h-5 w-5" />} aria-label="Close">
+              Close
+            </Button>
+          </div>
+          {summary && <div className="mx-auto max-w-2xl px-4 pb-2 text-center text-[14px] text-slate-600 md:max-w-none">{summary}</div>}
         </div>
-        <Button variant="ghost" onClick={onClose} icon={<X className="h-5 w-5" />} aria-label="Close">
-          Close
-        </Button>
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-2xl px-4 py-5 md:max-w-none md:px-5">{children}</div>
+        </div>
+        {footer && (
+          <div className="border-t border-slate-200 bg-white">
+            <div className="mx-auto max-w-2xl px-4 py-3 md:max-w-none md:px-5">{footer}</div>
+          </div>
+        )}
       </div>
-      {summary && (
-        <div className={`mx-auto px-4 pb-2 text-center text-[14px] text-slate-600 ${wide ? 'max-w-5xl' : 'max-w-2xl'}`}>{summary}</div>
-      )}
     </div>
-    <div className="flex-1 overflow-y-auto">
-      <div className={`mx-auto px-4 py-5 ${wide ? 'max-w-5xl' : 'max-w-2xl'}`}>{children}</div>
-    </div>
-    {footer && (
-      <div className="border-t border-slate-200 bg-white">
-        <div className={`mx-auto px-4 py-3 ${wide ? 'max-w-5xl' : 'max-w-2xl'}`}>{footer}</div>
-      </div>
-    )}
-  </div>
-);
+  );
+};
 
 export const Card: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className = '', ...rest }) => (
   <div className={`rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${className}`} {...rest} />

@@ -42,3 +42,9 @@ Don't build a second visit form.
 - Choice is Auto (follows the device), Light or Dark. Top-bar menu and Settings → Appearance & data. Saved per device in `apexdrive_theme`; `src/utils/theme.ts` holds the logic.
 - Write screens with the normal palette (`bg-white`, `text-slate-700`, `bg-amber-50`). `src/index.css` swaps the palette values in dark mode, so nothing is written twice. Do not hard-code hex colours.
 - Colours that must not flip have their own names: `bg-brand`, `bg-danger`, `bg-success` (solid buttons), `text-onaccent` (text on them, never `text-white`), `bg-ink` / `bg-ink-2` (dark toast), `bg-scrim` (dialog backdrop).
+
+## Layers and the Back button
+
+- Nothing navigates away to show a form. The dealership record is a pop-in; My Plan forms (log a visit, add to plan, edit a slot, next step) open on top of whatever screen you are on: a right-hand panel on a computer, full screen on a phone. Closing or saving returns you to where you were (usually the record).
+- My Plan is always mounted; `pageVisible` decides whether its page shows. Its forms open from anywhere via `planRequest` in `App.tsx`.
+- Every screen change and every overlay adds a browser-history step (`src/utils/backStack.ts`). Back closes the top layer, steps back inside multi-step forms, then returns to the previous screen with its scroll position. New overlays: wrap them in `Dialog`/`FormShell`/`Sheet`, or add `<BackLayer onBack={close} />`.

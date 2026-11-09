@@ -174,12 +174,64 @@ html.light {
   color-scheme: light;
 }
 
+/* Side panel slides in from the right on a computer */
+@media (min-width: 768px) {
+  .sheet-panel {
+    animation: sheet-in 0.18s ease-out;
+  }
+}
+@keyframes sheet-in {
+  from {
+    transform: translateX(32px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
 /* A short fade when switching theme (not on first load) */
 html.theme-fade,
 html.theme-fade *,
 html.theme-fade *::before,
 html.theme-fade *::after {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, fill 0.2s ease !important;
+}
+
+/*
+ * Native controls. The open list of a <select> is drawn by the browser and on
+ * some systems (Windows Chrome / Edge) ignores the page colours, giving white
+ * text on a white list. Give options and groups explicit colours in dark mode.
+ */
+html.dark select option,
+html.dark select optgroup {
+  background-color: #121b2e;
+  color: #f1f5f9;
+}
+html.dark select optgroup {
+  color: #93a1b8;
+}
+html.dark select option:checked {
+  background-color: #1e3a8a;
+  color: #ffffff;
+}
+html.dark select option:disabled {
+  color: #6b7a93;
+}
+/* Date and time pickers: light icon on dark fields */
+html.dark input::-webkit-calendar-picker-indicator {
+  filter: invert(0.85);
+}
+html.dark input[type='date'],
+html.dark input[type='time'],
+html.dark input[type='datetime-local'],
+html.dark input[type='month'] {
+  color-scheme: dark;
+}
+/* Scrollbars */
+html.dark {
+  scrollbar-color: #364560 #0b1120;
 }
 
 /* Map: darken the tiles, keep markers and popups readable */
@@ -203,4 +255,13 @@ html.dark .leaflet-bar a {
 }
 html.dark .leaflet-bar a:hover {
   background: #1a2438;
+}
+html.dark .leaflet-popup-content-wrapper,
+html.dark .leaflet-popup-tip {
+  background: #121b2e;
+  color: #f1f5f9;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+html.dark .leaflet-container a.leaflet-popup-close-button {
+  color: #93a1b8;
 }
