@@ -34,6 +34,7 @@ import { WeekView } from './ui/WeekView';
 import { AddFlow } from './ui/AddFlow';
 import { EditSlotSheet, MoveSheet } from './ui/SlotSheets';
 import { OutcomeSheet } from './ui/OutcomeSheet';
+import { buildLoggedSlot } from './ui/logVisit';
 import { BasketSheet, ReminderBanner, SettingsSheet, TodoSheet, Walkthrough } from './ui/OtherSheets';
 import { LunchSheet, QuickViewSheet, ReplanSheet, TimeSheet } from './ui/DaySheets';
 
@@ -51,7 +52,7 @@ export interface MyPlanModuleProps {
   assists?: ManagerAssist[];
   workspaceItems?: WorkspaceItem[];
   /** Opened from elsewhere in the CRM ("Add to my plan" / "Plan later"). */
-  request?: { dealershipId: string; planLater?: boolean; nextStep?: boolean; nonce: number } | null;
+  request?: { dealershipId: string; planLater?: boolean; nextStep?: boolean; logVisit?: boolean; nonce: number } | null;
   onRequestHandled?: () => void;
   onAddContact: (c: Contact) => void;
   onSaveProspect: (r: ProspectFormResult) => void;
@@ -153,7 +154,16 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
   useEffect(() => {
     if (!props.request) return;
     setViewUserId(currentUser.id);
-    if (props.request.nextStep) setSheet({ kind: 'nextstep', dealershipId: props.request.dealershipId });
+    const d = dealershipById.get(props.request.dealershipId);
+    if (props.request.logVisit && d) {
+      // Today's planned visit for this dealership if there is one; otherwise log it as unplanned.
+      const open = state.slots.find(s => s.userId === currentUser.id && s.date === today && s.status === 'planned' && !isMessage(s.how) && s.target.kind === 'dealership' && s.target.id === d.id);
+      if (open) setSheet({ kind: 'outcome', slotId: open.id });
+      else {
+        const draft = buildLoggedSlot(d, currentUser.id, contacts, catalog, today, new Date());
+        setSheet({ kind: 'outcome', slotId: draft.id, draft });
+      }
+    } else if (props.request.nextStep) setSheet({ kind: 'nextstep', dealershipId: props.request.dealershipId });
     else setSheet({ kind: 'add', preset: { dealershipId: props.request.dealershipId, planLater: props.request.planLater, nonce: props.request.nonce } });
     props.onRequestHandled?.();
   }, [props.request?.nonce]);
@@ -245,7 +255,7 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
       {sheet?.kind === 'add' && <AddFlow key={sheet.preset?.nonce ?? 'add'} preset={sheet.preset} onClose={close} />}
       {sheet?.kind === 'edit' && <EditSlotSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
       {sheet?.kind === 'nextstep' && <NextStepSheet key={sheet.dealershipId} dealershipId={sheet.dealershipId} onClose={close} />}
-      {sheet?.kind === 'outcome' && <OutcomeSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
+      {sheet?.kind === 'outcome' && <OutcomeSheet key={sheet.slotId} slotId={sheet.slotId} draft={sheet.draft} onClose={close} />}
       {sheet?.kind === 'move' && <MoveSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
       {sheet?.kind === 'todo' && <TodoSheet onClose={close} />}
       {sheet?.kind === 'basket' && <BasketSheet onClose={close} />}

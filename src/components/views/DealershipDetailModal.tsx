@@ -23,7 +23,6 @@ import {
   MapPin,
   Phone,
   Car,
-  Clock,
   Flame,
   Briefcase,
   Users,
@@ -31,7 +30,6 @@ import {
   AlertTriangle,
   History,
   Sparkles,
-  Mic,
   CalendarPlus,
   Send,
   Layers,
@@ -54,7 +52,9 @@ interface DealershipDetailModalProps {
   allUsers: User[];
   onClose: () => void;
   onUpdateDealership: (updated: Dealership) => void;
-  onAddActivity: (act: Activity) => void;
+  onAddActivity?: (act: Activity) => void;
+  /** Opens the same "How did it go?" form as My Plan. */
+  onLogVisit?: (dealership: Dealership) => void;
   onRequestAssist: (dealership: Dealership, managerId: string, assistType: AssistType, proposedDate: string, proposedTime: string, brief: string) => void;
   onAddContact: (contact: Contact) => void;
   onLogKeyfetchTopup: (dealershipId: string, quantity: number, notes?: string) => void;
@@ -80,7 +80,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
   allUsers,
   onClose,
   onUpdateDealership,
-  onAddActivity,
+  onLogVisit,
   onRequestAssist,
   onAddContact,
   onLogKeyfetchTopup,
@@ -91,17 +91,12 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
   nextStep,
   onPlanNextStep
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'visit_log' | 'products' | 'assist' | 'contacts' | 'audit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'assist' | 'contacts' | 'audit'>('overview');
 
   // AI Pre-visit brief state
   const [preVisitBrief, setPreVisitBrief] = useState<PreVisitBrief | null>(null);
   const [isLoadingBrief, setIsLoadingBrief] = useState<boolean>(false);
 
-  // Visit log form
-  const [logPurpose, setLogPurpose] = useState('In-Person Discovery');
-  const [logContactId, setLogContactId] = useState((contacts || []).find(c => c.dealershipId === dealership?.id)?.id || '');
-  const [logNotes, setLogNotes] = useState('');
-  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
 
   // Assist request form state
   const repManager = (allUsers || []).find(u => u.id === currentUser?.managerId) || (allUsers || []).find(u => u.role === 'manager');
@@ -138,40 +133,6 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
     setIsLoadingBrief(false);
   };
 
-  const handleSimulateVoiceInput = () => {
-    setIsVoiceRecording(true);
-    setTimeout(() => {
-      setLogNotes(`Met ${(contacts || []).find(c => c.dealershipId === dealership.id)?.firstName ?? 'the GSM'} on the lot. Counted ${dealership.usedCarsOnLot} used cars. Walked through the key tracking workflow; good questions on claims turnaround.`);
-      setIsVoiceRecording(false);
-    }, 800);
-  };
-
-  const handleSubmitVisitLog = () => {
-    if (!logNotes.trim()) return;
-
-    const newActivity: Activity = {
-      id: `act_${Date.now()}`,
-      dealershipId: dealership.id,
-      dealershipName: dealership.dealershipName,
-      userId: currentUser.id,
-      userName: `${currentUser.firstName} ${currentUser.lastName}`,
-      contactId: logContactId || undefined,
-      activityType: 'In-Person Visit',
-      communicationType: 'In-Person',
-      status: 'completed',
-      completedAt: new Date().toISOString(),
-      plannedDate: new Date().toISOString().split('T')[0],
-      isGoodWindow: true,
-      notes: logNotes,
-      productsDiscussed: ['Vehicle Service Contract (Extended Warranty)', 'Keyfetch'],
-      interestLevel: 'High',
-      pointsEarned: 40
-    };
-
-    onAddActivity(newActivity);
-    setLogNotes('');
-    setActiveTab('overview');
-  };
 
   const handleToggleProductInterest = (productId: string, level: 'Low' | 'Medium' | 'High') => {
     const existing = dealership.productInterests || [];
@@ -254,7 +215,17 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {onLogVisit && (
+              <button
+                type="button"
+                onClick={() => onLogVisit(dealership)}
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Log a visit</span>
+              </button>
+            )}
             {onAddToPlan && (
               <button
                 type="button"
@@ -304,7 +275,6 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
         <div className="flex border-b border-slate-200 px-5 gap-4 text-xs font-bold shrink-0 bg-white">
           {[
             { id: 'overview', label: 'Overview & Temp' },
-            { id: 'visit_log', label: 'Log Visit (+40 pts)' },
             { id: 'products', label: isClient ? 'Servicing & Top-Ups' : 'Scouting Checklist' },
             { id: 'assist', label: 'Manager Assist' },
             { id: 'contacts', label: `Contacts (${dealContacts.length})` },
@@ -410,45 +380,6 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                 )}
               </div>
               <ActivityTimeline dealership={dealership} activities={dealActivities} />
-            </div>
-          )}
-
-          {/* TAB 2: VISIT LOG */}
-          {activeTab === 'visit_log' && (
-            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-blue-600" />
-                  <span>Log Field Visit Notes</span>
-                </h4>
-                <button
-                  type="button"
-                  onClick={handleSimulateVoiceInput}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg font-bold text-xs cursor-pointer"
-                >
-                  <Mic className={`w-3.5 h-3.5 ${isVoiceRecording ? 'animate-pulse text-rose-600' : ''}`} />
-                  <span>{isVoiceRecording ? 'Transcribing Audio...' : 'Voice Dictate'}</span>
-                </button>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Lot Notes & Customer Feedback:</label>
-                <textarea
-                  value={logNotes}
-                  onChange={(e) => setLogNotes(e.target.value)}
-                  placeholder="Record decision maker feedback, objections, vehicles counted on lot..."
-                  className="w-full p-3 border border-slate-300 rounded-xl bg-white h-24"
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={handleSubmitVisitLog}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <span>Save Visit Log</span>
-                <span className="bg-blue-500 font-mono text-[10px] px-1.5 py-0.5 rounded">+40 pts</span>
-              </button>
             </div>
           )}
 

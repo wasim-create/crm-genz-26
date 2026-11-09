@@ -97,7 +97,7 @@ export const ActivityTimeline: React.FC<{ dealership: Dealership; activities: Ac
                     {a.tags?.includes('voicemail') && <span className="rounded bg-slate-100 px-1.5 font-semibold text-slate-600">Voicemail · no points</span>}
                     {!!a.pointsEarned && <span className="ml-auto rounded bg-amber-100 px-1.5 font-mono font-bold text-amber-800">+{a.pointsEarned} pts</span>}
                   </div>
-                  <p className="mt-1.5 text-xs leading-relaxed text-slate-700">{a.notes}</p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-slate-700 whitespace-pre-line">{a.notes}</p>
                   {a.voiceNotesTranscript && (
                     <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-slate-50 p-2 text-[11px] italic text-slate-600">
                       <Mic className="mt-0.5 h-3 w-3 shrink-0" /> Voice note: “{a.voiceNotesTranscript}”

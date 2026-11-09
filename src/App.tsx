@@ -76,7 +76,7 @@ export default function App() {
   // Shared "Add New Prospect / Client" and "Add Contact" forms (used everywhere)
   const [prospectForm, setProspectForm] = useState<{ mode: 'prospect' | 'client'; radar?: boolean } | null>(null);
   const [contactFormFor, setContactFormFor] = useState<Dealership | null>(null);
-  const [planRequest, setPlanRequest] = useState<{ dealershipId: string; planLater?: boolean; nextStep?: boolean; nonce: number } | null>(null);
+  const [planRequest, setPlanRequest] = useState<{ dealershipId: string; planLater?: boolean; nextStep?: boolean; logVisit?: boolean; nonce: number } | null>(null);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isWorkspaceSyncOpen, setIsWorkspaceSyncOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -305,28 +305,6 @@ export default function App() {
     }
   };
 
-  const handleAddActivity = (act: Activity) => {
-    const newActs = [act, ...activities];
-    setActivities(newActs);
-    storage.saveActivity(act);
-
-    // Live points award (Section 5)
-    awardPoints('visit_good_window', act.dealershipId, act.dealershipName, `Field visit at ${act.dealershipName}`);
-
-    // Audit log
-    const audit: AuditLogRecord = {
-      id: `aud_${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      userId: currentUser.id,
-      userName: `${currentUser.firstName} ${currentUser.lastName}`,
-      dealershipId: act.dealershipId,
-      dealershipName: act.dealershipName,
-      action: `${act.activityType} Logged`,
-      details: act.notes
-    };
-    setAuditLogs([audit, ...auditLogs]);
-    storage.saveAuditLog(audit);
-  };
 
   const handleClaimDealership = (deal: Dealership, reason?: string) => {
     const updated: Dealership = {
@@ -851,7 +829,11 @@ export default function App() {
           allUsers={users}
           onClose={() => setSelectedDealership(null)}
           onUpdateDealership={handleUpdateDealership}
-          onAddActivity={handleAddActivity}
+          onLogVisit={currentUser.role === 'finance' || currentUser.role === 'admin' ? undefined : (d) => {
+            setSelectedDealership(null);
+            setPlanRequest({ dealershipId: d.id, logVisit: true, nonce: Date.now() });
+            setCurrentView('planner');
+          }}
           onRequestAssist={handleRequestAssist}
           onAddContact={(c) => {
             const list = [c, ...contacts];

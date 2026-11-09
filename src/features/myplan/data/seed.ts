@@ -341,12 +341,6 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
         }
       };
       const mixed = [...clientsDue, ...live].filter((d, i, a) => a.indexOf(d) === i);
-      // Today comes first, so the day the demo is opened is always a real working day
-      if (!isWeekend(today)) {
-        fill(today, 3, mixed, 0);
-        fill(today, 3, local.filter(d => d.stage !== 'Not Now'), 0, true); // small book: reuse a dealership booked later in the week
-      }
-
       // 5) Plan-later basket: Not Now nurture dates, fresh claims, upsell ideas, low health
       const basket: { d: Dealership; note: string }[] = [];
       book.forEach(d => {
@@ -366,6 +360,12 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
         const work = workTypeForStage(d.stage)!;
         slots.push(make(user, d, undefined, j, 'in_person', defaultTaskIds(d.stage, work, hasKeyfetch(d, catalog)).map(t => plannedTask(t, d)), { basketNote: note }));
       });
+
+      // Today comes first, so the day the demo is opened is always a real working day
+      if (!isWeekend(today)) {
+        fill(today, 3, mixed, 0);
+        fill(today, 3, local.filter(d => d.stage !== 'Not Now'), 0, true); // small book: reuse a dealership booked later in the week
+      }
 
       planDays.forEach((date, k) => {
         if (k === 0 && !isWeekend(today)) return; // today was filled first

@@ -7,8 +7,9 @@ import React, { useMemo, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { CheckCircle2, Clock, Lock, Mic, Plus, Trophy, WifiOff } from 'lucide-react';
 import { PipelineStage } from '../../../types/crm';
-import { ActionPoint, InterestLevel, PlanSlot, SimpleResult, SlotTask, TaskOutcome, UpsellResult } from '../types';
-import { HOW_LABEL, isMessage, TASK_BY_ID } from '../engine/tasks';
+import { ActionPoint, HowType, InterestLevel, PlanSlot, SimpleResult, SlotTask, TaskOutcome, UpsellResult } from '../types';
+import { durationFor, HOW_LABEL, HOW_SHORT, isMessage, TASK_BY_ID } from '../engine/tasks';
+import { indexForTime, insertAt } from '../engine/schedule';
 import { format12h, formatDuration, toHHMM } from '../engine/time';
 import { pastEditWindow, replanPreview } from '../engine/schedule';
 import { addActionPoints, dismissToast, isOffline, submitWriteback, updateActionPoint, updateSlot, upsertSlots, useMyPlanState } from '../data/store';
@@ -59,11 +60,13 @@ function emptyOutcome(task: SlotTask): TaskOutcome {
 
 const MANAGER_ROLES = ['manager', 'team_lead', 'owner', 'executive'];
 
-export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = ({ slotId, onClose }) => {
+export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose: () => void }> = ({ slotId, draft, onClose }) => {
   const ctx = useMyPlan();
   const { user, viewUser, catalog, dealershipById, gameRules, productBonuses, dealerships, now, openSheet } = ctx;
   const state = useMyPlanState();
-  const slot = ctx.slots.find(s => s.id === slotId);
+  // A draft is something logged without being planned; it joins the plan when saved.
+  const slot = ctx.slots.find(s => s.id === slotId) ?? draft;
+  const isDraft = !!draft && !ctx.slots.some(s => s.id === slotId);
   // Captured when the sheet opens, so saving doesn't flip the screen into "edit" mode.
   const [wasDone] = useState(() => slot?.status === 'done');
   const editWin: { open: boolean; closesAt?: Date } = slot && wasDone ? pastEditWindow(slot, now) : { open: true };
@@ -93,6 +96,7 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
   const [nsTouched, setNsTouched] = useState<NextStepValue | null>(null);
   const [noteTipOff, setNoteTipOff] = useState<Record<string, boolean>>({});
   const [savedNext, setSavedNext] = useState<NextStepValue | null>(null);
+  const [startTime, setStartTime] = useState(slot?.fixedTime ?? '10:00');
 
   const preview: PlanSlot | undefined = slot ? { ...slot, tasks } : undefined;
   const dealership = slot?.target.kind === 'dealership' ? dealershipById.get(slot.target.id) : undefined;
@@ -143,9 +147,18 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
   const save = () => {
     const nowISO = new Date().toISOString();
     const timing = ctx.layout(slot.date ?? ctx.today).timings[slot.id];
-    const startedAt = slot.checkInAt ? toHHMM(new Date(slot.checkInAt).getHours() * 60 + new Date(slot.checkInAt).getMinutes()) : timing ? toHHMM(timing.start) : slot.sendTime;
+    const startedAt = slot.unplanned ? startTime : slot.checkInAt ? toHHMM(new Date(slot.checkInAt).getHours() * 60 + new Date(slot.checkInAt).getMinutes()) : timing ? toHHMM(timing.start) : slot.sendTime;
     const finalSlot: PlanSlot = {
       ...slot,
+      ...(slot.unplanned
+        ? {
+            how: spoke.how,
+            fixedTime: startTime,
+            durationMin: slot.durationOverridden ? slot.durationMin : durationFor(spoke.how, tasks),
+            checkInAt: new Date(`${slot.date ?? ctx.today}T${startTime}:00`).toISOString(),
+            sendTime: isMessage(spoke.how) ? startTime : undefined
+          }
+        : {}),
       tasks,
       spokeWithContactIds: spoke.contactIds,
       spokeWithNames: spoke.contactNames,
@@ -211,15 +224,19 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
     }
 
     const queued = submitWriteback(wb);
-    updateSlot(
-      slot.id,
-      { ...finalSlot, status: 'done', completedAt: nowISO, pointsAwarded: wb.totalPoints },
-      { message: undefined, undoable: false }
-    );
+    const doneSlot: PlanSlot = { ...finalSlot, status: 'done', completedAt: nowISO, pointsAwarded: wb.totalPoints };
+    let dayNow: PlanSlot[] | null = null;
+    if (isDraft) {
+      // Put the unplanned visit into today's plan at the time it happened.
+      const day = ctx.daySlots(doneSlot.date ?? ctx.today);
+      dayNow = insertAt(day, doneSlot, indexForTime(day, ctx.layoutCtx(doneSlot.date ?? ctx.today), startTime));
+      upsertSlots(dayNow);
+    } else updateSlot(slot.id, doneSlot, { message: undefined, undoable: false });
     addActionPoints(wb.actionPoints);
     if (nv && nv.mode !== 'skip') {
       const nextSlot = buildNextSlot(nv, { userId: slot.userId, target: slot.target, workType: slot.workType, contactIds: spoke.contactIds, contactNames: spoke.contactNames, contacts: dealership ? ctx.contacts.filter(c => c.dealershipId === dealership.id) : [] }, dealership);
-      placeNextSlot(ctx, nextSlot, nv.index, '', slot.id);
+      const placeCtx = { daySlots: (d: string) => (dayNow && d === doneSlot.date ? dayNow : ctx.daySlots(d)), layoutCtx: ctx.layoutCtx };
+      placeNextSlot(placeCtx, nextSlot, nv.index, '', dayNow ? undefined : slot.id);
     }
     setSavedNext(nv);
     if (wb.totalPoints > 0) {
@@ -347,8 +364,8 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
   // ---- Form ----
   return (
     <Sheet
-      title={wasDone ? `Edit: ${slot.target.name}` : 'How did it go?'}
-      summary={`${HOW_LABEL[slot.how]} · ${slot.target.name}`}
+      title={wasDone ? `Edit: ${slot.target.name}` : slot.unplanned ? 'Log a visit' : 'How did it go?'}
+      summary={`${HOW_LABEL[spoke.how]} · ${slot.target.name}`}
       onClose={onClose}
       footer={
         <Button variant="primary" size="lg" block onClick={save} disabled={!!missingQty || (needsReason && !reason.trim())}>
@@ -374,10 +391,34 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
           </Card>
         )}
 
+        {slot.unplanned && !wasDone && (
+          <Card className="space-y-4 p-4">
+            <div>
+              <div className="mb-2 text-[17px] font-bold text-slate-900">How did you talk to them?</div>
+              <Segmented
+                ariaLabel="How did you talk to them?"
+                value={spoke.how}
+                onChange={v => setSpoke(s => ({ ...s, how: v }))}
+                options={(['in_person', 'phone', 'meet', 'email', 'text'] as HowType[]).map(h => ({ value: h, label: HOW_SHORT[h] }))}
+              />
+            </div>
+            <label className="flex flex-wrap items-center gap-3 text-[16px] text-slate-800">
+              <span className="font-semibold">{isMessage(spoke.how) ? 'Sent at' : 'Started at'}</span>
+              <input
+                type="time"
+                className="min-h-[48px] rounded-xl border border-slate-300 px-3 text-[16px]"
+                value={startTime}
+                onChange={e => e.target.value && setStartTime(e.target.value)}
+              />
+              <span className="text-[15px] text-slate-500">today</span>
+            </label>
+          </Card>
+        )}
+
         {tasks.map(task => (
           <TaskOutcomeCard key={task.taskId} task={task} onChange={o => setOutcome(task.taskId, o)} />
         ))}
-        {tasks.length === 0 && isMessage(slot.how) && <Card className="p-4 text-[16px]">Mark this message as sent.</Card>}
+        {tasks.length === 0 && isMessage(spoke.how) && <Card className="p-4 text-[16px]">Mark this message as sent.</Card>}
 
         {slot.target.kind !== 'block' && (
           <div>
@@ -399,7 +440,7 @@ export const OutcomeSheet: React.FC<{ slotId: string; onClose: () => void }> = (
           </div>
         )}
 
-        {slot.target.kind !== 'block' && !isMessage(slot.how) && (
+        {slot.target.kind !== 'block' && !isMessage(spoke.how) && (
           <Card className="p-4">
             <ContactsEditor slot={spoke} onChange={p => setSpoke(s => ({ ...s, ...p }))} label="Who did you speak with?" />
           </Card>
