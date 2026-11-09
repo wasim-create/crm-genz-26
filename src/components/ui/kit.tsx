@@ -164,7 +164,7 @@ export function Switch<T extends string>({ value, options, onChange, label }: { 
 
 /** A simple centred dialog. Click outside or Cancel to close. */
 export const Dialog: React.FC<{ title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }> = ({ title, onClose, children, wide }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
+  <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-label={title} onClick={e => { e.stopPropagation(); onClose(); }}>
     <Panel className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'} space-y-4 p-6 shadow-2xl`} onClick={e => e.stopPropagation()}>
       <h2 className="text-[18px] font-bold text-slate-900">{title}</h2>
       {children}

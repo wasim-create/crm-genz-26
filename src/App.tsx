@@ -333,9 +333,10 @@ export default function App() {
     storage.saveAuditLog(audit);
   };
 
-  const handleMoveStage = (deal: Dealership, newStage: PipelineStage) => {
+  const handleMoveStage = (deal: Dealership, newStage: PipelineStage, note?: string, patch: Partial<Dealership> = {}) => {
     const updated: Dealership = {
       ...deal,
+      ...patch,
       stage: newStage,
       lastTouchpointDate: new Date().toISOString()
     };
@@ -349,7 +350,7 @@ export default function App() {
       dealershipId: deal.id,
       dealershipName: deal.dealershipName,
       action: `Stage Changed to ${newStage}`,
-      details: `Moved from ${deal.stage} to ${newStage}`
+      details: `Moved from ${deal.stage} to ${newStage}${note ? `. ${note}` : ''}`
     };
     setAuditLogs([audit, ...auditLogs]);
     storage.saveAuditLog(audit);
@@ -856,6 +857,7 @@ export default function App() {
           onRequestAddContact={(d) => setContactFormFor(d)}
           nextStep={nextSteps.get(selectedDealership.id)}
           onPlanNextStep={planNextStep}
+          onMoveStage={currentUser.role === 'finance' ? undefined : handleMoveStage}
         />
       )}
 
