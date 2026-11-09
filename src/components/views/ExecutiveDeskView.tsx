@@ -136,12 +136,12 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
         isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
       }`}>
         <div>
-          <h2 className={`text-xl font-bold tracking-tight flex items-center gap-2 ${isTvMode ? 'text-white' : 'text-slate-900'}`}>
+          <h1 className={`text-[26px] font-extrabold tracking-tight flex items-center gap-2 ${isTvMode ? 'text-white' : 'text-slate-900'}`}>
             <TrendingUp className="w-5 h-5 text-blue-500" />
-            <span>Executive Desk & Operational Storytelling</span>
-          </h2>
-          <p className={`text-xs mt-0.5 ${isTvMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            Counts, penetration, velocity, and territory compliance. All financial projections removed.
+            <span>Executive desk</span>
+          </h1>
+          <p className={`text-[15px] mt-1 ${isTvMode ? 'text-slate-400' : 'text-slate-600'}`}>
+            How the team is doing: deals, visits, products and gaps. Counts only, no money forecasts.
           </p>
         </div>
 
@@ -155,7 +155,7 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
             }`}
           >
             <Tv className="w-3.5 h-3.5" />
-            <span>{isTvMode ? 'Exit TV Mode' : 'Presentation / TV Mode'}</span>
+            <span>{isTvMode ? 'Exit full screen' : 'Present'}</span>
           </button>
 
           <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
@@ -182,7 +182,7 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
         <div className="flex items-start gap-3">
           <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 font-mono">
+            <span className="text-[12px] font-extrabold text-indigo-600">
               AI Storytelling Narrative ({period})
             </span>
             <h3 className={`text-base font-bold mt-0.5 ${isTvMode ? 'text-white' : 'text-slate-900'}`}>
@@ -194,12 +194,12 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
           {/* Highlights */}
           <div className={`p-3.5 rounded-xl border ${isTvMode ? 'bg-slate-800/80 border-emerald-900/50' : 'bg-emerald-50/60 border-emerald-200'}`}>
-            <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1 mb-2">
+            <span className="text-[13px] font-bold text-emerald-700 flex items-center gap-1 mb-2">
               <CheckCircle2 className="w-3.5 h-3.5" /> Key Highlights
             </span>
             <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300">
               {aiSummary.highlights.map((h, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[11px] leading-tight">
+                <li key={i} className="flex items-start gap-1.5 text-[13px] leading-tight">
                   <span className="text-emerald-600 font-bold">•</span>
                   <span>{h}</span>
                 </li>
@@ -209,12 +209,12 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
 
           {/* Concerns */}
           <div className={`p-3.5 rounded-xl border ${isTvMode ? 'bg-slate-800/80 border-amber-900/50' : 'bg-amber-50/60 border-amber-200'}`}>
-            <span className="text-[11px] font-bold text-amber-800 flex items-center gap-1 mb-2">
+            <span className="text-[13px] font-bold text-amber-800 flex items-center gap-1 mb-2">
               <AlertOctagon className="w-3.5 h-3.5" /> Operational Concerns
             </span>
             <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300">
               {aiSummary.concerns.map((c, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[11px] leading-tight">
+                <li key={i} className="flex items-start gap-1.5 text-[13px] leading-tight">
                   <span className="text-amber-600 font-bold">•</span>
                   <span>{c}</span>
                 </li>
@@ -224,12 +224,12 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
 
           {/* Recommendations */}
           <div className={`p-3.5 rounded-xl border ${isTvMode ? 'bg-slate-800/80 border-indigo-900/50' : 'bg-indigo-50/60 border-indigo-200'}`}>
-            <span className="text-[11px] font-bold text-indigo-700 flex items-center gap-1 mb-2">
+            <span className="text-[13px] font-bold text-indigo-700 flex items-center gap-1 mb-2">
               <Sparkles className="w-3.5 h-3.5" /> Recommended Actions
             </span>
             <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300">
               {aiSummary.recommendations.map((r, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[11px] leading-tight">
+                <li key={i} className="flex items-start gap-1.5 text-[13px] leading-tight">
                   <span className="text-indigo-600 font-bold">•</span>
                   <span>{r}</span>
                 </li>
@@ -242,27 +242,27 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
       {/* KPI Tiles (Strictly Counts & Quantities) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-          <span className="text-[11px] font-bold text-slate-400 uppercase block">Signed this period</span>
-          <div className="text-3xl font-black font-mono text-emerald-600 mt-1">{wonDeals.length}</div>
-          <span className="text-[10px] text-slate-500">{totalClients} active client rooftops in total</span>
+          <span className="text-[13px] font-bold text-slate-400 block">Signed this period</span>
+          <div className="text-3xl font-extrabold text-emerald-600 mt-1">{wonDeals.length}</div>
+          <span className="text-[12px] text-slate-500">{totalClients} active client rooftops in total</span>
         </div>
 
         <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-          <span className="text-[11px] font-bold text-slate-400 uppercase block">Golden Window Ratio</span>
-          <div className="text-3xl font-black font-mono text-blue-600 mt-1">{goodTimePercent}%</div>
-          <span className="text-[10px] text-slate-500">{goodTimeVisits} of {totalVisits} visits, calls & Meets inside 10–4</span>
+          <span className="text-[13px] font-bold text-slate-400 block">Golden Window Ratio</span>
+          <div className="text-3xl font-extrabold text-blue-600 mt-1">{goodTimePercent}%</div>
+          <span className="text-[12px] text-slate-500">{goodTimeVisits} of {totalVisits} visits, calls & Meets inside 10–4</span>
         </div>
 
         <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-          <span className="text-[11px] font-bold text-slate-400 uppercase block">Keyfetch Units Restocked</span>
-          <div className="text-3xl font-black font-mono text-indigo-600 mt-1">{totalUnitsToppedUp.toLocaleString()}</div>
-          <span className="text-[10px] text-slate-500">Tags delivered this period</span>
+          <span className="text-[13px] font-bold text-slate-400 block">Keyfetch Units Restocked</span>
+          <div className="text-3xl font-extrabold text-indigo-600 mt-1">{totalUnitsToppedUp.toLocaleString()}</div>
+          <span className="text-[12px] text-slate-500">Tags delivered this period</span>
         </div>
 
         <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-          <span className="text-[11px] font-bold text-slate-400 uppercase block">Catalog Upsells Won</span>
-          <div className="text-3xl font-black font-mono text-purple-600 mt-1">{totalUpsellsWon}</div>
-          <span className="text-[10px] text-slate-500">Add-ons won on existing clients</span>
+          <span className="text-[13px] font-bold text-slate-400 block">Catalog Upsells Won</span>
+          <div className="text-3xl font-extrabold text-purple-600 mt-1">{totalUpsellsWon}</div>
+          <span className="text-[12px] text-slate-500">Add-ons won on existing clients</span>
         </div>
       </div>
 
@@ -275,7 +275,7 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
               <Users2 className="w-4 h-4 text-blue-600" />
               <span>Solo vs. Assisted Closing Ratio</span>
             </h4>
-            <span className="text-xs font-mono text-slate-400">{wonDeals.length} signed this period</span>
+            <span className="text-xs text-slate-400">{wonDeals.length} signed this period</span>
           </div>
 
           <div className="space-y-3 text-xs">
@@ -314,15 +314,15 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
               <BarChart3 className="w-4 h-4 text-emerald-600" />
               <span>Product Adoption Across Clients</span>
             </h4>
-            <span className="text-xs font-mono text-slate-400">{totalClients} Clients</span>
+            <span className="text-xs text-slate-400">{totalClients} Clients</span>
           </div>
 
           <div className="space-y-2 text-xs">
             {ADOPTION.map(item => (
               <div key={item.name} className="space-y-1">
-                <div className="flex justify-between text-[11px] font-medium">
+                <div className="flex justify-between text-[13px] font-medium">
                   <span>{item.name}</span>
-                  <span className="font-mono font-bold">{item.count} lots ({Math.round((item.count / Math.max(1, totalClients)) * 100)}%)</span>
+                  <span className=" font-bold">{item.count} lots ({Math.round((item.count / Math.max(1, totalClients)) * 100)}%)</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div className={`h-full ${item.color} rounded-full`} style={{ width: `${(item.count / Math.max(1, totalClients)) * 100}%` }} />

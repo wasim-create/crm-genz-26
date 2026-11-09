@@ -101,7 +101,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div 
           onClick={onOpenGamification}
           className="flex min-w-0 flex-1 md:flex-none items-center gap-2 md:gap-3 px-2.5 py-1 bg-linear-to-r from-amber-50/80 via-indigo-50/50 to-blue-50/80 rounded-xl border border-amber-200/70 shadow-2xs cursor-pointer hover:border-amber-300 transition-all text-xs overflow-x-auto no-scrollbar"
-          title="Click to view full Game Day Scorecard & Leaderboards"
+          title="Open points & leaderboard"
         >
           {/* Level Title */}
           <div className="flex items-center gap-1.5 shrink-0">

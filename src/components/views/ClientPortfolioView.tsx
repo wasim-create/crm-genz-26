@@ -1,23 +1,8 @@
-import React, { useState } from 'react';
-import { Dealership, User, ProductCatalogItem, InventoryTopup, UpsellOpportunity } from '../../types/crm';
-import { formatUSDate } from '../../utils/territory';
-import {
-  Users2,
-  KeyRound,
-  TrendingUp,
-  AlertTriangle,
-  Plus,
-  Calendar,
-  CheckCircle2,
-  Car,
-  PackageCheck,
-  Search,
-  Sparkles,
-  Layers,
-  ArrowUpRight,
-  ShieldCheck,
-  Check
-} from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Package, Plus, Sparkles, Users2 } from 'lucide-react';
+import { Dealership, ProductCatalogItem, UpsellOpportunity, User } from '../../types/crm';
+import { Badge, Btn, Dialog, EmptyState, Page, PageHeader, Panel, Stat, Toolbar, useSticky } from '../ui/kit';
+import { daysSince, formatShortDay, lastContactText, matches, plural } from '../../utils/format';
 
 interface ClientPortfolioViewProps {
   dealerships: Dealership[];
@@ -32,384 +17,302 @@ interface ClientPortfolioViewProps {
   allUsers?: User[];
 }
 
-export const ClientPortfolioView: React.FC<ClientPortfolioViewProps> = ({
-  dealerships,
-  catalog,
-  currentUser,
-  onOpenDealership,
-  onLogKeyfetchTopup,
-  onUpdateUpsell,
-  onCreateUpsell,
-  onAddClient,
-  allUsers = []
-}) => {
-  const repName = (id: string | null) => {
-    if (!id) return '—';
+const REP_ROLES = ['new_rep', 'veteran_rep', 'team_lead'];
+const KEYFETCH = 'prod_3';
+const TOPUP_DUE_DAYS = 60;
+const QUIET_DAYS = 30;
+
+const lastTopup = (d: Dealership) => [...(d.topups ?? [])].sort((a, b) => b.date.localeCompare(a.date))[0];
+const openUpsells = (d: Dealership) => (d.upsells ?? []).filter(u => u.stage !== 'Won' && u.stage !== 'Lost');
+const atRisk = (d: Dealership) => (d.clientHealthScore ?? 100) < 70;
+const topupDue = (d: Dealership) => (d.signedProducts ?? []).includes(KEYFETCH) && d.stage === 'Client' && (daysSince(lastTopup(d)?.date) ?? 999) >= TOPUP_DUE_DAYS;
+const quiet = (d: Dealership) => (daysSince(d.lastTouchpointDate) ?? 999) >= QUIET_DAYS;
+
+export const ClientPortfolioView: React.FC<ClientPortfolioViewProps> = ({ dealerships, catalog, currentUser, onOpenDealership, onLogKeyfetchTopup, onCreateUpsell, onAddClient, allUsers = [] }) => {
+  const isRep = REP_ROLES.includes(currentUser.role);
+  const key = `clients_${currentUser.id}`;
+  const repName = (id?: string | null) => {
     const u = allUsers.find(x => x.id === id);
-    return u ? `${u.firstName} ${u.lastName}` : id;
+    return u ? `${u.firstName} ${u.lastName}` : '—';
   };
-  const [searchTerm, setSearchTerm] = useState('');
-  const [topupModalDeal, setTopupModalDeal] = useState<Dealership | null>(null);
+  const productName = (id: string) => catalog.find(p => p.id === id)?.name ?? id;
+
+  const [q, setQ] = useState('');
+  const [rep, setRep] = useSticky(`${key}_rep`, isRep ? currentUser.id : 'all');
+  const [product, setProduct] = useState('all');
+  const [chips, setChips] = useState<Record<string, boolean>>({});
+  const [sort, setSort] = useSticky(`${key}_sort`, 'health');
+
+  const [topupFor, setTopupFor] = useState<Dealership | null>(null);
   const [topupQty, setTopupQty] = useState(250);
-  const [topupNotes, setTopupNotes] = useState('Routine showroom key tag top-up');
-  
-  // Upsell modal state
-  const [upsellModalDeal, setUpsellModalDeal] = useState<Dealership | null>(null);
-  const [upsellProductId, setUpsellProductId] = useState('prod_10'); // Ceramic Pro by default
-  const [upsellNextStep, setUpsellNextStep] = useState('Schedule presentation of test kit');
+  const [topupNotes, setTopupNotes] = useState('');
+  const [upsellFor, setUpsellFor] = useState<Dealership | null>(null);
+  const [upsellProductId, setUpsellProductId] = useState('');
+  const [upsellNextStep, setUpsellNextStep] = useState('Show the sample kit to the GM');
 
-  // Filter won clients
-  const clients = dealerships.filter(d => d.stage === 'Client' || d.stage === 'Onboarding');
+  const all = useMemo(() => dealerships.filter(d => d.stage === 'Client' || d.stage === 'Onboarding'), [dealerships]);
+  const mine = useMemo(() => (rep === 'all' ? all : all.filter(d => d.assignedRepId === rep || d.originRepId === rep)), [all, rep]);
 
-  const filteredClients = clients.filter(c => {
-    if (!searchTerm) return true;
-    const q = searchTerm.toLowerCase();
-    return c.dealershipName.toLowerCase().includes(q) || c.city.toLowerCase().includes(q);
-  });
-
-  const totalClients = clients.length;
-  const keyfetchClientsCount = clients.filter(c => c.signedProducts?.includes('prod_3')).length;
-  const totalTopupUnits = clients.reduce((acc, c) => acc + (c.topups || []).reduce((s, t) => s + t.quantity, 0), 0);
-  const activeUpsellsCount = clients.reduce((acc, c) => acc + (c.upsells || []).filter(u => u.stage !== 'Won' && u.stage !== 'Lost').length, 0);
-
-  const handleExecuteTopup = () => {
-    if (!topupModalDeal) return;
-    onLogKeyfetchTopup(topupModalDeal.id, topupQty, topupNotes);
-    setTopupModalDeal(null);
+  const TESTS: Record<string, (d: Dealership) => boolean> = {
+    risk: atRisk,
+    topup: topupDue,
+    upsell: d => openUpsells(d).length > 0,
+    quiet,
+    onboarding: d => d.stage === 'Onboarding'
   };
 
-  const handleExecuteCreateUpsell = () => {
-    if (!upsellModalDeal) return;
-    onCreateUpsell(upsellModalDeal.id, upsellProductId, upsellNextStep);
-    setUpsellModalDeal(null);
+  const rows = useMemo(() => {
+    const list = mine.filter(d => {
+      if (product !== 'all') {
+        const [has, id] = product.split(':');
+        const owns = (d.signedProducts ?? []).includes(id);
+        if (has === 'has' ? !owns : owns) return false;
+      }
+      if (!matches(q, d.dealershipName, d.city, d.state, d.groupName, repName(d.assignedRepId))) return false;
+      return Object.entries(chips).every(([id, on]) => !on || TESTS[id](d));
+    });
+    const cmp: Record<string, (a: Dealership, b: Dealership) => number> = {
+      health: (a, b) => (a.clientHealthScore ?? 100) - (b.clientHealthScore ?? 100),
+      stale: (a, b) => (a.lastTouchpointDate ?? '').localeCompare(b.lastTouchpointDate ?? ''),
+      topup: (a, b) => (lastTopup(a)?.date ?? '').localeCompare(lastTopup(b)?.date ?? ''),
+      lot: (a, b) => b.usedCarsOnLot - a.usedCarsOnLot,
+      name: (a, b) => a.dealershipName.localeCompare(b.dealershipName)
+    };
+    return [...list].sort((a, b) => cmp[sort](a, b) || a.dealershipName.localeCompare(b.dealershipName));
+  }, [mine, product, q, chips, sort]);
+
+  const toggle = (id: string) => setChips(c => ({ ...c, [id]: !c[id] }));
+  const only = (id: string) => setChips(c => (c[id] && Object.values(c).filter(Boolean).length === 1 ? {} : { [id]: true }));
+  const clear = () => {
+    setQ('');
+    setRep(isRep ? currentUser.id : 'all');
+    setProduct('all');
+    setChips({});
   };
+  const n = (id: string) => mine.filter(TESTS[id]).length;
+
+  const team = allUsers.filter(u => REP_ROLES.includes(u.role) && u.active !== false && (currentUser.role !== 'manager' || u.managerId === currentUser.id));
+  const products = catalog.filter(p => p.isActive);
 
   return (
-    <div className="space-y-6">
-      {/* Overview Metric Cards (Strictly Non-Monetary) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
-          <span className="text-xs font-bold text-slate-500 uppercase">Active Client Book</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1">{totalClients} Rooftops</div>
-          <span className="text-[11px] text-emerald-600 font-semibold">100% Protected Attribution</span>
-        </div>
+    <Page>
+      <PageHeader
+        icon={<Users2 className="h-6 w-6" />}
+        title="Clients"
+        subtitle="Signed dealerships: what they have, when they last topped up, and what else they could take."
+        actions={
+          onAddClient && (
+            <Btn variant="primary" icon={<Plus className="h-4 w-4" />} onClick={onAddClient}>
+              Add client
+            </Btn>
+          )
+        }
+      />
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
-          <span className="text-xs font-bold text-slate-500 uppercase">Keyfetch Hardware Clients</span>
-          <div className="text-2xl font-bold text-blue-600 mt-1">{keyfetchClientsCount} Lots</div>
-          <span className="text-[11px] text-slate-500 font-mono">{totalTopupUnits.toLocaleString()} units topped up</span>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
-          <span className="text-xs font-bold text-slate-500 uppercase">Active Catalog Upsells</span>
-          <div className="text-2xl font-bold text-purple-600 mt-1">{activeUpsellsCount} Mini-Opps</div>
-          <span className="text-[11px] text-purple-700 font-semibold">Ceramic Pro, VSC & GAP</span>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
-          <span className="text-xs font-bold text-slate-500 uppercase">At-Risk Clients</span>
-          <div className="text-2xl font-bold text-rose-600 mt-1">
-            {clients.filter(c => (c.clientHealthScore || 100) < 70).length}
-          </div>
-          <span className="text-[11px] text-slate-500">Low touch (&gt;30d) or cooling temp</span>
-        </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label={rep === currentUser.id ? 'My clients' : 'Clients'} value={mine.length} hint={`${n('onboarding')} onboarding`} active={!Object.values(chips).some(Boolean)} onClick={() => setChips({})} />
+        <Stat label="At risk" value={n('risk')} hint="Health below 70" tone={n('risk') ? 'red' : 'neutral'} active={!!chips.risk} onClick={() => only('risk')} />
+        <Stat label="Keyfetch top-up due" value={n('topup')} hint={`No top-up in ${TOPUP_DUE_DAYS}+ days`} tone={n('topup') ? 'amber' : 'neutral'} active={!!chips.topup} onClick={() => only('topup')} />
+        <Stat label="Open upsells" value={mine.reduce((s, d) => s + openUpsells(d).length, 0)} hint={`At ${plural(n('upsell'), 'client')}`} tone="violet" active={!!chips.upsell} onClick={() => only('upsell')} />
       </div>
 
-      {/* Search Header */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <Users2 className="w-5 h-5 text-blue-600" />
-            <span>Client Portfolio & Product Servicing</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Keyfetch physical unit top-ups, product penetration matrices, and upsell mini-opportunities.
-          </p>
-        </div>
+      <Toolbar
+        search={{ value: q, onChange: setQ, placeholder: 'Search name, city, group or rep' }}
+        filters={[
+          {
+            id: 'rep',
+            allLabel: isRep ? 'Everyone’s clients' : 'All reps',
+            defaultValue: isRep ? currentUser.id : 'all',
+            value: rep,
+            onChange: setRep,
+            options: [...(isRep ? [{ value: currentUser.id, label: 'My clients' }] : []), ...team.filter(u => u.id !== currentUser.id).map(u => ({ value: u.id, label: `${u.firstName} ${u.lastName}`, count: all.filter(d => d.assignedRepId === u.id).length }))]
+          },
+          {
+            id: 'product',
+            allLabel: 'Any products',
+            value: product,
+            onChange: setProduct,
+            options: [
+              ...products.map(p => ({ value: `has:${p.id}`, label: `Has ${p.name}`, count: mine.filter(d => (d.signedProducts ?? []).includes(p.id)).length })),
+              ...products.map(p => ({ value: `not:${p.id}`, label: `Doesn’t have ${p.name}`, count: mine.filter(d => !(d.signedProducts ?? []).includes(p.id)).length }))
+            ]
+          }
+        ]}
+        chips={[
+          { id: 'risk', label: 'At risk', count: n('risk'), active: !!chips.risk, onClick: () => toggle('risk'), tone: 'attention' },
+          { id: 'topup', label: 'Top-up due', count: n('topup'), active: !!chips.topup, onClick: () => toggle('topup') },
+          { id: 'quiet', label: `No contact in ${QUIET_DAYS}+ days`, count: n('quiet'), active: !!chips.quiet, onClick: () => toggle('quiet') },
+          { id: 'upsell', label: 'Open upsell', count: n('upsell'), active: !!chips.upsell, onClick: () => toggle('upsell') },
+          { id: 'onboarding', label: 'Onboarding', count: n('onboarding'), active: !!chips.onboarding, onClick: () => toggle('onboarding') }
+        ]}
+        sort={{
+          value: sort,
+          onChange: setSort,
+          options: [
+            { value: 'health', label: 'Health (lowest first)' },
+            { value: 'stale', label: 'Last contact (oldest first)' },
+            { value: 'topup', label: 'Last top-up (oldest first)' },
+            { value: 'lot', label: 'Lot size (largest first)' },
+            { value: 'name', label: 'Name (A–Z)' }
+          ]
+        }}
+        count={`${plural(rows.length, 'client')}${rows.length !== mine.length ? ` of ${mine.length}` : ''}`}
+        onClear={clear}
+      />
 
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-        {onAddClient && (
-          <button
-            type="button"
-            onClick={onAddClient}
-            className="flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-2xs cursor-pointer"
-          >
-            + Add client
-          </button>
-        )}
-        <div className="relative w-full sm:w-64">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search active clients..."
-            className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-blue-500 w-full"
-          />
-        </div>
-        </div>
-      </div>
-
-      {/* Client List with Product Matrix */}
-      <div className="grid grid-cols-1 gap-4">
-        {filteredClients.map(client => {
-          const hasKeyfetch = client.signedProducts?.includes('prod_3');
-          const clientTopups = client.topups || [];
-          const clientUpsells = client.upsells || [];
-          
-          // Products not yet signed (candidates for upselling)
-          const availableForUpsell = catalog.filter(p => !client.signedProducts?.includes(p.id) && p.isActive);
-
-          return (
-            <div
-              key={client.id}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4 hover:border-slate-300 transition-all"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-base text-slate-900">{client.dealershipName}</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      Active Client
-                    </span>
-                    {client.groupName && (
-                      <span className="text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded font-bold">
-                        {client.groupName}
-                      </span>
-                    )}
+      {rows.length === 0 ? (
+        <EmptyState title="No clients match" hint="Try clearing a filter." />
+      ) : (
+        <div className="space-y-2">
+          {rows.map(d => {
+            const tp = lastTopup(d);
+            const ups = openUpsells(d);
+            const hasKeyfetch = (d.signedProducts ?? []).includes(KEYFETCH);
+            const canUpsell = products.some(p => !(d.signedProducts ?? []).includes(p.id));
+            const health = d.clientHealthScore ?? 100;
+            return (
+              <Panel key={d.id} interactive onClick={() => onOpenDealership(d)} className="grid grid-cols-1 gap-3 p-4 lg:grid-cols-[minmax(220px,1.4fr)_2fr_1fr_auto] lg:items-center">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[16px] font-bold text-slate-900">{d.dealershipName}</span>
+                    {d.stage === 'Onboarding' && <Badge tone="teal">Onboarding</Badge>}
+                    {atRisk(d) && <Badge tone="red">At risk · {health}</Badge>}
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    {client.city}, {client.state} • {client.usedCarsOnLot} used cars • Rep: <strong>{repName(client.originRepId)}</strong>
+                  <div className="mt-0.5 text-[13px] text-slate-500">
+                    {d.city}, {d.state}
+                    {d.groupName ? ` · ${d.groupName}` : ''}
+                    {rep !== currentUser.id ? ` · ${repName(d.assignedRepId)}` : ''}
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenDealership(client)}
-                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
-                  >
-                    View Record
-                  </button>
-                  {availableForUpsell.length > 0 && (
-                    <button
-                      type="button"
+                <div className="flex flex-wrap gap-1.5">
+                  {(d.signedProducts ?? []).map(p => (
+                    <Badge key={p} tone="green">
+                      {productName(p)}
+                    </Badge>
+                  ))}
+                  {ups.map(u => (
+                    <Badge key={u.id} tone="violet" title={`Next: ${u.nextStep}`}>
+                      <Sparkles className="h-3 w-3" />
+                      {u.productName} · {u.stage.toLowerCase()}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="text-[13px] text-slate-600">
+                  <div>{lastContactText(d.lastTouchpointDate)}</div>
+                  {hasKeyfetch && (
+                    <div className={topupDue(d) ? 'font-semibold text-amber-700' : ''}>
+                      <Package className="mr-1 inline h-3.5 w-3.5" />
+                      {tp ? `Top-up ${tp.quantity} on ${formatShortDay(tp.date)}` : 'No top-ups yet'}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end" onClick={e => e.stopPropagation()}>
+                  {hasKeyfetch && (
+                    <Btn
+                      size="sm"
                       onClick={() => {
-                        setUpsellModalDeal(client);
-                        setUpsellProductId(availableForUpsell[0]?.id || 'prod_10');
+                        setTopupFor(d);
+                        setTopupQty(tp?.quantity ?? 250);
+                        setTopupNotes('');
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs border border-purple-200 cursor-pointer"
                     >
-                      + Pitch Upsell
-                    </button>
+                      Log top-up
+                    </Btn>
+                  )}
+                  {canUpsell && (
+                    <Btn
+                      size="sm"
+                      onClick={() => {
+                        setUpsellFor(d);
+                        setUpsellProductId(products.find(p => !(d.signedProducts ?? []).includes(p.id))?.id ?? '');
+                      }}
+                    >
+                      Pitch a product
+                    </Btn>
                   )}
                 </div>
-              </div>
-
-              {/* 3-Column Servicing Layout: Signed Products, Keyfetch Top-ups, Active Upsells */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs">
-                {/* 1. Signed Products Matrix */}
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
-                  <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider">
-                    Contracted Products ({client.signedProducts?.length || 0})
-                  </span>
-                  <div className="space-y-1.5">
-                    {client.signedProducts?.map(pid => {
-                      const prod = catalog.find(p => p.id === pid);
-                      return (
-                        <div key={pid} className="flex items-center justify-between bg-white p-2 rounded-lg border border-slate-200/80">
-                          <span className="font-semibold text-slate-800 text-[11px]">{prod?.name || pid}</span>
-                          <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-0.5">
-                            <Check className="w-3 h-3" /> Active
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 2. Keyfetch Inventory Top-Ups (ONLY if client has Keyfetch!) */}
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">
-                      Keyfetch Lot Top-Ups
-                    </span>
-                    {hasKeyfetch && (
-                      <button
-                        type="button"
-                        onClick={() => setTopupModalDeal(client)}
-                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Log Top-Up (+30 pts)</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {hasKeyfetch ? (
-                    <div className="space-y-1.5">
-                      {clientTopups.length === 0 ? (
-                        <p className="text-slate-400 text-[11px] py-2 italic">No top-ups logged yet.</p>
-                      ) : (
-                        clientTopups.map(tp => (
-                          <div key={tp.id} className="bg-white p-2 rounded-lg border border-slate-200/80 flex items-center justify-between">
-                            <div>
-                              <span className="font-mono font-bold text-blue-700 text-xs">
-                                {tp.quantity} units
-                              </span>
-                              <span className="text-[10px] text-slate-400 block">{tp.date}</span>
-                            </div>
-                            <span className="text-[10px] text-slate-500 italic">By {tp.handledByName}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-white/60 rounded-lg text-center text-slate-400 text-[11px]">
-                      Client does not have Keyfetch hardware.
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Upsell Mini-Opportunities */}
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
-                  <span className="font-bold text-slate-800 block text-[11px] uppercase tracking-wider">
-                    Upsell Pipeline
-                  </span>
-
-                  {clientUpsells.length === 0 ? (
-                    <p className="text-slate-400 text-[11px] py-2 italic">No active upsells being pitched.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {clientUpsells.map(up => (
-                        <div key={up.id} className="bg-white p-2 rounded-lg border border-slate-200/80 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-900 text-[11px]">{up.productName}</span>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                              up.stage === 'Won' ? 'bg-emerald-100 text-emerald-800' :
-                              up.stage === 'Pitched' ? 'bg-blue-100 text-blue-800' :
-                              'bg-amber-100 text-amber-800'
-                            }`}>
-                              {up.stage}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-slate-500">Next: {up.nextStep}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Log Keyfetch Top-up Modal (Quantity ONLY, no prices) */}
-      {topupModalDeal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-xs">
-            <h3 className="font-bold text-sm text-slate-900">
-              Log Keyfetch Top-Up for {topupModalDeal.dealershipName}
-            </h3>
-
-            <div className="space-y-3">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Physical Quantity (Units):</label>
-                <input
-                  type="number"
-                  value={topupQty}
-                  onChange={(e) => setTopupQty(parseInt(e.target.value, 10) || 0)}
-                  className="w-full p-2 border border-slate-300 rounded-xl font-mono font-bold text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Notes / Delivery Reference:</label>
-                <textarea
-                  value={topupNotes}
-                  onChange={(e) => setTopupNotes(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-xl h-16"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setTopupModalDeal(null)}
-                className="px-3 py-1.5 rounded-xl text-slate-600 hover:bg-slate-100 font-bold cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteTopup}
-                className="px-4 py-1.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 cursor-pointer"
-              >
-                Save Top-Up (+30 pts)
-              </button>
-            </div>
-          </div>
+              </Panel>
+            );
+          })}
         </div>
       )}
 
-      {/* Pitch Upsell Modal */}
-      {upsellModalDeal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl text-xs">
-            <h3 className="font-bold text-sm text-slate-900">
-              Pitch Catalog Upsell: {upsellModalDeal.dealershipName}
-            </h3>
-
-            <div className="space-y-3">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Select Catalog Product:</label>
-                <select
-                  value={upsellProductId}
-                  onChange={(e) => setUpsellProductId(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-xl bg-white font-medium"
+      {topupFor && (
+        <Dialog title={`Log a Keyfetch top-up — ${topupFor.dealershipName}`} onClose={() => setTopupFor(null)}>
+          <label className="block text-[14px] font-semibold text-slate-800">
+            How many units?
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[100, 150, 200, 250, 300].map(qty => (
+                <button
+                  key={qty}
+                  type="button"
+                  onClick={() => setTopupQty(qty)}
+                  className={`min-h-[40px] cursor-pointer rounded-xl border-2 px-3 text-[14px] font-semibold ${topupQty === qty ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white'}`}
                 >
-                  {catalog
-                    .filter(p => !upsellModalDeal.signedProducts?.includes(p.id) && p.isActive)
-                    .map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} {p.isNewLaunch ? '(🔥 NEW Launch)' : ''}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Next Pitch Step:</label>
-                <input
-                  type="text"
-                  value={upsellNextStep}
-                  onChange={(e) => setUpsellNextStep(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-xl"
-                />
-              </div>
+                  {qty}
+                </button>
+              ))}
+              <input type="number" min={1} aria-label="Other quantity" value={topupQty} onChange={e => setTopupQty(parseInt(e.target.value, 10) || 0)} className="min-h-[40px] w-24 rounded-xl border border-slate-300 px-3 text-[14px]" />
             </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setUpsellModalDeal(null)}
-                className="px-3 py-1.5 rounded-xl text-slate-600 hover:bg-slate-100 font-bold cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteCreateUpsell}
-                className="px-4 py-1.5 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-700 cursor-pointer"
-              >
-                Create Mini-Opportunity
-              </button>
-            </div>
+          </label>
+          <label className="block text-[14px] font-semibold text-slate-800">
+            Note (optional)
+            <input value={topupNotes} onChange={e => setTopupNotes(e.target.value)} placeholder="e.g. Delivered to the service desk" className="mt-1 min-h-[40px] w-full rounded-xl border border-slate-300 px-3 text-[14px] font-normal" />
+          </label>
+          <div className="flex justify-end gap-2">
+            <Btn variant="ghost" onClick={() => setTopupFor(null)}>
+              Cancel
+            </Btn>
+            <Btn
+              variant="primary"
+              disabled={topupQty <= 0}
+              onClick={() => {
+                onLogKeyfetchTopup(topupFor.id, topupQty, topupNotes || undefined);
+                setTopupFor(null);
+              }}
+            >
+              Save top-up
+            </Btn>
           </div>
-        </div>
+        </Dialog>
       )}
-    </div>
+
+      {upsellFor && (
+        <Dialog title={`Pitch a product — ${upsellFor.dealershipName}`} onClose={() => setUpsellFor(null)}>
+          <label className="block text-[14px] font-semibold text-slate-800">
+            Product
+            <select value={upsellProductId} onChange={e => setUpsellProductId(e.target.value)} className="mt-1 min-h-[40px] w-full rounded-xl border border-slate-300 bg-white px-3 text-[14px] font-normal">
+              {products
+                .filter(p => !(upsellFor.signedProducts ?? []).includes(p.id))
+                .map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.isNewLaunch ? ' (new)' : ''}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="block text-[14px] font-semibold text-slate-800">
+            Next step
+            <input value={upsellNextStep} onChange={e => setUpsellNextStep(e.target.value)} className="mt-1 min-h-[40px] w-full rounded-xl border border-slate-300 px-3 text-[14px] font-normal" />
+          </label>
+          <div className="flex justify-end gap-2">
+            <Btn variant="ghost" onClick={() => setUpsellFor(null)}>
+              Cancel
+            </Btn>
+            <Btn
+              variant="primary"
+              disabled={!upsellProductId}
+              onClick={() => {
+                onCreateUpsell(upsellFor.id, upsellProductId, upsellNextStep);
+                setUpsellFor(null);
+              }}
+            >
+              Add upsell
+            </Btn>
+          </div>
+        </Dialog>
+      )}
+    </Page>
   );
 };

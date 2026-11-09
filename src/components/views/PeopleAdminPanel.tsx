@@ -150,7 +150,7 @@ export const PeopleAdminPanel: React.FC<{
             <div key={u.id} className={`flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-0 ${inactive ? 'bg-slate-50 opacity-60' : ''}`}>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-bold text-slate-900">
-                  {u.firstName} {u.lastName} {inactive && <span className="ml-1 rounded bg-slate-200 px-1.5 text-[11px] font-semibold text-slate-600">Removed</span>}
+                  {u.firstName} {u.lastName} {inactive && <span className="ml-1 rounded bg-slate-200 px-1.5 text-[13px] font-semibold text-slate-600">Removed</span>}
                 </div>
                 <div className="text-xs text-slate-500">
                   {u.title ?? ROLE_LABEL[u.role]} · {u.region} · {u.email}

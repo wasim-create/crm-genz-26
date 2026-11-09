@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Btn, PageHeader } from '../ui/kit';
 import { ProductCatalogItem, User } from '../../types/crm';
 import { PeopleAdminPanel } from './PeopleAdminPanel';
 import {
@@ -95,27 +96,16 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Settings className="w-5 h-5 text-slate-700" />
-            <span>Settings & Open Product Catalog</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Configure system parameters, manage active products across field checklists, and view data repositories.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={onResetDemoData}
-          className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Reset All Demo Seed Data</span>
-        </button>
-      </div>
+      <PageHeader
+        icon={<Settings className="h-6 w-6" />}
+        title="Settings"
+        subtitle="Products, territory and planning rules, people and data."
+        actions={
+          <Btn variant="danger" icon={<RotateCcw className="h-4 w-4" />} onClick={onResetDemoData}>
+            Reset demo data
+          </Btn>
+        }
+      />
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 gap-2 text-xs font-bold">
@@ -178,32 +168,32 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {catalog.map((prod, idx) => (
                   <tr key={prod.id} className="hover:bg-slate-50/80">
-                    <td className="p-3 font-mono font-bold text-slate-400">{idx + 1}</td>
+                    <td className="p-3 font-bold text-slate-400">{idx + 1}</td>
                     <td className="p-3">
                       <span className="font-bold text-slate-900 block">{prod.name}</span>
-                      <span className="text-[11px] text-slate-500">{prod.description}</span>
+                      <span className="text-[13px] text-slate-500">{prod.description}</span>
                     </td>
                     <td className="p-3 text-slate-600 font-medium">{prod.category || 'General'}</td>
                     <td className="p-3">
                       {prod.requiresInventoryTopups ? (
-                        <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-[10px] border border-blue-200">
+                        <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-[12px] border border-blue-200">
                           Yes (Keyfetch Tracking)
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-[10px]">No</span>
+                        <span className="text-slate-400 text-[12px]">No</span>
                       )}
                     </td>
                     <td className="p-3">
                       {prod.isNewLaunch ? (
-                        <span className="font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded text-[10px] border border-rose-200 animate-pulse">
+                        <span className="font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded text-[12px] border border-rose-200 animate-pulse">
                           🔥 New Launch
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-[10px]">Standard</span>
+                        <span className="text-slate-400 text-[12px]">Standard</span>
                       )}
                     </td>
                     <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                      <span className={`px-2 py-0.5 rounded-full font-bold text-[12px] ${
                         prod.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
                       }`}>
                         {prod.isActive ? 'Active' : 'Deactivated'}
@@ -214,7 +204,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                         <button
                           type="button"
                           onClick={() => handleToggleProductStatus(prod.id)}
-                          className="text-[11px] font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
+                          className="text-[13px] font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
                         >
                           {prod.isActive ? 'Deactivate' : 'Reactivate'}
                         </button>
@@ -233,7 +223,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4 text-xs">
           <h3 className="font-bold text-sm text-slate-900">Active Storage Repository</h3>
           <p className="text-slate-500">
-            Current mode: <strong className="text-slate-800 font-mono">{storageMode}</strong>. Data synchronized locally with role-based privacy masking.
+            Current mode: <strong className="text-slate-800">{storageMode}</strong>. Data synchronized locally with role-based privacy masking.
           </p>
         </div>
       )}
@@ -275,7 +265,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                 <span className="font-bold text-emerald-900 text-xs">🟢 Home Region Radius</span>
                 <span className="text-xs font-bold text-emerald-700">0–{homeRadius} mi</span>
               </div>
-              <p className="text-[11px] text-emerald-800">Normal working territory. Standard travel calculations apply.</p>
+              <p className="text-[13px] text-emerald-800">Normal working territory. Standard travel calculations apply.</p>
               <input
                 type="number"
                 value={homeRadius}
@@ -289,7 +279,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                 <span className="font-bold text-amber-900 text-xs">🟡 Edge Tolerance</span>
                 <span className="text-xs font-bold text-amber-700">{homeRadius}–{edgeRadius} mi</span>
               </div>
-              <p className="text-[11px] text-amber-800">10–15% buffer. Flagged gently as "Edge of region".</p>
+              <p className="text-[13px] text-amber-800">10–15% buffer. Flagged gently as "Edge of region".</p>
               <input
                 type="number"
                 value={edgeRadius}
@@ -303,7 +293,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                 <span className="font-bold text-rose-900 text-xs">🔴 Out-of-Town Threshold</span>
                 <span className="text-xs font-bold text-rose-700">{outOfTownRadius}+ mi</span>
               </div>
-              <p className="text-[11px] text-rose-800">Triggers Trip Planning with 15-mile proximity clusters.</p>
+              <p className="text-[13px] text-rose-800">Triggers Trip Planning with 15-mile proximity clusters.</p>
               <input
                 type="number"
                 value={outOfTownRadius}
@@ -319,15 +309,15 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-semibold text-slate-800">Golden Window for In-Person & Calls</p>
-                  <p className="text-[11px] text-slate-500">10:00 AM – 4:00 PM local time of dealership.</p>
+                  <p className="text-[13px] text-slate-500">10:00 AM – 4:00 PM local time of dealership.</p>
                 </div>
-                <span className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg font-mono font-bold">10:00 - 16:00</span>
+                <span className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg font-bold">10:00 - 16:00</span>
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                 <div>
                   <p className="font-semibold text-slate-800">Require Trip Approval for Out-of-Town (70+ mi)</p>
-                  <p className="text-[11px] text-slate-500">Requires manager sign-off on travel days over 70 miles from home.</p>
+                  <p className="text-[13px] text-slate-500">Requires manager sign-off on travel days over 70 miles from home.</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
@@ -343,7 +333,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                 <div>
                   <p className="font-semibold text-slate-800">Leave-By Safety Margin (minutes)</p>
-                  <p className="text-[11px] text-slate-500">Buffer added before first appointment (on top of drive + 10m parking).</p>
+                  <p className="text-[13px] text-slate-500">Buffer added before first appointment (on top of drive + 10m parking).</p>
                 </div>
                 <input
                   type="number"

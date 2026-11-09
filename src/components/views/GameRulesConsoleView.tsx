@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Btn, PageHeader } from '../ui/kit';
+import { formatShortDay } from '../../utils/format';
 import { GameRule, GamificationProfile, PointsLedgerEntry, ProductBonus, ProductCatalogItem, User } from '../../types/crm';
 import {
   Gamepad2,
@@ -75,29 +77,18 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Gamepad2 className="w-5 h-5 text-indigo-600" />
-            <span>Game Rules & Incentive Console</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Configure scorable field actions, create launch multipliers on any catalog product, and tune territory streak targets.
-          </p>
-        </div>
-
-        {canManageBonuses && (
-          <button
-            type="button"
-            onClick={() => setShowBonusModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-linear-to-r from-orange-600 to-rose-600 hover:from-orange-700 hover:to-rose-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Create Product Bonus</span>
-          </button>
-        )}
-      </div>
+      <PageHeader
+        icon={<Gamepad2 className="h-6 w-6" />}
+        title="Points rules"
+        subtitle="What each field action is worth, product launch bonuses and streak targets."
+        actions={
+          canManageBonuses && (
+            <Btn variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setShowBonusModal(true)}>
+              Add a product bonus
+            </Btn>
+          )
+        }
+      />
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 gap-2 text-xs font-bold">
@@ -117,7 +108,7 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
           >
             <span>{t.label}</span>
             {t.count !== undefined && (
-              <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-mono">
+              <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[12px]">
                 {t.count}
               </span>
             )}
@@ -139,27 +130,27 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
                 }`}
               >
                 <div className="flex items-start justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 bg-rose-100 px-2 py-0.5 rounded">
+                  <span className="text-[12px] font-bold text-rose-600 bg-rose-100 px-2 py-0.5 rounded">
                     {b.targetType === 'all' ? 'All Territories' : b.targetType}
                   </span>
                   <button
                     type="button"
                     onClick={() => onToggleBonus(b.id)}
-                    className="text-[11px] font-bold text-slate-500 hover:text-slate-900 cursor-pointer"
+                    className="text-[13px] font-bold text-slate-500 hover:text-slate-900 cursor-pointer"
                   >
                     {b.isActive ? 'Deactivate' : 'Activate'}
                   </button>
                 </div>
 
                 <div className="my-3">
-                  <h4 className="font-black text-slate-900 text-base">{b.productName}</h4>
+                  <h4 className="font-extrabold text-slate-900 text-base">{b.productName}</h4>
                   <div className="mt-1 flex items-center gap-2">
                     {b.multiplier ? (
-                      <span className="text-xl font-black font-mono text-rose-600">
+                      <span className="text-xl font-extrabold text-rose-600">
                         {b.multiplier}x Points
                       </span>
                     ) : (
-                      <span className="text-xl font-black font-mono text-emerald-600">
+                      <span className="text-xl font-extrabold text-emerald-600">
                         +{b.bonusPoints} Bonus Pts
                       </span>
                     )}
@@ -167,8 +158,8 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
-                  <span>Valid: {b.startDate} to {b.endDate}</span>
+                <div className="pt-2 border-t border-slate-100 text-[13px] text-slate-400 flex items-center justify-between">
+                  <span>{formatShortDay(b.startDate)} – {formatShortDay(b.endDate)}</span>
                   <span className="font-bold text-orange-600 flex items-center gap-0.5">
                     <Flame className="w-3 h-3 fill-current" /> Live
                   </span>
@@ -198,14 +189,14 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
                 <tr key={r.id} className="hover:bg-slate-50/60">
                   <td className="p-3 font-semibold text-slate-500">{r.category}</td>
                   <td className="p-3 font-bold text-slate-900">{r.label}</td>
-                  <td className="p-3 font-mono font-bold text-emerald-600">+{r.basePoints} pts</td>
-                  <td className="p-3 font-mono text-slate-500">{r.dailyCap ? `${r.dailyCap} pts/day` : 'No Cap'}</td>
+                  <td className="p-3 font-bold text-emerald-600">+{r.basePoints} pts</td>
+                  <td className="p-3 text-slate-500">{r.dailyCap ? `${r.dailyCap} pts/day` : 'No Cap'}</td>
                   <td className="p-3">
-                    <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-800">
+                    <span className="px-2 py-0.5 rounded-full font-bold text-[12px] bg-emerald-100 text-emerald-800">
                       Active
                     </span>
                   </td>
-                  <td className="p-3 text-right text-slate-500 font-mono text-[10px]">
+                  <td className="p-3 text-right text-slate-500 text-[12px]">
                     {r.applicableRoles.join(', ')}
                   </td>
                 </tr>
@@ -229,9 +220,9 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
               { level: 6, title: 'Hall of Fame', min: 5000 }
             ].map(l => (
               <div key={l.level} className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-center space-y-1">
-                <span className="font-mono font-bold text-indigo-600 block text-[10px]">LEVEL {l.level}</span>
+                <span className=" font-bold text-indigo-600 block text-[12px]">LEVEL {l.level}</span>
                 <span className="font-bold text-slate-900 block">{l.title}</span>
-                <span className="text-[10px] text-slate-400 font-mono">{l.min}+ pts</span>
+                <span className="text-[12px] text-slate-400">{l.min}+ pts</span>
               </div>
             ))}
           </div>
@@ -251,7 +242,7 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
 
           <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-200 space-y-2">
             <span className="font-bold text-indigo-900">Simulated Change: +150 Ceramic Pro Upsell Bonus</span>
-            <p className="text-indigo-800 text-[11px]">
+            <p className="text-indigo-800 text-[13px]">
               {(() => {
                 const reps = users.filter(u => ['new_rep', 'veteran_rep', 'team_lead'].includes(u.role) && gamification[u.id]);
                 const extra = (id: string) => pointsLedger.filter(l => l.userId === id && /Ceramic Pro/.test(l.description)).length * 150;
@@ -298,7 +289,7 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
                     type="number"
                     value={bonusPoints}
                     onChange={(e) => setBonusPoints(parseInt(e.target.value, 10) || 0)}
-                    className="w-full p-2 border border-slate-300 rounded-xl font-mono font-bold"
+                    className="w-full p-2 border border-slate-300 rounded-xl font-bold"
                   />
                 </div>
                 <div>
@@ -307,7 +298,7 @@ export const GameRulesConsoleView: React.FC<GameRulesConsoleViewProps> = ({
                     type="number"
                     value={bonusMultiplier}
                     onChange={(e) => setBonusMultiplier(parseInt(e.target.value, 10) || 1)}
-                    className="w-full p-2 border border-slate-300 rounded-xl font-mono font-bold"
+                    className="w-full p-2 border border-slate-300 rounded-xl font-bold"
                   />
                 </div>
               </div>

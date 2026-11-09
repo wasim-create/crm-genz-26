@@ -16,6 +16,7 @@ import {
   isGoodVisitWindow 
 } from '../../utils/territory';
 import { AIService, PreVisitBrief } from '../../services/aiService';
+import { formatDay } from '../../utils/format';
 import { NextStepState, needsNextStep, nextStepText } from '../../utils/nextStepStatus';
 import { AccountStatusBanner, ActivityTimeline, AuditList, LotHistory, OnboardingChecklist } from './DealershipHistory';
 import {
@@ -186,24 +187,24 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
         <div className="p-5 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-[10px] text-slate-400 font-bold uppercase">{dealership.id}</span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              <span className=" text-[12px] text-slate-400 font-bold">{dealership.id}</span>
+              <span className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${
                 isClient ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
               }`}>
                 {dealership.stage}
               </span>
               {dealership.hasActiveAssist && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 animate-pulse">
+                <span className="text-[12px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 animate-pulse">
                   Active Manager Assist
                 </span>
               )}
             </div>
-            <h2 className="text-xl font-black text-slate-900 mt-1">{dealership.dealershipName}</h2>
+            <h2 className="text-xl font-extrabold text-slate-900 mt-1">{dealership.dealershipName}</h2>
             <p className="text-xs text-slate-500">
               {dealership.city}, {dealership.state} {dealership.zipCode} • {dealership.usedCarsOnLot} used cars • F&I: {dealership.fiSystem}
             </p>
             {nextStep && nextStep.kind !== 'not_applicable' && (
-              <div className={`mt-2 inline-flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${needsNextStep(nextStep) ? 'bg-rose-50 text-rose-800' : nextStep.kind === 'waiting' ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
+              <div className={`mt-2 inline-flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-1 text-[13px] font-semibold ${needsNextStep(nextStep) ? 'bg-rose-50 text-rose-800' : nextStep.kind === 'waiting' ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
                 {nextStep.kind === 'planned' ? 'Next step: ' : ''}
                 {nextStepText(nextStep)}
                 {needsNextStep(nextStep) && onPlanNextStep && (
@@ -309,10 +310,10 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                       <span className="font-bold text-slate-900 text-xs">Relationship Temperature & Ghosting Radar</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono font-bold uppercase text-slate-500">
+                      <span className="text-[12px] font-bold text-slate-500">
                         Ghosting Risk: <strong className={dealership.relationshipTemperature.ghostingRisk === 'high' ? 'text-rose-600' : 'text-emerald-600'}>{dealership.relationshipTemperature.ghostingRisk}</strong>
                       </span>
-                      <span className="text-xl font-black font-mono text-indigo-600">
+                      <span className="text-xl font-extrabold text-indigo-600">
                         {dealership.relationshipTemperature.score}°
                       </span>
                     </div>
@@ -320,10 +321,10 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                     <div className="p-2.5 bg-white/80 rounded-xl border border-slate-200/60">
-                      <span className="font-bold text-slate-700 block text-[10px] uppercase">Detected Intent Signals:</span>
+                      <span className="font-bold text-slate-700 block text-[12px]">Detected Intent Signals:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {(dealership.relationshipTemperature?.intentPhrases || []).map((phrase, i) => (
-                          <span key={i} className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-medium">
+                          <span key={i} className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[12px] font-medium">
                             "{phrase}"
                           </span>
                         ))}
@@ -331,16 +332,16 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                     </div>
 
                     <div className="p-2.5 bg-white/80 rounded-xl border border-slate-200/60">
-                      <span className="font-bold text-slate-700 block text-[10px] uppercase">Hesitation / Friction Flags:</span>
+                      <span className="font-bold text-slate-700 block text-[12px]">Hesitation / Friction Flags:</span>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {(dealership.relationshipTemperature?.hesitationPhrases || []).length > 0 ? (
                           (dealership.relationshipTemperature?.hesitationPhrases || []).map((phrase, i) => (
-                            <span key={i} className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-medium">
+                            <span key={i} className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[12px] font-medium">
                               "{phrase}"
                             </span>
                           ))
                         ) : (
-                          <span className="text-[10px] text-slate-400 italic">No significant objections detected.</span>
+                          <span className="text-[12px] text-slate-400 italic">No significant objections detected.</span>
                         )}
                       </div>
                     </div>
@@ -394,7 +395,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-bold text-sm text-slate-900">Scouting Product Interest Matrix</h4>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[13px] text-slate-500">
                         Check products of interest during discovery. Automatically pre-fills deal sign-up.
                       </p>
                     </div>
@@ -418,12 +419,12 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                             <div className="flex items-center gap-1.5">
                               <span className="font-bold text-slate-900 text-xs">{prod.name}</span>
                               {prod.isNewLaunch && (
-                                <span className="text-[9px] font-bold text-rose-700 bg-rose-100 px-1 rounded">
+                                <span className="text-[12px] font-bold text-rose-700 bg-rose-100 px-1 rounded">
                                   NEW
                                 </span>
                               )}
                             </div>
-                            <span className="text-[10px] text-slate-400 block">{prod.category}</span>
+                            <span className="text-[12px] text-slate-400 block">{prod.category}</span>
                           </div>
 
                           <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${
@@ -454,7 +455,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                           type="number"
                           value={topupQty}
                           onChange={(e) => setTopupQty(parseInt(e.target.value, 10) || 0)}
-                          className="w-32 p-2 border border-slate-300 rounded-xl bg-white font-mono font-bold"
+                          className="w-32 p-2 border border-slate-300 rounded-xl bg-white font-bold"
                           placeholder="Units"
                         />
                         <button
@@ -469,8 +470,8 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                       <div className="space-y-1.5 pt-2">
                         {dealership.topups?.map(tp => (
                           <div key={tp.id} className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
-                            <span className="font-mono font-bold text-blue-700">{tp.quantity} units</span>
-                            <span className="text-slate-500">{tp.date} • Handled by {tp.handledByName}</span>
+                            <span className=" font-bold text-blue-700">{tp.quantity} units</span>
+                            <span className="text-slate-500">{formatDay(tp.date)} · {tp.handledByName}</span>
                           </div>
                         ))}
                       </div>
@@ -489,7 +490,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                   <Briefcase className="w-4 h-4 text-purple-600" />
                   <span>Request Manager Assist for {dealership.dealershipName}</span>
                 </h4>
-                <p className="text-[11px] text-slate-500 mt-0.5">
+                <p className="text-[13px] text-slate-500 mt-0.5">
                   You keep full deal ownership through closure. Manager co-attends to accelerate contract signing.
                 </p>
               </div>
@@ -534,7 +535,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                     type="date"
                     value={assistDate}
                     onChange={(e) => setAssistDate(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded-xl bg-white font-mono"
+                    className="w-full p-2 border border-slate-300 rounded-xl bg-white"
                   />
                 </div>
                 <div>
@@ -543,7 +544,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                     type="time"
                     value={assistTime}
                     onChange={(e) => setAssistTime(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded-xl bg-white font-mono"
+                    className="w-full p-2 border border-slate-300 rounded-xl bg-white"
                   />
                 </div>
               </div>
@@ -553,7 +554,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                 <textarea
                   value={assistBrief}
                   onChange={(e) => setAssistBrief(e.target.value)}
-                  className="w-full p-3 border border-slate-300 rounded-xl bg-white h-24 font-mono text-[11px]"
+                  className="w-full p-3 border border-slate-300 rounded-xl bg-white h-24 text-[13px]"
                 />
               </div>
 
@@ -563,7 +564,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                 className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <span>Send Assist Request to Manager</span>
-                <span className="bg-purple-500 font-mono text-[10px] px-1.5 py-0.5 rounded">+25 pts</span>
+                <span className="bg-purple-500 text-[12px] px-1.5 py-0.5 rounded">+25 pts</span>
               </button>
             </div>
           )}
@@ -591,10 +592,10 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                 <div key={c.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
                   <div>
                     <span className="font-bold text-slate-900">{c.firstName} {c.lastName}</span>
-                    <span className="text-slate-500 block text-[11px]">{c.jobTitle}{c.phone ? ` • ${formatUSPhone(c.phone)}` : ''}{c.email ? ` • ${c.email}` : ''}</span>
+                    <span className="text-slate-500 block text-[13px]">{c.jobTitle}{c.phone ? ` • ${formatUSPhone(c.phone)}` : ''}{c.email ? ` • ${c.email}` : ''}</span>
                   </div>
                   {c.isDecisionMaker && (
-                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+                    <span className="text-[12px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
                       Decision Maker
                     </span>
                   )}
@@ -610,7 +611,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
               <div className="space-y-2">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                   <span className="font-bold text-slate-900 block">Origin rep: {(() => { const o = (allUsers || []).find(u => u.id === dealership.originRepId); return o ? `${o.firstName} ${o.lastName}` : 'Not claimed yet'; })()}</span>
-                  <p className="text-slate-600 text-[11px] mt-0.5">
+                  <p className="text-slate-600 text-[13px] mt-0.5">
                     Attribution is permanently locked. All introduction and closing rewards flow to origin rep.
                   </p>
                 </div>
@@ -618,7 +619,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = ({
                 {dealership.ownershipTransfers?.map(tx => (
                   <div key={tx.id} className="p-3 bg-purple-50 rounded-xl border border-purple-200">
                     <span className="font-bold text-purple-900 block">Ownership Reassigned</span>
-                    <p className="text-[11px] text-purple-800 mt-0.5">
+                    <p className="text-[13px] text-purple-800 mt-0.5">
                       {(() => { const f = (allUsers || []).find(u => u.id === tx.fromRepId); const t = (allUsers || []).find(u => u.id === tx.toRepId); return `${f ? `${f.firstName} ${f.lastName}` : tx.fromRepId} → ${t ? `${t.firstName} ${t.lastName}` : tx.toRepId}`; })()} on {new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, by {tx.transferredByManagerName}. Reason: “{tx.reason}”
                     </p>
                   </div>

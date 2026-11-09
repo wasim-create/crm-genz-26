@@ -137,7 +137,7 @@ export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
                       <span className="text-slate-400">•</span>
                       <span className="font-bold text-blue-700">{item.dealershipName}</span>
                     </div>
-                    <span className="text-[11px] font-mono text-slate-400">{formatUSDate(item.date)}</span>
+                    <span className="text-[13px] text-slate-400">{formatUSDate(item.date)}</span>
                   </div>
 
                   <h5 className="font-bold text-slate-800 text-xs">{item.subjectOrTitle}</h5>
@@ -147,11 +147,11 @@ export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
 
                   {item.actionItems && item.actionItems.length > 0 && (
                     <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl space-y-1">
-                      <div className="font-bold text-amber-900 text-[11px] flex items-center gap-1">
+                      <div className="font-bold text-amber-900 text-[13px] flex items-center gap-1">
                         <Sparkles className="w-3 h-3 text-amber-600" /> AI Action Items Extracted:
                       </div>
                       {item.actionItems.map((act, i) => (
-                        <div key={i} className="text-[11px] text-amber-800 flex items-center gap-1.5">
+                        <div key={i} className="text-[13px] text-amber-800 flex items-center gap-1.5">
                           <CheckCircle2 className="w-3 h-3 text-amber-600 shrink-0" />
                           <span>{act}</span>
                         </div>
@@ -165,7 +165,7 @@ export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
                         href={item.deepLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline"
+                        className="inline-flex items-center gap-1 text-[13px] font-bold text-blue-600 hover:underline"
                       >
                         Open in Google {item.service} <ExternalLink className="w-3 h-3" />
                       </a>
@@ -191,7 +191,7 @@ export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
                   <div key={u.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-800">{u.subjectOrTitle}</span>
-                      <span className="text-slate-400 font-mono text-[11px]">{formatUSDate(u.date)}</span>
+                      <span className="text-slate-400 text-[13px]">{formatUSDate(u.date)}</span>
                     </div>
                     <p className="text-slate-600">{u.summary}</p>
                     <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
@@ -222,16 +222,16 @@ export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
                   <div key={idx} className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
                     <div>
                       <h5 className="font-bold text-slate-900">{s.name}</h5>
-                      <p className="text-slate-500 text-[11px]">{s.desc}</p>
+                      <p className="text-slate-500 text-[13px]">{s.desc}</p>
                     </div>
-                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                    <span className="text-[12px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
                       {s.status}
                     </span>
                   </div>
                 ))}
               </div>
 
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl text-slate-700 leading-relaxed text-[11px]">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl text-slate-700 leading-relaxed text-[13px]">
                 <strong>Privacy & Domain Security:</strong> OAuth 2.0 uses minimal read-only scopes. Only items matching verified customer domains are indexed into the CRM database.
               </div>
             </div>

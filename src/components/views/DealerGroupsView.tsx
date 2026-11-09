@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader } from '../ui/kit';
 import { DealerGroup, Dealership, User } from '../../types/crm';
 import { Layers, Building, MapPin, Phone, Users, CheckCircle2, Flame, ArrowRight, ShieldCheck } from 'lucide-react';
 
@@ -26,28 +27,16 @@ export const DealerGroupsView: React.FC<DealerGroupsViewProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Layers className="w-5 h-5 text-indigo-600" />
-            <span>Dealer Groups & Rooftop Networks</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Enterprise group entities. Rooftop sign-up triggers warm opportunities across sister stores. Attribution stays per rooftop.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-mono font-bold bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-xl border border-indigo-200">
-            {groups.length} Dealer Groups Indexed
-          </span>
-        </div>
-      </div>
+      <PageHeader
+        icon={<Layers className="h-6 w-6" />}
+        title="Dealer groups"
+        subtitle={`${groups.length} groups. When one store signs, its sister stores become warm leads; each store keeps its own rep and credit.`}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left: Group List */}
         <div className="lg:col-span-4 space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Dealer Groups</h3>
+          <h3 className="text-xs font-bold text-slate-500">Dealer Groups</h3>
           <div className="space-y-2">
             {groups.map(g => {
               const count = dealerships.filter(d => d.groupId === g.id).length;
@@ -65,7 +54,7 @@ export const DealerGroupsView: React.FC<DealerGroupsViewProps> = ({
                 >
                   <div className="flex items-start justify-between gap-1">
                     <h4 className="font-bold text-sm text-slate-900">{g.name}</h4>
-                    <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                    <span className="text-[12px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
                       {count} Roofs
                     </span>
                   </div>
@@ -105,7 +94,7 @@ export const DealerGroupsView: React.FC<DealerGroupsViewProps> = ({
 
               {/* Rooftops List */}
               <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                <h4 className="text-xs font-bold text-slate-700">
                   Rooftop Stores ({groupRooftops.length})
                 </h4>
 
@@ -125,7 +114,7 @@ export const DealerGroupsView: React.FC<DealerGroupsViewProps> = ({
                             <div className="font-bold text-slate-900 flex items-center gap-2">
                               <span>{roof.dealershipName}</span>
                               {isSigned && (
-                                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
+                                <span className="text-[12px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
                                   Signed
                                 </span>
                               )}
