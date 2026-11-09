@@ -4,7 +4,7 @@ import { Dealership, User } from '../../types/crm';
 import { NextStepState, needsNextStep } from '../../utils/nextStepStatus';
 import { calculateDistanceMiles, isWithinTerritory } from '../../utils/territory';
 import { RouteMap } from '../common/RouteMap';
-import { Badge, Btn, EmptyState, Page, PageHeader, Panel, Switch, Toolbar, useSticky } from '../ui/kit';
+import { BackLayer, Badge, Btn, EmptyState, Page, PageHeader, Panel, Switch, Toolbar, useSticky } from '../ui/kit';
 import { NextStepPill, nextStepSortKey } from '../ui/NextStepPill';
 import { stageLabel, stageTone } from '../../utils/stages';
 import { daysSince, lastContactText, matches, plural } from '../../utils/format';
@@ -249,6 +249,7 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({ dealerships,
 
       {farDeal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/50 p-4" role="dialog" aria-modal="true" aria-label="Claim outside your territory">
+          <BackLayer onBack={() => setFarDeal(null)} />
           <Panel className="w-full max-w-md space-y-4 p-6 shadow-2xl">
             <div>
               <h2 className="text-[18px] font-bold text-slate-900">Claim outside your territory?</h2>
@@ -282,6 +283,7 @@ export const ProspectPoolView: React.FC<ProspectPoolViewProps> = ({ dealerships,
 
       {showImport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/50 p-4" role="dialog" aria-modal="true" aria-label="Import a list">
+          <BackLayer onBack={() => setShowImport(false)} />
           <Panel className="w-full max-w-lg space-y-4 p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">

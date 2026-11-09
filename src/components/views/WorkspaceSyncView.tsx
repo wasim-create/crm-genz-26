@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BackLayer } from '../ui/kit';
 import { WorkspaceItem, Dealership, User } from '../../types/crm';
 import { formatDay } from '../../utils/format';
 import {
@@ -57,6 +58,7 @@ export const WorkspaceSyncView: React.FC<WorkspaceSyncViewProps> = ({
 
   return (
     <div className="fixed inset-0 bg-scrim/60 backdrop-blur-2xs z-50 flex items-center justify-center p-4">
+      <BackLayer onBack={onClose} />
       <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="p-6 bg-ink text-onaccent flex items-center justify-between">

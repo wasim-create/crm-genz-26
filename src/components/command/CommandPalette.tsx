@@ -2,6 +2,7 @@
 // Arrow keys to move, Enter to open, Escape to close.
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useBackLayer } from '../../utils/backStack';
 import { ArrowRight, Building2, CornerDownLeft, LayoutGrid, Search, User as UserIcon } from 'lucide-react';
 import { Contact, Dealership } from '../../types/crm';
 import { stageLabel } from '../../utils/stages';
@@ -62,6 +63,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose,
     onClose();
   };
 
+  useBackLayer(isOpen, onClose);
   if (!isOpen) return null;
 
   return (

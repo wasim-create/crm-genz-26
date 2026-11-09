@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Dealership, 
   User, 
@@ -45,6 +45,7 @@ import { ensureSeeded, useMyPlanState } from './features/myplan/data/store';
 import { HOW_SHORT, TASK_BY_ID } from './features/myplan/engine/tasks';
 import { todayISO } from './features/myplan/engine/time';
 import { computeNextSteps, PlannedRef } from './utils/nextStepStatus';
+import { initScreens, pushScreen, replaceScreen } from './utils/backStack';
 import { CheckCircle2, X, Sparkles, Flame } from 'lucide-react';
 
 const storage = new LocalStorageAdapter();
@@ -69,6 +70,27 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ActiveView>('planner');
+  // Screen changes go into the browser history, so the phone / browser Back button
+  // returns to the previous screen (after closing anything open on top).
+  const mainRef = useRef<HTMLElement | null>(null);
+  const scrollByView = useRef<Partial<Record<ActiveView, number>>>({});
+  const viewRef = useRef<ActiveView>('planner');
+  viewRef.current = currentView;
+  const showView = (v: ActiveView) => {
+    if (mainRef.current) scrollByView.current[viewRef.current] = mainRef.current.scrollTop;
+    setCurrentView(v);
+  };
+  const goTo = (v: ActiveView) => {
+    if (v === viewRef.current) return;
+    showView(v);
+    pushScreen(v);
+  };
+  useEffect(() => initScreens(viewRef.current, v => showView(v as ActiveView)), []);
+  useEffect(() => {
+    // Back to a list: put it where it was. A new screen starts at the top.
+    const y = scrollByView.current[currentView] ?? 0;
+    requestAnimationFrame(() => mainRef.current?.scrollTo({ top: y }));
+  }, [currentView]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
 
   // Modals state
@@ -136,9 +158,8 @@ export default function App() {
   );
   const nextSteps = useMemo(() => computeNextSteps(dealerships, activities, plannedRefs, assists, todayISO()), [dealerships, activities, plannedRefs, assists]);
   const planNextStep = (d: Dealership) => {
-    setSelectedDealership(null);
+    // Opens on top of the current screen (and the record, if open).
     setPlanRequest({ dealershipId: d.id, nextStep: true, nonce: Date.now() });
-    setCurrentView('planner');
   };
 
   // Saving from the shared prospect form: the dealership, any new / updated
@@ -225,11 +246,13 @@ export default function App() {
     setIncentives(fresh.incentives);
 
     // Contextual view routing
-    if (u.role === 'finance') setCurrentView('finance');
-    else if (u.role === 'manager') setCurrentView('assists');
-    else if (u.role === 'executive' || u.role === 'owner') setCurrentView('executive_desk');
-    else if (u.role === 'admin') setCurrentView('settings');
-    
+    const home: ActiveView | null =
+      u.role === 'finance' ? 'finance' : u.role === 'manager' ? 'assists' : u.role === 'executive' || u.role === 'owner' ? 'executive_desk' : u.role === 'admin' ? 'settings' : null;
+    if (home) {
+      showView(home);
+      replaceScreen(home);
+    }
+
     showToast(`Now viewing as ${u.firstName} ${u.lastName}`);
   };
 
@@ -597,11 +620,11 @@ export default function App() {
         allUsers={users.filter(u => u.active !== false)}
         onSelectUser={handleSelectUser}
         onOpenCommand={() => setIsCommandOpen(true)}
-        onOpenMobileWorkDay={() => setCurrentView('planner')}
+        onOpenMobileWorkDay={() => goTo('planner')}
         onOpenWorkspaceSync={() => setIsWorkspaceSyncOpen(true)}
         syncState={{ isSyncing, lastSyncTime: 'Today, 11:30 AM' }}
         gamificationProfile={gamification[currentUser.id]}
-        onOpenGamification={() => setCurrentView('gamification')}
+        onOpenGamification={() => goTo('gamification')}
       />
 
       {/* Main App Container */}
@@ -609,7 +632,7 @@ export default function App() {
         {/* Role-based Sidebar with v2 Labels */}
         <Sidebar
           currentView={currentView}
-          onNavigate={(v) => setCurrentView(v)}
+          onNavigate={(v) => goTo(v)}
           currentUser={currentUser}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -619,9 +642,15 @@ export default function App() {
         />
 
         {/* Viewport Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar">
-          {currentView === 'planner' && (
+        <main ref={mainRef} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar">
+          {/* Always mounted: on other screens it only shows its forms, on top of that screen. */}
+          {(
             <MyPlanModule
+              pageVisible={currentView === 'planner'}
+              onOpenPlan={() => {
+                setSelectedDealership(null);
+                goTo('planner');
+              }}
               currentUser={currentUser}
               users={users}
               dealerships={dealerships}
@@ -805,7 +834,7 @@ export default function App() {
                 showToast('Catalog updated.');
               }}
               onUpdateFISystems={setFiSystems}
-              onNavigateToGameRules={() => setCurrentView('game_rules')}
+              onNavigateToGameRules={() => goTo('game_rules')}
               onUpdateUsers={(list, message) => {
                 setUsers(list);
                 storage.saveUsers(list);
@@ -831,9 +860,7 @@ export default function App() {
           onClose={() => setSelectedDealership(null)}
           onUpdateDealership={handleUpdateDealership}
           onLogVisit={currentUser.role === 'finance' || currentUser.role === 'admin' ? undefined : (d) => {
-            setSelectedDealership(null);
             setPlanRequest({ dealershipId: d.id, logVisit: true, nonce: Date.now() });
-            setCurrentView('planner');
           }}
           onRequestAssist={handleRequestAssist}
           onAddContact={(c) => {
@@ -844,14 +871,10 @@ export default function App() {
           }}
           onLogKeyfetchTopup={handleLogKeyfetchTopup}
           onAddToPlan={(d) => {
-            setSelectedDealership(null);
             setPlanRequest({ dealershipId: d.id, nonce: Date.now() });
-            setCurrentView('planner');
           }}
           onPlanLater={(d) => {
-            setSelectedDealership(null);
             setPlanRequest({ dealershipId: d.id, planLater: true, nonce: Date.now() });
-            setCurrentView('planner');
           }}
           planPanel={<DealershipPlanPanel dealership={selectedDealership} user={currentUser} />}
           onRequestAddContact={(d) => setContactFormFor(d)}
@@ -869,7 +892,7 @@ export default function App() {
         onSelectDealership={(d) => setSelectedDealership(d)}
         contacts={contacts}
         pages={pagesFor(currentUser.role)}
-        onNavigate={id => setCurrentView(id as ActiveView)}
+        onNavigate={id => goTo(id as ActiveView)}
       />
 
       {/* Google Workspace Sync Modal */}

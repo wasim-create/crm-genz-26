@@ -331,6 +331,7 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
                     ctx.setView('day');
                     ctx.setDate(savedNext.date);
                     onClose();
+                    ctx.showPlanPage?.();
                   }}
                 >
                   See {formatDayLabel(savedNext.date)}

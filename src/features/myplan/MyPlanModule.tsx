@@ -28,6 +28,8 @@ import type { ProspectFormResult } from '../../components/forms/ProspectForm';
 import { mockGoogleCalendar } from './connectors/googleConnectors';
 import { buildSuggestions } from './services/suggestions';
 import { MyPlanContextValue, MyPlanProvider, SheetState } from './ui/context';
+import { sheetStepBack } from './ui/primitives';
+import { useBackLayer } from '../../utils/backStack';
 import { Header, MonthView } from './ui/HeaderAndMonth';
 import { DayView } from './ui/DayView';
 import { WeekView } from './ui/WeekView';
@@ -58,12 +60,17 @@ export interface MyPlanModuleProps {
   onSaveProspect: (r: ProspectFormResult) => void;
   onClaimDealership: (d: Dealership) => void;
   onOpenDealership: (d: Dealership) => void;
+  /** False when another screen is showing: only the forms and panels open (on top of that screen). */
+  pageVisible?: boolean;
+  /** Go to the My Plan screen (link in the saved message when you're elsewhere). */
+  onOpenPlan?: () => void;
 }
 
 const VIEWER_ROLES = ['manager', 'team_lead', 'owner', 'executive'];
 
 export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
   const { currentUser, users, dealerships, contacts, groups, catalog } = props;
+  const pageVisible = props.pageVisible !== false;
   const state = useMyPlanState();
   const today = todayISO();
   const [date, setDate] = useState(today);
@@ -147,8 +154,17 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
 
   // First visit: short walkthrough.
   useEffect(() => {
-    if (!readOnly && state.seededOn && !settings.walkthroughDone && !sheet) setSheet({ kind: 'walkthrough' });
-  }, [readOnly, state.seededOn, settings.walkthroughDone]);
+    if (pageVisible && !readOnly && state.seededOn && !settings.walkthroughDone && !sheet) setSheet({ kind: 'walkthrough' });
+  }, [pageVisible, readOnly, state.seededOn, settings.walkthroughDone]);
+
+  // Phone / browser Back: step back inside a multi-step form, otherwise close it.
+  useBackLayer(!!sheet, () => {
+    if (sheetStepBack.current) {
+      sheetStepBack.current();
+      return false;
+    }
+    setSheet(null);
+  });
 
   // "Add to my plan" / "Plan later" from elsewhere in the CRM.
   useEffect(() => {
@@ -229,13 +245,15 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
     onAddContact: props.onAddContact,
     onSaveProspect: props.onSaveProspect,
     onClaimDealership: props.onClaimDealership,
-    onOpenDealership: props.onOpenDealership
+    onOpenDealership: props.onOpenDealership,
+    showPlanPage: pageVisible ? undefined : props.onOpenPlan
   };
 
   const close = () => setSheet(null);
 
   return (
     <MyPlanProvider value={value}>
+      {pageVisible && (
       <div className="mx-auto max-w-6xl text-[16px]" style={settings.biggerText ? { zoom: 1.15 } : undefined}>
         <Header viewers={viewers} onViewUser={setViewUserId} />
         <ReminderBanner />
@@ -251,6 +269,7 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
           <MonthView />
         )}
       </div>
+      )}
 
       {sheet?.kind === 'add' && <AddFlow key={sheet.preset?.nonce ?? 'add'} preset={sheet.preset} onClose={close} />}
       {sheet?.kind === 'edit' && <EditSlotSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
@@ -273,6 +292,11 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
         >
           {state.toast.points ? <span className="rounded-lg bg-amber-500 px-2 font-bold text-darkink">+{state.toast.points}</span> : null}
           <span className="flex-1">{state.toast.text}</span>
+          {!pageVisible && props.onOpenPlan && (
+            <button type="button" onClick={() => { dismissToast(); props.onOpenPlan?.(); }} className="inline-flex min-h-[44px] items-center rounded-xl bg-onaccent/15 px-3 font-bold text-onink-accent hover:bg-onaccent/25">
+              Open My Plan
+            </button>
+          )}
           {state.toast.canUndo && (
             <button type="button" onClick={undo} className="inline-flex min-h-[44px] items-center gap-1 rounded-xl bg-onaccent/15 px-3 font-bold text-onink-accent hover:bg-onaccent/25">
               <Undo2 className="h-4 w-4" /> Undo

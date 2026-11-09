@@ -3,6 +3,7 @@
 // actions. Tabs: Overview · Activity · Contacts · Products · History.
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useBackLayer } from '../../utils/backStack';
 import {
   Briefcase,
   Car,
@@ -84,9 +85,10 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = props
   const [more, setMore] = useState(false);
   const extra = more ? '' : 'max-sm:hidden';
 
-  // Close on Escape.
+  // Back button and Escape close the record (Escape only when nothing is open on top of it).
+  const isTop = useBackLayer(true, onClose);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !dialog && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !dialog && isTop() && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [dialog, onClose]);
@@ -175,7 +177,6 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = props
                 icon={<Plus className="h-4 w-4" />}
                 onClick={() => {
                   onAddToPlan(d);
-                  onClose();
                 }}
               >
                 Add to my plan
@@ -187,7 +188,6 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = props
                 className={extra}
                 onClick={() => {
                   onPlanLater(d);
-                  onClose();
                 }}
               >
                 Plan later

@@ -92,6 +92,8 @@ export interface MyPlanContextValue {
   onSaveProspect: (r: ProspectFormResult) => void;
   onClaimDealership: (d: Dealership) => void;
   onOpenDealership: (d: Dealership) => void;
+  /** When a form was opened from another screen: go to the My Plan screen. */
+  showPlanPage?: () => void;
 }
 
 export const MyPlanContext = createContext<MyPlanContextValue | null>(null);
