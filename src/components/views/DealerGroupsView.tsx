@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
-import { PageHeader } from '../ui/kit';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ChevronRight, Layers, Phone } from 'lucide-react';
 import { DealerGroup, Dealership, User } from '../../types/crm';
-import { Layers, Building, MapPin, Phone, Users, CheckCircle2, Flame, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Badge, EmptyState, Page, PageHeader, Panel, SectionTitle, Toolbar } from '../ui/kit';
+import { stageLabel, stageTone } from '../../utils/stages';
+import { lastContactText, matches, plural } from '../../utils/format';
+import { formatUSPhone } from '../../utils/territory';
 
 interface DealerGroupsViewProps {
   groups: DealerGroup[];
@@ -11,131 +14,143 @@ interface DealerGroupsViewProps {
   onOpenDealership: (dealership: Dealership) => void;
 }
 
-export const DealerGroupsView: React.FC<DealerGroupsViewProps> = ({
-  groups,
-  dealerships,
-  users,
-  currentUser,
-  onOpenDealership
-}) => {
-  const [selectedGroupId, setSelectedGroupId] = useState<string>(groups[0]?.id || '');
+const SIGNED = ['Signed', 'Client', 'Onboarding'];
+const LIVE = ['Claimed', 'Visit Planned', 'Visited', 'Follow-up', 'In Progress', 'HOT', 'Negotiation', 'Contract', 'Won'];
 
-  const selectedGroup = groups.find(g => g.id === selectedGroupId) || groups[0];
-  const groupRooftops = dealerships.filter(d => d.groupId === selectedGroupId);
+export const DealerGroupsView: React.FC<DealerGroupsViewProps> = ({ groups, dealerships, users, currentUser, onOpenDealership }) => {
+  const isRep = ['new_rep', 'veteran_rep', 'team_lead'].includes(currentUser.role);
+  const [q, setQ] = useState('');
+  const [state, setState] = useState('all');
+  const [mine, setMine] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [sort, setSort] = useState('name');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const signedCount = groupRooftops.filter(r => r.stage === 'Signed' || r.stage === 'Client' || r.stage === 'Onboarding').length;
+  const rows = useMemo(() => {
+    const list = groups
+      .map(g => {
+        const stores = dealerships.filter(d => d.groupId === g.id);
+        return { g, stores, signed: stores.filter(s => SIGNED.includes(s.stage)).length, live: stores.filter(s => LIVE.includes(s.stage)).length, mineCount: stores.filter(s => s.assignedRepId === currentUser.id).length };
+      })
+      .filter(r => (state === 'all' || r.g.hqState === state) && (!mine || r.mineCount > 0) && (!open || r.signed < r.stores.length) && matches(q, r.g.name, r.g.hqCity, r.g.mainDecisionMaker, ...r.stores.map(s => s.dealershipName)));
+    const cmp: Record<string, (a: (typeof list)[number], b: (typeof list)[number]) => number> = {
+      name: (a, b) => a.g.name.localeCompare(b.g.name),
+      stores: (a, b) => b.stores.length - a.stores.length,
+      signed: (a, b) => b.signed / Math.max(1, b.stores.length) - a.signed / Math.max(1, a.stores.length),
+      open: (a, b) => b.stores.length - b.signed - (a.stores.length - a.signed)
+    };
+    return list.sort(cmp[sort]);
+  }, [groups, dealerships, state, mine, open, q, sort, currentUser.id]);
+
+  useEffect(() => {
+    if (!rows.some(r => r.g.id === selectedId)) setSelectedId(rows[0]?.g.id ?? null);
+  }, [rows, selectedId]);
+  const sel = rows.find(r => r.g.id === selectedId);
+  const userName = (id?: string | null) => {
+    const u = users.find(x => x.id === id);
+    return u ? `${u.firstName} ${u.lastName}` : 'Unassigned';
+  };
 
   return (
-    <div className="space-y-6">
+    <Page>
       <PageHeader
         icon={<Layers className="h-6 w-6" />}
         title="Dealer groups"
-        subtitle={`${groups.length} groups. When one store signs, its sister stores become warm leads; each store keeps its own rep and credit.`}
+        subtitle="Groups that own several stores. When one store signs, its sister stores become warm leads; each store keeps its own rep and credit."
+      />
+      <Toolbar
+        search={{ value: q, onChange: setQ, placeholder: 'Search group, city, store or contact' }}
+        filters={[{ id: 'state', allLabel: 'All states', value: state, onChange: setState, options: [...new Set(groups.map(g => g.hqState))].sort().map(s => ({ value: s, label: s })) }]}
+        chips={[
+          ...(isRep ? [{ id: 'mine', label: 'Has my stores', active: mine, onClick: () => setMine(m => !m) }] : []),
+          { id: 'open', label: 'Stores still to sign', active: open, onClick: () => setOpen(o => !o) }
+        ]}
+        sort={{ value: sort, onChange: setSort, options: [{ value: 'name', label: 'Name (A–Z)' }, { value: 'stores', label: 'Most stores' }, { value: 'signed', label: 'Most signed' }, { value: 'open', label: 'Most left to sign' }] }}
+        count={plural(rows.length, 'group')}
+        onClear={() => {
+          setQ('');
+          setState('all');
+          setMine(false);
+          setOpen(false);
+        }}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left: Group List */}
-        <div className="lg:col-span-4 space-y-3">
-          <h3 className="text-xs font-bold text-slate-500">Dealer Groups</h3>
-          <div className="space-y-2">
-            {groups.map(g => {
-              const count = dealerships.filter(d => d.groupId === g.id).length;
-              const isSelected = g.id === selectedGroupId;
-
+      {rows.length === 0 ? (
+        <EmptyState title="No groups match" hint="Try clearing a filter." />
+      ) : (
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+          <div className="space-y-2 lg:col-span-4">
+            {rows.map(r => {
+              const on = r.g.id === selectedId;
               return (
-                <div
-                  key={g.id}
-                  onClick={() => setSelectedGroupId(g.id)}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${
-                    isSelected
-                      ? 'bg-indigo-50/50 border-indigo-400 shadow-xs'
-                      : 'bg-white border-slate-200 hover:border-slate-300'
-                  }`}
+                <button
+                  key={r.g.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setSelectedId(r.g.id)}
+                  className={`w-full cursor-pointer rounded-2xl border bg-white p-4 text-left transition ${on ? 'border-blue-600 ring-2 ring-blue-600/20' : 'border-slate-200 hover:border-slate-300'}`}
                 >
-                  <div className="flex items-start justify-between gap-1">
-                    <h4 className="font-bold text-sm text-slate-900">{g.name}</h4>
-                    <span className="text-[12px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                      {count} Roofs
-                    </span>
+                  <div className="text-[15px] font-bold text-slate-900">{r.g.name}</div>
+                  <div className="mt-0.5 text-[13px] text-slate-500">
+                    {r.g.hqCity}, {r.g.hqState} · {plural(r.stores.length, 'store')}
                   </div>
-                  <p className="text-xs text-slate-500">{g.hqCity}, {g.hqState}</p>
-                </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100" aria-label={`${r.signed} of ${r.stores.length} signed`}>
+                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${(r.signed / Math.max(1, r.stores.length)) * 100}%` }} />
+                  </div>
+                  <div className="mt-1 text-[13px] text-slate-600">
+                    {r.signed} of {r.stores.length} signed{r.live ? ` · ${r.live} in progress` : ''}
+                  </div>
+                </button>
               );
             })}
           </div>
-        </div>
 
-        {/* Right: Group Rooftop Detail Matrix */}
-        <div className="lg:col-span-8">
-          {selectedGroup && (
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+          {sel && (
+            <Panel className="space-y-5 p-5 lg:col-span-8">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-xl font-bold text-slate-900">{selectedGroup.name}</h3>
-                  <p className="text-xs text-slate-500">
-                    HQ: {selectedGroup.hqAddress}, {selectedGroup.hqCity}, {selectedGroup.hqState} {selectedGroup.hqZip}
+                  <h2 className="text-[22px] font-extrabold text-slate-900">{sel.g.name}</h2>
+                  <p className="text-[14px] text-slate-600">
+                    Head office: {sel.g.hqAddress}, {sel.g.hqCity}, {sel.g.hqState} {sel.g.hqZip}
                   </p>
-                  <p className="text-xs text-indigo-700 font-medium mt-1">
-                    Main Executive: <strong>{selectedGroup.mainDecisionMaker}</strong> • {selectedGroup.mainPhone}
+                  <p className="mt-1 text-[14px] text-slate-800">
+                    Main contact: <strong>{sel.g.mainDecisionMaker}</strong>
+                    {sel.g.mainPhone && (
+                      <a href={`tel:${sel.g.mainPhone}`} className="ml-2 inline-flex items-center gap-1 text-blue-700 hover:underline">
+                        <Phone className="h-4 w-4" />
+                        {formatUSPhone(sel.g.mainPhone)}
+                      </a>
+                    )}
                   </p>
+                  {sel.g.groupAccountOwnerId && <p className="text-[14px] text-slate-600">Group account owner: {userName(sel.g.groupAccountOwnerId)}</p>}
                 </div>
-
-                <div className="text-right">
-                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl inline-block">
-                    {signedCount} of {groupRooftops.length} Rooftops Won / Signed
-                  </span>
-                </div>
+                <Badge tone={sel.signed === sel.stores.length ? 'green' : 'neutral'}>
+                  {sel.signed} of {sel.stores.length} signed
+                </Badge>
               </div>
-
-              {/* Group Notes */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed">
-                <strong>Group Profile & Rollout Notes:</strong> {selectedGroup.notes}
-              </div>
-
-              {/* Rooftops List */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-700">
-                  Rooftop Stores ({groupRooftops.length})
-                </h4>
-
-                <div className="space-y-2">
-                  {groupRooftops.map(roof => {
-                    const isSigned = roof.stage === 'Signed' || roof.stage === 'Client' || roof.stage === 'Onboarding';
-
-                    return (
-                      <div
-                        key={roof.id}
-                        onClick={() => onOpenDealership(roof)}
-                        className="p-3.5 bg-white border border-slate-200 hover:border-blue-400 rounded-2xl flex items-center justify-between text-xs transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Building className="w-4 h-4 text-slate-400" />
-                          <div>
-                            <div className="font-bold text-slate-900 flex items-center gap-2">
-                              <span>{roof.dealershipName}</span>
-                              {isSigned && (
-                                <span className="text-[12px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded">
-                                  Signed
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-slate-500">{roof.city}, {roof.state} • {roof.usedCarsOnLot} cars</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-blue-700">{roof.stage}</span>
-                          <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-                        </div>
+              {sel.g.notes && <p className="rounded-xl bg-slate-50 p-3 text-[14px] text-slate-700">{sel.g.notes}</p>}
+              <div className="space-y-2">
+                <SectionTitle>Stores</SectionTitle>
+                {sel.stores.map(s => (
+                  <button key={s.id} type="button" onClick={() => onOpenDealership(s)} className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 text-left hover:border-blue-400">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[15px] font-semibold text-slate-900">{s.dealershipName}</span>
+                        <Badge tone={stageTone(s.stage)}>{stageLabel(s.stage)}</Badge>
+                        {s.isPlaceholder && <Badge tone="amber">Details needed</Badge>}
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="mt-0.5 text-[13px] text-slate-500">
+                        {s.city}, {s.state} · {s.usedCarsOnLot} cars · {userName(s.assignedRepId)} · {lastContactText(s.lastTouchpointDate).toLowerCase()}
+                      </div>
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+                  </button>
+                ))}
               </div>
-            </div>
+            </Panel>
           )}
         </div>
-      </div>
-    </div>
+      )}
+    </Page>
   );
 };

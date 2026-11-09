@@ -21,7 +21,7 @@ import {
 } from './types/crm';
 import { LocalStorageAdapter } from './services/storageAdapter';
 import { Navbar } from './components/layout/Navbar';
-import { Sidebar, ActiveView } from './components/layout/Sidebar';
+import { Sidebar, ActiveView, pagesFor } from './components/layout/Sidebar';
 import { MyPlanModule } from './features/myplan/MyPlanModule';
 import { DealershipPlanPanel } from './features/myplan/DealershipPlanPanel';
 import { resetMyPlan, setCrmBridge } from './features/myplan/data/store';
@@ -230,7 +230,7 @@ export default function App() {
     else if (u.role === 'executive' || u.role === 'owner') setCurrentView('executive_desk');
     else if (u.role === 'admin') setCurrentView('settings');
     
-    showToast(`Switched persona to ${u.firstName} ${u.lastName} (${u.role})`);
+    showToast(`Now viewing as ${u.firstName} ${u.lastName}`);
   };
 
   // Keyboard shortcut Cmd+K / Ctrl+K
@@ -867,6 +867,9 @@ export default function App() {
         onClose={() => setIsCommandOpen(false)}
         dealerships={dealerships}
         onSelectDealership={(d) => setSelectedDealership(d)}
+        contacts={contacts}
+        pages={pagesFor(currentUser.role)}
+        onNavigate={id => setCurrentView(id as ActiveView)}
       />
 
       {/* Google Workspace Sync Modal */}

@@ -33,6 +33,35 @@ export type ActiveView =
   | 'groups'
   | 'settings';
 
+/** Pages each role can open, in menu order (also used by search). */
+export function pagesFor(role: string): { id: ActiveView; label: string }[] {
+  const L: Record<ActiveView, string> = {
+    planner: 'My plan',
+    pipeline: 'Pipeline',
+    bench: 'My prospects',
+    pool: 'Prospect pool',
+    clients: 'Clients',
+    assists: ['manager', 'owner', 'executive'].includes(role) ? 'Assist requests' : 'My assist requests',
+    executive_desk: 'Executive desk',
+    finance: 'Introduction incentives',
+    gamification: 'Points & leaderboard',
+    game_rules: 'Points rules',
+    groups: 'Dealer groups',
+    settings: 'Settings'
+  };
+  const ids: ActiveView[] =
+    role === 'new_rep' || role === 'veteran_rep'
+      ? ['planner', 'bench', 'pipeline', 'pool', 'clients', 'assists', 'gamification', 'groups', 'game_rules', 'settings']
+      : role === 'manager' || role === 'team_lead'
+        ? ['assists', 'pipeline', 'planner', 'bench', 'clients', 'pool', 'groups', 'executive_desk', 'gamification', 'game_rules', 'settings']
+        : role === 'finance'
+          ? ['finance', 'assists', 'executive_desk', 'clients', 'pipeline', 'bench', 'settings']
+          : role === 'admin'
+            ? ['settings', 'game_rules', 'bench', 'pool', 'clients', 'groups']
+            : ['executive_desk', 'pipeline', 'assists', 'finance', 'planner', 'bench', 'clients', 'groups', 'pool', 'gamification', 'game_rules', 'settings'];
+  return ids.map(id => ({ id, label: L[id] }));
+}
+
 interface SidebarProps {
   currentView: ActiveView;
   onNavigate: (view: ActiveView) => void;

@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Dealership, Activity, ManagerAssist, IntroductionIncentive, User } from '../../types/crm';
 import { formatUSDate } from '../../utils/territory';
 import { NextStepState, needsNextStep } from '../../utils/nextStepStatus';
 import { AIService } from '../../services/aiService';
+import { Badge, Btn, Page, PageHeader, Panel, SectionTitle, Stat, Switch } from '../ui/kit';
+import { STAGE_META } from '../../utils/stages';
+import { formatRelative, plural } from '../../utils/format';
 import {
   TrendingUp,
   AlertOctagon,
@@ -37,16 +40,24 @@ interface ExecutiveDeskViewProps {
 }
 
 export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
-  dealerships,
-  activities,
-  assists,
+  dealerships: allDealerships,
+  activities: allActivities,
+  assists: allAssists,
   incentives,
-  users,
+  users: allUsers,
   onOpenDealership,
   nextSteps
 }) => {
   const [period, setPeriod] = useState<'Weekly' | 'Monthly' | 'Quarterly'>('Weekly');
-  const [isTvMode, setIsTvMode] = useState(false);
+  const [region, setRegion] = useState('all');
+  const [repSort, setRepSort] = useState<'live' | 'contacts' | 'signed' | 'gaps' | 'points'>('contacts');
+  const pageRef = useRef<HTMLDivElement>(null);
+  const regions = [...new Set(allUsers.filter(u => ['new_rep', 'veteran_rep', 'team_lead'].includes(u.role)).map(u => u.region))];
+  const inRegion = (userId?: string | null) => region === 'all' || allUsers.find(u => u.id === userId)?.region === region;
+  const users = region === 'all' ? allUsers : allUsers.filter(u => u.region === region || !['new_rep', 'veteran_rep', 'team_lead'].includes(u.role));
+  const dealerships = region === 'all' ? allDealerships : allDealerships.filter(d => inRegion(d.assignedRepId));
+  const activities = region === 'all' ? allActivities : allActivities.filter(a => inRegion(a.userId));
+  const assists = region === 'all' ? allAssists : allAssists.filter(a => inRegion(a.originRepId));
 
   // Strictly non-monetary. Everything is worked out from the data for the chosen period.
   const periodDays = period === 'Weekly' ? 7 : period === 'Monthly' ? 30 : 90;
@@ -129,209 +140,190 @@ export const ExecutiveDeskView: React.FC<ExecutiveDeskViewProps> = ({
     noNextStepByRep: noNextByRep
   });
 
+  // Per-rep table: the quickest way to see who needs help.
+  const repRows = users
+    .filter(u => ['new_rep', 'veteran_rep', 'team_lead'].includes(u.role) && u.active !== false)
+    .map(u => {
+      const mine = activePipelineDeals.filter(d => d.assignedRepId === u.id);
+      const contacts = live.filter(a => a.userId === u.id).length;
+      const outside = live.filter(a => a.userId === u.id && a.isGoodWindow === false).length;
+      const signed = new Set(signedActs.filter(a => a.userId === u.id).map(a => a.dealershipId)).size;
+      const gaps = noNextStep.filter(d => d.assignedRepId === u.id).length;
+      return { u, live: mine.length, contacts, outside, signed, gaps, points: pointsByRep[u.id] ?? 0 };
+    })
+    .sort((a, b) => b[repSort] - a[repSort]);
+
+  const PERIOD_WORD = period === 'Weekly' ? 'this week' : period === 'Monthly' ? 'in the last 30 days' : 'in the last 90 days';
+  const present = () => {
+    const el = pageRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void el.requestFullscreen?.().catch(() => undefined);
+  };
+
+  const attention: { title: string; tone: 'red' | 'amber' | 'violet'; items: Dealership[]; why: (d: Dealership) => string }[] = [
+    { title: 'Live deals with no next step', tone: 'red', items: noNextStep, why: d => { const u = users.find(x => x.id === d.assignedRepId); return u ? `${u.firstName} ${u.lastName} · ${STAGE_META[d.stage]?.label ?? d.stage}` : d.stage; } },
+    { title: 'Clients at risk', tone: 'red', items: atRiskClients, why: d => `Health ${d.clientHealthScore} · last contact ${formatRelative(d.lastTouchpointDate).toLowerCase()}` },
+    { title: 'Group stores close to signing, no manager booked', tone: 'violet', items: stalledGroupDeals, why: d => `${d.groupName ?? ''} · ${STAGE_META[d.stage]?.label ?? d.stage}` }
+  ];
+
   return (
-    <div className={`space-y-6 ${isTvMode ? 'bg-slate-950 text-white min-h-screen p-8 rounded-3xl' : ''}`}>
-      {/* Header & Controls */}
-      <div className={`p-5 rounded-2xl border shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-        isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-      }`}>
-        <div>
-          <h1 className={`text-[26px] font-extrabold tracking-tight flex items-center gap-2 ${isTvMode ? 'text-white' : 'text-slate-900'}`}>
-            <TrendingUp className="w-5 h-5 text-blue-500" />
-            <span>Executive desk</span>
-          </h1>
-          <p className={`text-[15px] mt-1 ${isTvMode ? 'text-slate-400' : 'text-slate-600'}`}>
-            How the team is doing: deals, visits, products and gaps. Counts only, no money forecasts.
-          </p>
-        </div>
+    <div ref={pageRef} className="overflow-y-auto bg-slate-50 [&:fullscreen]:p-8">
+      <Page>
+        <PageHeader
+          icon={<TrendingUp className="h-6 w-6" />}
+          title="Executive desk"
+          subtitle="How the team is doing: deals, field work, products and gaps. Counts only, no money forecasts."
+          actions={
+            <>
+              <select aria-label="Region" value={region} onChange={e => setRegion(e.target.value)} className="min-h-[40px] cursor-pointer rounded-xl border border-slate-300 bg-white px-3 text-[14px] font-medium">
+                <option value="all">All regions</option>
+                {regions.map(r => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              <Switch
+                label="Period"
+                value={period}
+                onChange={setPeriod}
+                options={[
+                  { value: 'Weekly', label: 'Week' },
+                  { value: 'Monthly', label: '30 days' },
+                  { value: 'Quarterly', label: '90 days' }
+                ]}
+              />
+              <Btn icon={<Tv className="h-4 w-4" />} onClick={present}>
+                Present
+              </Btn>
+            </>
+          }
+        />
 
-        <div className="flex items-center gap-3">
-          {/* TV Mode Toggle */}
-          <button
-            type="button"
-            onClick={() => setIsTvMode(!isTvMode)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-              isTvMode ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
-            }`}
-          >
-            <Tv className="w-3.5 h-3.5" />
-            <span>{isTvMode ? 'Exit full screen' : 'Present'}</span>
-          </button>
-
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
-            {(['Weekly', 'Monthly', 'Quarterly'] as const).map(p => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  period === p ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* AI Narrative Headline & 3x3 Grid (Section 9) */}
-      <div className={`p-5 rounded-2xl border shadow-2xs space-y-4 ${
-        isTvMode ? 'bg-slate-900 border-indigo-900/60' : 'bg-linear-to-br from-indigo-50/70 via-white to-blue-50/70 border-indigo-200/80'
-      }`}>
-        <div className="flex items-start gap-3">
-          <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
-          <div>
-            <span className="text-[12px] font-extrabold text-indigo-600">
-              AI Storytelling Narrative ({period})
-            </span>
-            <h3 className={`text-base font-bold mt-0.5 ${isTvMode ? 'text-white' : 'text-slate-900'}`}>
-              {aiSummary.headline}
-            </h3>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-          {/* Highlights */}
-          <div className={`p-3.5 rounded-xl border ${isTvMode ? 'bg-slate-800/80 border-emerald-900/50' : 'bg-emerald-50/60 border-emerald-200'}`}>
-            <span className="text-[13px] font-bold text-emerald-700 flex items-center gap-1 mb-2">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Key Highlights
-            </span>
-            <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300">
-              {aiSummary.highlights.map((h, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[13px] leading-tight">
-                  <span className="text-emerald-600 font-bold">•</span>
-                  <span>{h}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Concerns */}
-          <div className={`p-3.5 rounded-xl border ${isTvMode ? 'bg-slate-800/80 border-amber-900/50' : 'bg-amber-50/60 border-amber-200'}`}>
-            <span className="text-[13px] font-bold text-amber-800 flex items-center gap-1 mb-2">
-              <AlertOctagon className="w-3.5 h-3.5" /> Operational Concerns
-            </span>
-            <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300">
-              {aiSummary.concerns.map((c, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[13px] leading-tight">
-                  <span className="text-amber-600 font-bold">•</span>
-                  <span>{c}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Recommendations */}
-          <div className={`p-3.5 rounded-xl border ${isTvMode ? 'bg-slate-800/80 border-indigo-900/50' : 'bg-indigo-50/60 border-indigo-200'}`}>
-            <span className="text-[13px] font-bold text-indigo-700 flex items-center gap-1 mb-2">
-              <Sparkles className="w-3.5 h-3.5" /> Recommended Actions
-            </span>
-            <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300">
-              {aiSummary.recommendations.map((r, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[13px] leading-tight">
-                  <span className="text-indigo-600 font-bold">•</span>
-                  <span>{r}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Tiles (Strictly Counts & Quantities) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-          <span className="text-[13px] font-bold text-slate-400 block">Signed this period</span>
-          <div className="text-3xl font-extrabold text-emerald-600 mt-1">{wonDeals.length}</div>
-          <span className="text-[12px] text-slate-500">{totalClients} active client rooftops in total</span>
-        </div>
-
-        <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-          <span className="text-[13px] font-bold text-slate-400 block">Golden Window Ratio</span>
-          <div className="text-3xl font-extrabold text-blue-600 mt-1">{goodTimePercent}%</div>
-          <span className="text-[12px] text-slate-500">{goodTimeVisits} of {totalVisits} visits, calls & Meets inside 10–4</span>
-        </div>
-
-        <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-          <span className="text-[13px] font-bold text-slate-400 block">Keyfetch Units Restocked</span>
-          <div className="text-3xl font-extrabold text-indigo-600 mt-1">{totalUnitsToppedUp.toLocaleString()}</div>
-          <span className="text-[12px] text-slate-500">Tags delivered this period</span>
-        </div>
-
-        <div className={`p-4 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-          <span className="text-[13px] font-bold text-slate-400 block">Catalog Upsells Won</span>
-          <div className="text-3xl font-extrabold text-purple-600 mt-1">{totalUpsellsWon}</div>
-          <span className="text-[12px] text-slate-500">Add-ons won on existing clients</span>
-        </div>
-      </div>
-
-      {/* Visual Charts Grid (Counts & Rates) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Solo vs Assisted Closes */}
-        <div className={`p-5 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} space-y-4`}>
-          <div className="flex items-center justify-between">
-            <h4 className="font-bold text-sm flex items-center gap-2">
-              <Users2 className="w-4 h-4 text-blue-600" />
-              <span>Solo vs. Assisted Closing Ratio</span>
-            </h4>
-            <span className="text-xs text-slate-400">{wonDeals.length} signed this period</span>
-          </div>
-
-          <div className="space-y-3 text-xs">
-            <div>
-              <div className="flex justify-between mb-1 font-semibold">
-                <span>Solo Rep Closes</span>
-                <span>{soloWon} deals ({wonDeals.length > 0 ? Math.round((soloWon / wonDeals.length) * 100) : 0}%)</span>
-              </div>
-              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-blue-600 rounded-full" 
-                  style={{ width: `${wonDeals.length > 0 ? (soloWon / wonDeals.length) * 100 : 0}%` }} 
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between mb-1 font-semibold">
-                <span>Manager Assisted Closes</span>
-                <span>{assistedWon} deals ({wonDeals.length > 0 ? Math.round((assistedWon / wonDeals.length) * 100) : 0}%)</span>
-              </div>
-              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-purple-600 rounded-full" 
-                  style={{ width: `${wonDeals.length > 0 ? (assistedWon / wonDeals.length) * 100 : 0}%` }} 
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Product Penetration across Active Clients */}
-        <div className={`p-5 rounded-2xl border ${isTvMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} space-y-4`}>
-          <div className="flex items-center justify-between">
-            <h4 className="font-bold text-sm flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-emerald-600" />
-              <span>Product Adoption Across Clients</span>
-            </h4>
-            <span className="text-xs text-slate-400">{totalClients} Clients</span>
-          </div>
-
-          <div className="space-y-2 text-xs">
-            {ADOPTION.map(item => (
-              <div key={item.name} className="space-y-1">
-                <div className="flex justify-between text-[13px] font-medium">
-                  <span>{item.name}</span>
-                  <span className=" font-bold">{item.count} lots ({Math.round((item.count / Math.max(1, totalClients)) * 100)}%)</span>
+        <Panel className="space-y-4 p-5">
+          <div className="text-[19px] font-bold text-slate-900">{aiSummary.headline}</div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {[
+              { title: 'Going well', items: aiSummary.highlights, icon: <CheckCircle2 className="h-4 w-4 text-emerald-600" /> },
+              { title: 'Needs attention', items: aiSummary.concerns, icon: <AlertOctagon className="h-4 w-4 text-amber-600" /> },
+              { title: 'Do next', items: aiSummary.recommendations, icon: <Sparkles className="h-4 w-4 text-blue-600" /> }
+            ].map(col => (
+              <div key={col.title}>
+                <div className="mb-1.5 flex items-center gap-1.5 text-[14px] font-semibold text-slate-800">
+                  {col.icon} {col.title}
                 </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className={`h-full ${item.color} rounded-full`} style={{ width: `${(item.count / Math.max(1, totalClients)) * 100}%` }} />
-                </div>
+                <ul className="list-disc space-y-1 pl-5 text-[14px] text-slate-700">
+                  {col.items.map((t, k) => (
+                    <li key={k}>{t}</li>
+                  ))}
+                </ul>
               </div>
             ))}
           </div>
+        </Panel>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <Stat label={`Signed ${PERIOD_WORD}`} value={wonDeals.length} hint={`${assistedWon} with a manager · ${soloWon} alone`} tone="green" />
+          <Stat label="Live deals" value={activePipelineDeals.length} hint={`${totalClients} clients in total`} />
+          <Stat label="Visits, calls & Meets" value={totalVisits} hint={`${goodTimePercent}% between 10 and 4`} tone={goodTimePercent < 90 ? 'amber' : 'neutral'} />
+          <Stat label="Keyfetch tags delivered" value={totalUnitsToppedUp.toLocaleString()} />
+          <Stat label="Upsells won" value={totalUpsellsWon} hint="On existing clients" tone="violet" />
         </div>
-      </div>
+
+        <Panel className="overflow-x-auto">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
+            <SectionTitle>By rep, {PERIOD_WORD}</SectionTitle>
+            <label className="inline-flex items-center gap-1.5 text-[14px] text-slate-600">
+              Sort by
+              <select value={repSort} onChange={e => setRepSort(e.target.value as typeof repSort)} className="min-h-[36px] cursor-pointer rounded-xl border border-slate-300 bg-white px-2 text-[14px]">
+                <option value="contacts">Visits & calls</option>
+                <option value="live">Live deals</option>
+                <option value="signed">Signed</option>
+                <option value="gaps">No next step</option>
+                <option value="points">Points</option>
+              </select>
+            </label>
+          </div>
+          <table className="mt-2 w-full text-left text-[14px]">
+            <thead>
+              <tr className="border-b border-slate-200 text-[13px] font-semibold text-slate-600">
+                <th className="px-4 py-2.5">Rep</th>
+                <th className="px-4 py-2.5 text-right">Live deals</th>
+                <th className="px-4 py-2.5 text-right">Visits & calls</th>
+                <th className="px-4 py-2.5 text-right">Signed</th>
+                <th className="px-4 py-2.5 text-right">No next step</th>
+                <th className="px-4 py-2.5 text-right">Points</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {repRows.map(r => (
+                <tr key={r.u.id}>
+                  <td className="px-4 py-2.5">
+                    <div className="font-semibold text-slate-900">
+                      {r.u.firstName} {r.u.lastName}
+                    </div>
+                    <div className="text-[13px] text-slate-500">{r.u.region}</div>
+                  </td>
+                  <td className="px-4 py-2.5 text-right">{r.live}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    {r.contacts}
+                    {r.outside > 0 && <div className="text-[12px] text-amber-700">{r.outside} outside 10–4</div>}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">{r.signed}</td>
+                  <td className={`px-4 py-2.5 text-right ${r.gaps ? 'font-semibold text-rose-700' : ''}`}>{r.gaps}</td>
+                  <td className="px-4 py-2.5 text-right">{r.points.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Panel>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {attention.map(block => (
+            <Panel key={block.title} className="space-y-2 p-4">
+              <SectionTitle right={<Badge tone={block.items.length ? block.tone : 'neutral'}>{block.items.length}</Badge>}>{block.title}</SectionTitle>
+              {block.items.length === 0 ? (
+                <p className="text-[14px] text-slate-500">None. Good.</p>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {block.items.slice(0, 6).map(d => (
+                    <li key={d.id}>
+                      <button type="button" onClick={() => onOpenDealership(d)} className="w-full cursor-pointer py-2 text-left hover:text-blue-700">
+                        <div className="text-[14px] font-semibold text-slate-900">{d.dealershipName}</div>
+                        <div className="text-[13px] text-slate-500">{block.why(d)}</div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {block.items.length > 6 && <p className="text-[13px] text-slate-500">and {block.items.length - 6} more</p>}
+            </Panel>
+          ))}
+        </div>
+
+        <Panel className="space-y-3 p-5">
+          <SectionTitle right={<span className="text-[13px] text-slate-500">{plural(totalClients, 'client')}</span>}>Products across clients</SectionTitle>
+          <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
+            {ADOPTION.map(item => {
+              const pct = Math.round((item.count / Math.max(1, totalClients)) * 100);
+              return (
+                <div key={item.name}>
+                  <div className="flex justify-between text-[14px]">
+                    <span className="text-slate-800">{item.name}</span>
+                    <span className="font-semibold text-slate-900">
+                      {item.count} · {pct}%
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-blue-600" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      </Page>
     </div>
   );
 };

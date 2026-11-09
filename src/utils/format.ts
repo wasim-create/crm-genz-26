@@ -75,3 +75,13 @@ export function lastContactText(iso?: string | null, now = new Date()): string {
   const r = formatRelative(iso, now);
   return /^(Today|Yesterday|Tomorrow|in |\d)/.test(r) ? `Last contact ${r.toLowerCase()}` : `Last contact on ${r}`;
 }
+
+/** A full timestamp in the viewer's time: "Wed, Nov 11 · 2:35 PM". */
+export function formatStamp(iso?: string | null, timeZone?: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  const day = d.toLocaleDateString('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric', ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) });
+  const time = d.toLocaleTimeString('en-US', { timeZone, hour: 'numeric', minute: '2-digit' });
+  return `${day} · ${time}`;
+}
