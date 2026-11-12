@@ -46,6 +46,11 @@ import { HOW_SHORT, TASK_BY_ID } from './features/myplan/engine/tasks';
 import { todayISO } from './features/myplan/engine/time';
 import { computeNextSteps, PlannedRef } from './utils/nextStepStatus';
 import { initScreens, pushScreen, replaceScreen } from './utils/backStack';
+import { stageTracking } from './utils/stageTracking';
+import { repReport, RepReport } from './features/team/signals';
+import { resetTeam, useTeamState } from './features/team/store';
+import { TeamView } from './features/team/TeamView';
+import { WorthALook } from './features/team/WorthALook';
 import { CheckCircle2, X, Sparkles, Flame } from 'lucide-react';
 
 const storage = new LocalStorageAdapter();
@@ -157,6 +162,40 @@ export default function App() {
     [planState.slots]
   );
   const nextSteps = useMemo(() => computeNextSteps(dealerships, activities, plannedRefs, assists, todayISO()), [dealerships, activities, plannedRefs, assists]);
+  // Who needs help: one report per rep (same rules for the manager's screen and the rep's own card).
+  const teamState = useTeamState();
+  const plannedContacts = useMemo(
+    () => planState.slots.filter(s => s.status === 'planned' && s.date && s.target.kind === 'dealership').map(s => ({ userId: s.userId, date: s.date!, how: s.how })),
+    [planState.slots]
+  );
+  const teamReports: RepReport[] = useMemo(() => {
+    const today = todayISO();
+    return users
+      .filter(u => (u.role === 'new_rep' || u.role === 'veteran_rep') && u.active !== false)
+      .map(rep => {
+        const mgr = users.find(u => u.id === rep.managerId);
+        return repReport({
+          rep,
+          managerName: mgr?.firstName,
+          dealerships,
+          activities,
+          nextSteps,
+          planned: plannedContacts,
+          assists,
+          streak: gamification[rep.id]?.streakDays,
+          rules: teamState.rules,
+          handled: teamState.handled[rep.id],
+          today
+        });
+      });
+  }, [users, dealerships, activities, nextSteps, plannedContacts, assists, gamification, teamState]);
+  const myTeamReports = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'manager' || currentUser.role === 'team_lead') return teamReports.filter(r => r.rep.managerId === currentUser.id);
+    if (currentUser.role === 'owner' || currentUser.role === 'executive') return teamReports;
+    return [];
+  }, [teamReports, currentUser]);
+
   const planNextStep = (d: Dealership) => {
     // Opens on top of the current screen (and the record, if open).
     setPlanRequest({ dealershipId: d.id, nextStep: true, nonce: Date.now() });
@@ -247,10 +286,12 @@ export default function App() {
 
     // Contextual view routing
     const home: ActiveView | null =
-      u.role === 'finance' ? 'finance' : u.role === 'manager' ? 'assists' : u.role === 'executive' || u.role === 'owner' ? 'executive_desk' : u.role === 'admin' ? 'settings' : null;
-    if (home) {
-      showView(home);
-      replaceScreen(home);
+      u.role === 'finance' ? 'finance' : u.role === 'manager' ? 'team' : u.role === 'executive' || u.role === 'owner' ? 'executive_desk' : u.role === 'admin' ? 'settings' : null;
+    // Keep the screen if the new persona can open it; otherwise go to their usual first screen.
+    const target = home ?? (pagesFor(u.role).some(pg => pg.id === viewRef.current) ? null : pagesFor(u.role)[0]?.id ?? null);
+    if (target) {
+      showView(target);
+      replaceScreen(target);
     }
 
     showToast(`Now viewing as ${u.firstName} ${u.lastName}`);
@@ -359,6 +400,7 @@ export default function App() {
   const handleMoveStage = (deal: Dealership, newStage: PipelineStage, note?: string, patch: Partial<Dealership> = {}) => {
     const updated: Dealership = {
       ...deal,
+      ...(newStage !== deal.stage ? stageTracking(deal, newStage, new Date().toISOString().slice(0, 10)) : {}),
       ...patch,
       stage: newStage,
       lastTouchpointDate: new Date().toISOString()
@@ -378,6 +420,60 @@ export default function App() {
     setAuditLogs([audit, ...auditLogs]);
     storage.saveAuditLog(audit);
     showToast(`${deal.dealershipName} moved to ${newStage}`);
+  };
+
+  // My team: a manager offers to join a rep's visit (booked straight away as an assist).
+  const handleOfferVisit = (rep: User, deal: Dealership, date: string, time: string, note: string) => {
+    if (!currentUser) return;
+    const dm = contacts.find(c => c.dealershipId === deal.id && c.isDecisionMaker);
+    const assist: ManagerAssist = {
+      id: `ast_${Date.now()}`,
+      dealershipId: deal.id,
+      dealershipName: deal.dealershipName,
+      originRepId: rep.id,
+      originRepName: `${rep.firstName} ${rep.lastName}`,
+      assignedManagerId: currentUser.id,
+      assignedManagerName: `${currentUser.firstName} ${currentUser.lastName}`,
+      assistType: 'in_person_visit',
+      proposedDate: date,
+      proposedTime: time,
+      requestDate: new Date().toISOString(),
+      decisionMakerName: dm ? `${dm.firstName} ${dm.lastName}` : 'Decision maker not on file',
+      decisionMakerTitle: dm?.jobTitle ?? '—',
+      objections: deal.relationshipTemperature?.hesitationPhrases?.join('; ') || 'None recorded yet.',
+      productsOfInterest: (deal.productInterests || []).map(p => p.productName),
+      aiBriefing: `Offered by ${currentUser.firstName} from My team.`,
+      managerNotes: note,
+      status: 'Accepted'
+    };
+    setAssists(list => [assist, ...list]);
+    storage.saveAssist(assist);
+    const updated = { ...deal, hasActiveAssist: true, activeAssistId: assist.id };
+    setDealerships(list => list.map(d => (d.id === deal.id ? updated : d)));
+    storage.saveDealership(updated);
+  };
+
+  // My team: a short message that sits at the top of the rep's My Plan until they tick it off.
+  const handleNudge = (rep: User, message: string, reason: string, dealershipId?: string) => {
+    if (!currentUser) return;
+    const deal = dealerships.find(d => d.id === dealershipId);
+    const nudge: ManagerPriority = {
+      id: `nudge_${Date.now()}`,
+      managerId: currentUser.id,
+      managerName: `${currentUser.firstName} ${currentUser.lastName}`,
+      targetType: 'rep',
+      targetId: rep.id,
+      title: message,
+      reason,
+      priorityLevel: 'High',
+      dueDate: todayISO(),
+      linkedDealershipId: deal?.id,
+      linkedDealershipName: deal?.dealershipName,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+    setManagerPriorities(list => [nudge, ...list]);
+    storage.savePriority(nudge);
   };
 
   // Section 3: Manager Assist Flow (Rep keeps ownership!)
@@ -576,6 +672,7 @@ export default function App() {
     if (confirm('Reset all CRM data back to the clean Improvement Pass v2 seed state?')) {
       await storage.resetToSeed();
       resetMyPlan();
+      resetTeam();
       const fresh = await storage.loadAll(currentUser);
       setContacts(fresh.contacts);
       setDealerships(fresh.dealerships);
@@ -639,10 +736,45 @@ export default function App() {
           hotDealCount={hotDealCount}
           pendingAssistCount={pendingAssistCount}
           pendingFinanceCount={pendingFinanceCount}
+          teamHelpCount={myTeamReports.filter(r => r.status === 'help').length}
         />
 
         {/* Viewport Content */}
         <main ref={mainRef} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar">
+          {currentView === 'team' && (
+            <TeamView
+              reports={myTeamReports}
+              currentUser={currentUser}
+              users={users}
+              dealerships={dealerships}
+              activities={activities}
+              planned={plannedContacts}
+              onOpenDealership={d => setSelectedDealership(d)}
+              onOpenAssists={() => goTo('assists')}
+              onOfferVisit={handleOfferVisit}
+              onNudge={handleNudge}
+            />
+          )}
+
+          {currentView === 'planner' && (currentUser.role === 'new_rep' || currentUser.role === 'veteran_rep') && (() => {
+            const mine = teamReports.find(r => r.rep.id === currentUser.id);
+            const nudges = managerPriorities.filter(p => p.id.startsWith('nudge_') && p.targetType === 'rep' && p.targetId === currentUser.id && p.status === 'pending');
+            return mine ? (
+              <WorthALook
+                report={mine}
+                nudges={nudges}
+                dealerships={dealerships}
+                onOpenDealership={d => setSelectedDealership(d)}
+                onPlanNext={planNextStep}
+                onAckNudge={p => {
+                  const done = { ...p, status: 'completed' as const, completedAt: new Date().toISOString() };
+                  setManagerPriorities(list => list.map(x => (x.id === p.id ? done : x)));
+                  storage.savePriority(done);
+                }}
+              />
+            ) : null;
+          })()}
+
           {/* Always mounted: on other screens it only shows its forms, on top of that screen. */}
           {(
             <MyPlanModule

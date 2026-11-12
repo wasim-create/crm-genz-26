@@ -1,3 +1,4 @@
+import { REP_SITUATIONS } from '../../../../data/demo/places';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { INITIAL_DEALERSHIPS, INITIAL_GAME_RULES, INITIAL_PRODUCT_BONUSES, PRODUCT_CATALOG, USERS } from '../../../../data/seedData';
@@ -131,7 +132,8 @@ test('seed: every rep gets history, today, a basket, action points and their own
     priorities: INITIAL_MANAGER_PRIORITIES,
     workspace: INITIAL_WORKSPACE_ITEMS
   });
-  for (const rep of USERS.filter(u => u.role.endsWith('_rep'))) {
+  // Reps set up for the manager's team screen (gone quiet, brand new) are left out on purpose.
+  for (const rep of USERS.filter(u => u.role.endsWith('_rep') && !REP_SITUATIONS[u.id])) {
     const mine = seed.slots.filter(s => s.userId === rep.id);
     assert.ok(mine.some(s => s.status === 'done'), `${rep.firstName} has history`);
     assert.ok(mine.some(s => s.status === 'basket'), `${rep.firstName} has a basket`);

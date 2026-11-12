@@ -26,7 +26,16 @@ import {
 import { buildDemoData, DemoData } from './demo/story';
 
 /** Bump when the demo story changes so saved browser data is refreshed. */
-export const SEED_VERSION = 'story-2026-11-v5';
+export const SEED_VERSION = 'story-2026-11-v6';
+
+function hiredBusinessDaysAgo(n: number): string {
+  const d = new Date();
+  while (n > 0) {
+    d.setDate(d.getDate() - 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) n--;
+  }
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 export const USERS: User[] = [
   {
@@ -97,6 +106,49 @@ export const USERS: User[] = [
     homeCoords: { lat: 32.7876, lng: -96.7996 },
     phone: '(214) 555-0134',
     hireDate: '2026-08-15',
+    isRookie: true
+  },
+  {
+    id: 'u_marcus',
+    firstName: 'Marcus',
+    lastName: 'Reid',
+    email: 'marcus.reid@example.com',
+    role: 'veteran_rep',
+    region: 'Northeast',
+    managerId: 'u_jason',
+    homeZipCode: '02903',
+    homeCoords: { lat: 41.824, lng: -71.4128 },
+    phone: '(401) 555-0131',
+    hireDate: '2022-05-09',
+    isRookie: false
+  },
+  {
+    id: 'u_priya',
+    firstName: 'Priya',
+    lastName: 'Nair',
+    email: 'priya.nair@example.com',
+    role: 'veteran_rep',
+    region: 'Northeast',
+    managerId: 'u_jason',
+    homeZipCode: '06103',
+    homeCoords: { lat: 41.7658, lng: -72.6734 },
+    phone: '(860) 555-0118',
+    hireDate: '2021-10-04',
+    isRookie: false
+  },
+  {
+    id: 'u_ellie',
+    firstName: 'Ellie',
+    lastName: 'Hartwell',
+    email: 'ellie.hartwell@example.com',
+    role: 'new_rep',
+    region: 'Northeast',
+    managerId: 'u_jason',
+    homeZipCode: '03101',
+    homeCoords: { lat: 42.9956, lng: -71.4548 },
+    phone: '(603) 555-0127',
+    // Started three weeks before "today", so the demo always shows a new starter.
+    hireDate: hiredBusinessDaysAgo(15),
     isRookie: true
   },
   {
