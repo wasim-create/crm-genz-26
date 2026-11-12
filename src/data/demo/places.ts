@@ -74,7 +74,24 @@ export interface Place {
   transferFrom?: string;
   /** Which manager assisted (defaults to the rep's manager). */
   note?: string;
+  /** Lost deals: the stage it died at, and how many business days ago. */
+  lostAt?: 'Visited' | 'Follow-up' | 'In Progress' | 'HOT' | 'Negotiation' | 'Contract';
+  lostD?: number;
+  /** Business days ago the deal entered its current stage (overrides the default). */
+  stageSinceD?: number;
 }
+
+/**
+ * Team situations for the manager's "My team" screen. Each new rep's book is
+ * built to show one kind of "needs help":
+ *   Marcus: activity has stopped, nothing planned, deals left without a next step
+ *   Priya:  keeps losing deals at Negotiation, and one is stuck there
+ *   Ellie:  new starter, behind on her first-weeks milestones
+ */
+export const REP_SITUATIONS: Record<string, { quietFromD?: number; thinPlan?: boolean; hiredD?: number }> = {
+  u_marcus: { quietFromD: -5, thinPlan: true },
+  u_ellie: { hiredD: -15 }
+};
 
 export interface GroupDef {
   id: string;
@@ -446,6 +463,32 @@ export const PLACES: Place[] = [
   { key: 'w_foothill', name: 'Foothill Kia', brands: ['Kia'], street: '1500 S Mountain Ave', city: 'Monrovia', state: 'CA', zip: '91016', lat: 34.1311, lng: -117.9962, area: '626', cars: 90, fi: 'RouteOne', rep: null, scen: 'pool_radar' },
   { key: 'w_ventura', name: 'Ventura Coast Honda', brands: ['Honda'], street: '6000 Auto Center Dr', city: 'Ventura', state: 'CA', zip: '93003', lat: 34.2614, lng: -119.2115, area: '805', cars: 120, fi: 'DealerTrack', rep: null, scen: 'pool' },
   { key: 'w_temecula', name: 'Temecula Valley Ford', brands: ['Ford'], street: '40500 Temecula Center Dr', city: 'Temecula', state: 'CA', zip: '92591', lat: 33.5073, lng: -117.1478, area: '951', cars: 140, fi: 'Reynolds & Reynolds', rep: null, scen: 'pool' },
+
+  // ─────────────── NORTHEAST — Marcus Reid (Providence, RI) ───────────────
+  { key: 'ri_narragansett', name: 'Narragansett Bay Hyundai', brands: ['Hyundai'], street: '1500 Bald Hill Rd', city: 'Warwick', state: 'RI', zip: '02886', lat: 41.7001, lng: -71.4955, area: '401', cars: 110, fi: 'CDK Global', rep: 'u_marcus', scen: 'client', signed: ['prod_3', 'prod_1'] },
+  { key: 'ri_aquidneck', name: 'Aquidneck Subaru', brands: ['Subaru'], street: '1000 W Main Rd', city: 'Middletown', state: 'RI', zip: '02842', lat: 41.5276, lng: -71.2826, area: '401', cars: 85, fi: 'DealerTrack', rep: 'u_marcus', scen: 'client', signed: ['prod_1', 'prod_5'] },
+  { key: 'ri_blackstone', name: 'Blackstone Valley Ford', brands: ['Ford'], street: '1600 Diamond Hill Rd', city: 'Woonsocket', state: 'RI', zip: '02895', lat: 41.9817, lng: -71.4831, area: '401', cars: 130, fi: 'Reynolds & Reynolds', rep: 'u_marcus', scen: 'client', signed: ['prod_3', 'prod_4'] },
+  { key: 'ri_pawtucket', name: 'Pawtucket Auto Exchange', brands: [], independent: true, street: '700 Newport Ave', city: 'Pawtucket', state: 'RI', zip: '02861', lat: 41.859, lng: -71.3762, area: '401', cars: 60, fi: 'RouteOne', rep: 'u_marcus', scen: 'follow_up' },
+  { key: 'ri_oceanstate', name: 'Ocean State Chevrolet', brands: ['Chevrolet'], street: '1400 Reservoir Ave', city: 'Cranston', state: 'RI', zip: '02920', lat: 41.7737, lng: -71.4609, area: '401', cars: 140, fi: 'CDK Global', rep: 'u_marcus', scen: 'in_progress', interest: ['prod_1', 'prod_7'] },
+  { key: 'ma_route6', name: 'Route 6 Motors', brands: [], independent: true, street: '120 Fall River Ave', city: 'Seekonk', state: 'MA', zip: '02771', lat: 41.8121, lng: -71.337, area: '508', cars: 55, fi: 'DealerTrack', rep: 'u_marcus', scen: 'visited' },
+  { key: 'ma_bristolcounty', name: 'Bristol County Nissan', brands: ['Nissan'], street: '425 William S Canning Blvd', city: 'Fall River', state: 'MA', zip: '02721', lat: 41.672, lng: -71.17, area: '508', cars: 120, fi: 'Reynolds & Reynolds', rep: 'u_marcus', scen: 'hot', interest: ['prod_3', 'prod_1'], objection: 'Wants Keyfetch installed before the holiday sales event.' },
+
+  // ─────────────── NORTHEAST — Priya Nair (Hartford, CT) ───────────────
+  { key: 'ct_capitol', name: 'Capitol City Toyota', brands: ['Toyota'], street: '1 Weston St', city: 'Hartford', state: 'CT', zip: '06120', lat: 41.7779, lng: -72.66, area: '860', cars: 150, fi: 'CDK Global', rep: 'u_priya', scen: 'negotiation', stageSinceD: -26, interest: ['prod_1', 'prod_4'], objection: 'Wants a 60-day cancellation window before committing to the VSC program.' },
+  { key: 'ct_farmington', name: 'Farmington Valley Honda', brands: ['Honda'], street: '320 W Main St', city: 'Avon', state: 'CT', zip: '06001', lat: 41.8098, lng: -72.8442, area: '860', cars: 120, fi: 'Reynolds & Reynolds', rep: 'u_priya', scen: 'lost', lostAt: 'Negotiation', lostD: -4, competitor: 'renewed with their current VSC provider at a lower rate' },
+  { key: 'ct_silasdeane', name: 'Silas Deane Kia', brands: ['Kia'], street: '1100 Silas Deane Hwy', city: 'Wethersfield', state: 'CT', zip: '06109', lat: 41.696, lng: -72.653, area: '860', cars: 90, fi: 'DealerTrack', rep: 'u_priya', scen: 'lost', lostAt: 'Negotiation', lostD: -11, competitor: 'took a bundle from their F&I software vendor' },
+  { key: 'ct_buckland', name: 'Buckland Hills Mazda', brands: ['Mazda'], street: '200 Buckland Hills Dr', city: 'Manchester', state: 'CT', zip: '06042', lat: 41.8065, lng: -72.548, area: '860', cars: 80, fi: 'RouteOne', rep: 'u_priya', scen: 'lost', lostAt: 'Negotiation', lostD: -17, competitor: 'went with a cheaper key-tracking system' },
+  { key: 'ct_bristolauto', name: 'Bristol Auto Center', brands: [], independent: true, street: '700 Farmington Ave', city: 'Bristol', state: 'CT', zip: '06010', lat: 41.688, lng: -72.92, area: '860', cars: 70, fi: 'DealerTrack', rep: 'u_priya', scen: 'client', signed: ['prod_1'] },
+  { key: 'ct_glastonbury', name: 'Glastonbury Subaru', brands: ['Subaru'], street: '2800 Main St', city: 'Glastonbury', state: 'CT', zip: '06033', lat: 41.712, lng: -72.608, area: '860', cars: 95, fi: 'CDK Global', rep: 'u_priya', scen: 'client', signed: ['prod_3', 'prod_1', 'prod_5'] },
+  { key: 'ct_westfarms', name: 'West Farms Nissan', brands: ['Nissan'], street: '1500 New Britain Ave', city: 'West Hartford', state: 'CT', zip: '06110', lat: 41.724, lng: -72.759, area: '860', cars: 115, fi: 'CDK Global', rep: 'u_priya', scen: 'visited' },
+  { key: 'ct_rockyhill', name: 'Rocky Hill Auto Plaza', brands: [], independent: true, street: '2000 Silas Deane Hwy', city: 'Rocky Hill', state: 'CT', zip: '06067', lat: 41.664, lng: -72.662, area: '860', cars: 75, fi: 'RouteOne', rep: 'u_priya', scen: 'in_progress', interest: ['prod_3', 'prod_5'] },
+  { key: 'ct_hardwarecity', name: 'Hardware City Chevrolet', brands: ['Chevrolet'], street: '600 E Main St', city: 'New Britain', state: 'CT', zip: '06051', lat: 41.67, lng: -72.76, area: '860', cars: 110, fi: 'Reynolds & Reynolds', rep: 'u_priya', scen: 'follow_up' },
+
+  // ─────────────── NORTHEAST — Ellie Hartwell (Manchester, NH), started 3 weeks ago ───────────────
+  { key: 'nh_granite', name: 'Granite State Ford', brands: ['Ford'], street: '1100 S Willow St', city: 'Manchester', state: 'NH', zip: '03103', lat: 42.959, lng: -71.441, area: '603', cars: 140, fi: 'CDK Global', rep: 'u_ellie', scen: 'visited' },
+  { key: 'nh_merrimack', name: 'Merrimack Valley Toyota', brands: ['Toyota'], street: '200 Amherst St', city: 'Nashua', state: 'NH', zip: '03064', lat: 42.765, lng: -71.492, area: '603', cars: 160, fi: 'Reynolds & Reynolds', rep: 'u_ellie', scen: 'claimed' },
+  { key: 'nh_capitalregion', name: 'Capital Region Auto', brands: [], independent: true, street: '80 Manchester St', city: 'Concord', state: 'NH', zip: '03301', lat: 43.19, lng: -71.52, area: '603', cars: 65, fi: 'DealerTrack', rep: 'u_ellie', scen: 'claimed' },
+  { key: 'nh_bedford', name: 'Bedford Hyundai', brands: ['Hyundai'], street: '25 S River Rd', city: 'Bedford', state: 'NH', zip: '03110', lat: 42.948, lng: -71.515, area: '603', cars: 100, fi: 'RouteOne', rep: 'u_ellie', scen: 'visit_planned' },
 
   // ─────────────── TEXAS — Carlos Martinez (Dallas, TX) ───────────────
   {

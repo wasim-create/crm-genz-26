@@ -169,6 +169,12 @@ export interface Dealership {
   claimedAt?: string | null;
   lastTouchpointDate?: string | null;
   lostReason?: string;
+  /** Stage the deal was at when it was lost (for spotting where deals die). */
+  lostAtStage?: PipelineStage;
+  /** When the deal was lost (YYYY-MM-DD). */
+  lostDate?: string;
+  /** When the deal entered its current stage (YYYY-MM-DD). */
+  stageSince?: string;
   nurtureFollowUpDate?: string;
   disqualifiedReason?: string;
   hasActiveAssist?: boolean;

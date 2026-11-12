@@ -1,3 +1,4 @@
+import { REP_SITUATIONS } from '../../../data/demo/places';
 // Demo plans for every user, built from the CRM's own demo data so My Plan
 // and the CRM always tell the same story:
 //   • the past 4 weeks = the CRM's logged visits, calls, Meets, emails and texts
@@ -355,6 +356,9 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
       if (basket.length < 2) {
         local.filter(d => d.stage === 'Client' && !thisWeek.has(d.id) && !basket.some(b => b.d === d)).slice(0, 2 - basket.length).forEach(d => basket.push({ d, note: 'Drop off refreshed menu cards' }));
       }
+      // Demo: a rep who has stopped planning (shows on the manager's My team screen).
+      const thinPlan = !!REP_SITUATIONS[user.id]?.thinPlan;
+      if (thinPlan) basket.length = 0;
       basket.forEach(b => inBasket.add(b.d.id));
       basket.slice(0, 6).forEach(({ d, note }, j) => {
         const work = workTypeForStage(d.stage)!;
@@ -362,13 +366,14 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
       });
 
       // Today comes first, so the day the demo is opened is always a real working day
-      if (!isWeekend(today)) {
+      if (!isWeekend(today) && !thinPlan) {
         fill(today, 3, mixed, 0);
         fill(today, 3, local.filter(d => d.stage !== 'Not Now'), 0, true); // small book: reuse a dealership booked later in the week
       }
 
       planDays.forEach((date, k) => {
         if (k === 0 && !isWeekend(today)) return; // today was filled first
+        if (thinPlan) return;
         fill(date, 2, k % 2 === 0 ? mixed : [...live, ...clientsDue], k * 2);
       });
 
@@ -643,5 +648,10 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
     const ordered: PlanSlot[] = [...morning, ...flex.slice(0, 1), ...afternoon, ...flex.slice(1)];
     ordered.forEach((s, i) => (s.orderIndex = i));
   });
+  // Demo: reps who have stopped planning have nothing booked after today.
+  for (let i = slots.length - 1; i >= 0; i--) {
+    const s = slots[i];
+    if (REP_SITUATIONS[s.userId]?.thinPlan && s.status === 'planned' && s.date && s.date > today && s.target.kind === 'dealership' && s.source !== 'assist') slots.splice(i, 1);
+  }
   return { slots, actionPoints };
 }

@@ -3,6 +3,7 @@
 // stage changes, contacts, action points, points and an audit entry.
 // Pure function: the App applies the result to its state and storage.
 
+import { stageTracking } from '../../../utils/stageTracking';
 import {
   Activity,
   AuditLogRecord,
@@ -281,8 +282,10 @@ export function buildWriteback(input: WritebackInput): WritebackResult {
       if (result === 'Won') signedProducts.add(p);
     });
 
+    const moved = stageChanges[d.id] && stageChanges[d.id] !== d.stage;
     return {
       ...d,
+      ...(moved ? stageTracking(d, stageChanges[d.id]!, now.slice(0, 10)) : {}),
       stage: stageChanges[d.id] ?? d.stage,
       nurtureFollowUpDate: input.nextSkipped?.nurtureDate ?? (stageChanges[d.id] === 'Not Now' ? input.nextStep?.date : undefined) ?? d.nurtureFollowUpDate,
       lastTouchpointDate: now,

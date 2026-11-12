@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BackLayer, Badge, Btn, PageHeader, Switch } from '../ui/kit';
 import { ThemeChoice } from '../ui/ThemeToggle';
+import { TeamRulesPanel } from '../../features/team/TeamRulesPanel';
 import { ProductCatalogItem, User } from '../../types/crm';
 import { PeopleAdminPanel } from './PeopleAdminPanel';
 import {
@@ -46,7 +47,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   onUpdateUsers,
   knownLocations = []
 }) => {
-  const [activeTab, setActiveTab] = useState<'storage' | 'catalog' | 'fi_systems' | 'territory' | 'people'>(currentUser.role === 'admin' ? 'people' : 'catalog');
+  const [activeTab, setActiveTab] = useState<'storage' | 'catalog' | 'fi_systems' | 'territory' | 'people' | 'team'>(currentUser.role === 'admin' ? 'people' : 'catalog');
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [newProductName, setNewProductName] = useState('');
   const [newProductCategory, setNewProductCategory] = useState('Ancillary');
@@ -115,11 +116,14 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
         options={[
           { value: 'catalog', label: `Products (${catalog.filter(p => p.isActive).length})` },
           { value: 'territory', label: 'Territory & planning' },
+          ...(currentUser.role.endsWith('_rep') ? [] : [{ value: 'team' as const, label: 'Team rules' }]),
           { value: 'people', label: `People (${allUsers.filter(u => u.active !== false).length})` },
           { value: 'fi_systems', label: 'F&I systems' },
           { value: 'storage', label: 'Appearance & data' }
         ]}
       />
+
+      {activeTab === 'team' && <TeamRulesPanel canEdit={['owner', 'executive', 'admin'].includes(currentUser.role)} />}
 
       {activeTab === 'people' && onUpdateUsers && (
         <PeopleAdminPanel currentUser={currentUser} users={allUsers} knownLocations={knownLocations} onChange={onUpdateUsers} />

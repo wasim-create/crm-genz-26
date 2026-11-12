@@ -38,7 +38,7 @@ import type {
   User,
   WorkspaceItem
 } from '../../types/crm';
-import { GROUPS, PLACES, Place, Scenario } from './places';
+import { GROUPS, PLACES, Place, REP_SITUATIONS, Scenario } from './places';
 import { buildContacts, hash } from './people';
 import { addDays, isWeekend, parseISODate, toISODate } from '../../features/myplan/engine/time';
 import { utcOffsetMinutes, zoneFor } from '../../features/myplan/engine/timezones';
@@ -192,9 +192,12 @@ interface Ev {
 
 /** Deals with no next step planned (to show the warnings). */
 const NEXT_GAP: Record<string, 'missing' | 'waiting' | 'waiting_overdue'> = {
-  mw_nwcdjr: 'missing',
   tx_stockyards: 'missing',
   w_brand: 'missing',
+  ri_pawtucket: 'missing',
+  ri_oceanstate: 'missing',
+  ma_route6: 'missing',
+  ma_bristolcounty: 'missing',
   ne_northshore: 'waiting_overdue',
   se_gwinnett: 'waiting'
 };
@@ -262,6 +265,8 @@ interface AssistSpec {
 
 const ASSISTS: AssistSpec[] = [
   { key: 'ne_blackstone', status: 'Pending', type: 'in_person_visit', requestD: -1, proposedD: 3, time: '14:00' },
+  // Priya asked for help on the deal stuck in Negotiation; still waiting on Jason.
+  { key: 'ct_capitol', status: 'Pending', type: 'terms_approval', requestD: -4, proposedD: 2, time: '11:00' },
   { key: 'ne_cw_ford', status: 'Accepted', type: 'terms_approval', requestD: -6, proposedD: 2, time: '11:00', managerNotes: 'I’ll bring the Commonwealth Toyota terms sheet so Sean Walsh can see they match. 45 minutes max.' },
   { key: 'ne_goldenmile', status: 'Completed', type: 'google_meet', requestD: -12, proposedD: -8, time: '13:30', outcome: 'Confirmed the claims turnaround in writing for Rachel. Stephen agreed to sign once the agreement arrives.' },
   { key: 'ne_cw_kia', status: 'Completed', type: 'contract_signing_support', requestD: -19, proposedD: -15, time: '11:00', outcome: 'Agreement signed by Brian Costa. Richard Doyle approved ChargeClub for this store only.' },
@@ -376,6 +381,8 @@ export function buildDemoData(users: User[], gameRules: GameRule[], now: Date = 
   const startD = (p: Place) => {
     let s = START[p.scen] - jitter(p, 4);
     if (p.rep === 'u_carlos' && !p.transferFrom) s = Math.max(s, -58);
+    const hired = p.rep ? REP_SITUATIONS[p.rep]?.hiredD : undefined;
+    if (hired !== undefined) s = Math.max(s, hired + 1);
     return s;
   };
 
@@ -759,9 +766,13 @@ export function buildDemoData(users: User[], gameRules: GameRule[], now: Date = 
         intro(s0, true, s0 + 3);
         scout(s0 + 3);
         demo(s0 + 12);
-        push({ d: s0 + 20, t: '11:10', type: 'Phone Call', to: 0, notes: `Follow-up with ${fn(0)}: comparing us with their current provider; decision this month.`, tasks: ['p_followup'] });
+        push({ d: p.lostD !== undefined ? Math.min(s0 + 20, p.lostD - 9) : s0 + 20, t: '11:10', type: 'Phone Call', to: 0, notes: `Follow-up with ${fn(0)}: comparing us with their current provider; decision this month.`, tasks: ['p_followup'] });
+        if (p.lostAt === 'Negotiation') {
+          push({ d: (p.lostD ?? -9) - 6, t: '10:20', type: 'Email', to: 0, notes: `Sent ${fn(0)} draft terms for ${names(interestIds.slice(0, 2))}.` });
+          push({ d: (p.lostD ?? -9) - 3, t: '14:10', type: 'Phone Call', to: 0, notes: `${fn(0)} pushed back on price in the draft terms; said they'd compare with their current provider.`, tasks: ['p_followup'] });
+        }
         lostReason = `They ${p.competitor ?? 'went with another provider'}.`;
-        push({ d: -9, t: '15:30', type: 'Phone Call', to: 0, notes: `${fn(0)} called — they ${p.competitor ?? 'went with another provider'}. Closed as lost; OK to check back next year.`, tasks: ['p_followup'] });
+        push({ d: p.lostD ?? -9, t: '15:30', type: 'Phone Call', to: 0, notes: `${fn(0)} called — they ${p.competitor ?? 'went with another provider'}. Closed as lost; OK to check back next year.`, tasks: ['p_followup'] });
         break;
       case 'not_now':
         intro(s0, true, s0 + 3);
@@ -804,6 +815,12 @@ export function buildDemoData(users: User[], gameRules: GameRule[], now: Date = 
       if (aSpec.status === 'Declined') {
         push({ d: aSpec.proposedD, t: '14:20', type: 'Phone Call', to: 0, notes: `${fn(0)} confirmed the terms again on the phone. Bringing the agreement for signature.`, next: 'Contract signing', nextIn: 1, nextTime: '14:30', tasks: ['p_followup'] });
       }
+    }
+
+    // Demo: a rep who has gone quiet (no contact logged lately).
+    const quietFrom = p.rep ? REP_SITUATIONS[p.rep]?.quietFromD : undefined;
+    if (quietFrom !== undefined) {
+      for (let i = evs.length - 1; i >= 0; i--) if (evs[i].d >= quietFrom && (!evs[i].by || evs[i].by === 'rep')) evs.splice(i, 1);
     }
 
     // Demo: deals where the rep hasn't planned what happens next.
@@ -849,6 +866,9 @@ export function buildDemoData(users: User[], gameRules: GameRule[], now: Date = 
         if (!user) return;
         const date = bd(e.d);
         if (user.id === 'u_carlos' && date < carlosHire) return;
+        const sit = REP_SITUATIONS[user.id];
+        if (sit?.hiredD !== undefined && e.d <= sit.hiredD) return;
+        if (sit?.quietFromD !== undefined && e.d >= sit.quietFromD) return;
         const ts = stampAt(date, e.t, zone);
         const [hh] = e.t.split(':').map(Number);
         const live = LIVE.includes(e.type);
@@ -989,6 +1009,13 @@ export function buildDemoData(users: User[], gameRules: GameRule[], now: Date = 
       claimedAt,
       lastTouchpointDate: lastTouch,
       lostReason,
+      lostAtStage: p.scen === 'lost' ? p.lostAt ?? 'Follow-up' : undefined,
+      lostDate: p.scen === 'lost' ? bd(p.lostD ?? -9) : undefined,
+      stageSince: bd(
+        p.stageSinceD ??
+          ({ claimed: s0, visit_planned: s0, visited: s0 + 3, follow_up: -8 - (h % 3), in_progress: s0 + 16, hot: -3, negotiation: -15, contract: -4, won: -1, signed: signedD ?? s0, onboarding: signedD ?? s0, lost: p.lostD ?? -9, not_now: -10, disqualified: s0 + 3 } as Partial<Record<Scenario, number>>)[p.scen] ??
+          s0
+      ),
       nurtureFollowUpDate: nurture,
       disqualifiedReason: disq,
       hasActiveAssist: !!assistOpen,
@@ -1380,10 +1407,10 @@ type Locals = {
  * calls inside 10–4). Never touches lost, nurture, at-risk or far accounts.
  */
 function addRoutine(stories: StoryCtx[], users: User[], localsFor: (p: Place) => Locals, bd: (n: number) => string) {
-  const TARGET: Record<string, number> = { u_kevin: 3, u_kelley: 3, u_toddb: 3, u_toddk: 2, u_carlos: 2 };
+  const TARGET: Record<string, number> = { u_kevin: 3, u_kelley: 3, u_toddb: 3, u_toddk: 2, u_carlos: 2, u_marcus: 3, u_priya: 3, u_ellie: 1 };
   // Desired current streaks: a day with no live contact (office / training
   // day) ends each streak. Picked on a day with no story events for that rep.
-  const STREAK: Record<string, number> = { u_kevin: 14, u_kelley: 8, u_toddb: 6, u_toddk: 2, u_carlos: 4 };
+  const STREAK: Record<string, number> = { u_kevin: 14, u_kelley: 8, u_toddb: 6, u_toddk: 2, u_carlos: 4, u_priya: 5 };
   const SKIP: Record<string, number[]> = {};
   Object.entries(STREAK).forEach(([uid, n]) => {
     const busy = (d: number) => stories.some(s => s.p.rep === uid && s.evs.some(e => e.d === d && (!e.by || e.by === 'rep') && LIVE.includes(e.type)));

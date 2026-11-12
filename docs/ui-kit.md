@@ -48,3 +48,10 @@ Don't build a second visit form.
 - Nothing navigates away to show a form. The dealership record is a pop-in; My Plan forms (log a visit, add to plan, edit a slot, next step) open on top of whatever screen you are on: a right-hand panel on a computer, full screen on a phone. Closing or saving returns you to where you were (usually the record).
 - My Plan is always mounted; `pageVisible` decides whether its page shows. Its forms open from anywhere via `planRequest` in `App.tsx`.
 - Every screen change and every overlay adds a browser-history step (`src/utils/backStack.ts`). Back closes the top layer, steps back inside multi-step forms, then returns to the previous screen with its scroll position. New overlays: wrap them in `Dialog`/`FormShell`/`Sheet`, or add `<BackLayer onBack={close} />`.
+
+## My team (who needs help)
+
+- `src/features/team/signals.ts` holds the rules (pure code, tested). One report per rep; the manager's screen and the rep's "Worth a look" card read the same report.
+- Status: Needs help if any rule says so or three things need an eye at once; Keep an eye if anything is open; otherwise On track. Acting on a flag (nudge, offer to join, note, check-in, "It's fine") quietens it for a week unless it gets worse.
+- Owners and admins change the numbers in Settings → Team rules. Check-ins, notes and handled flags live in `src/features/team/store.ts`.
+- Demo: Jason's team has Marcus (gone quiet), Priya (losing at Negotiation, one deal stuck), Ellie (new starter), Kelley (keep an eye) and Kevin (on track). See `REP_SITUATIONS` in `src/data/demo/places.ts`.

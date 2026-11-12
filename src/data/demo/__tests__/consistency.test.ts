@@ -1,3 +1,4 @@
+import { REP_SITUATIONS } from '../places';
 // Consistency checks for the demo data. The demo is rebuilt for several
 // different "todays" so it stays coherent whenever someone opens it.
 
@@ -162,7 +163,8 @@ for (const iso of DATES) {
     }
     const weekday = ![0, 6].includes(new Date(`${today}T12:00:00Z`).getUTCDay());
     if (weekday)
-      for (const rep of USERS.filter(u => u.role.endsWith('_rep'))) {
+      // (Reps set up to look like they've stopped planning are left out on purpose.)
+      for (const rep of USERS.filter(u => u.role.endsWith('_rep') && !REP_SITUATIONS[u.id]?.thinPlan)) {
         const todays = seed.slots.filter(s => s.userId === rep.id && s.date === today && s.target.kind === 'dealership' && s.how !== 'email' && s.how !== 'text');
         assert.ok(todays.length >= 3, `${rep.firstName} has a real day today (${todays.length} stops)`);
       }
@@ -170,7 +172,7 @@ for (const iso of DATES) {
     const refs = seed.slots.filter(s => (s.status === 'planned' || s.status === 'basket') && s.target.kind !== 'block').map(s => ({ targetId: s.target.id, rooftopIds: s.target.rooftopIds, date: s.date, time: s.fixedTime, status: s.status, label: s.how }));
     const states = computeNextSteps(D.dealerships, D.activities, refs, D.assists, today);
     const all = [...states.values()];
-    assert.ok(all.filter(needsNextStep).length >= 3 && all.filter(needsNextStep).length <= 8, `a few deals with no next step (${all.filter(needsNextStep).length})`);
+    assert.ok(all.filter(needsNextStep).length >= 3 && all.filter(needsNextStep).length <= 12, `a few deals with no next step (${all.filter(needsNextStep).length})`);
     assert.ok(all.some(x => x.kind === 'waiting' && !x.overdue), 'a deal waiting on them');
     assert.ok(all.some(x => x.kind === 'waiting' && x.overdue), 'a deal waiting too long');
     assert.ok(all.filter(x => x.kind === 'planned').length >= 30, 'most live deals have a next step');
