@@ -46,6 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'finance': return 'Finance';
       case 'executive': return 'Executive';
       case 'owner': return 'Owner';
+      case 'inventory_manager': return 'Inventory Manager';
       case 'admin': return 'Administrator';
       default: return role;
     }
@@ -70,6 +71,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { label: 'Reps', roles: ['veteran_rep', 'new_rep', 'team_lead'] },
     { label: 'Managers', roles: ['manager'] },
     { label: 'Owners & finance', roles: ['owner', 'executive', 'finance'] },
+    { label: 'Operations', roles: ['inventory_manager'] },
     { label: 'Admin', roles: ['admin'] }
   ];
 

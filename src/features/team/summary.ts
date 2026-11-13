@@ -56,6 +56,12 @@ const firstMove = (f: Flag, first: string): string => {
       return `Go through the lost deals with ${first}`;
     case 'new_rep':
       return `Offer ${first} a ride-along`;
+    case 'keyfetch_low':
+      return `Check ${first}'s client has keychains on order`;
+    case 'keyfetch_count':
+      return `Remind ${first} to count keychains`;
+    case 'contracts_drop':
+      return `Offer to join ${first} at the client whose contracts dropped`;
     case 'assist_waiting':
       return `Answer ${first}'s request for help`;
     default:

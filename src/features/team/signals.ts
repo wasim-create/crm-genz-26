@@ -112,6 +112,8 @@ export interface SignalInput {
   assists: ManagerAssist[];
   streak?: number;
   rules?: TeamRules;
+  /** Keyfetch stock at the rep's clients (from the stock sheets). */
+  stock?: { dealerId: string; name: string; status: string; weeksLeft: number | null; onTheWayQty: number; countDue: boolean; drop?: { recent: number; usual: number } }[];
   /** Remembered manager actions, keyed by flag id. */
   handled?: Record<string, HandledMark>;
   today: string;
@@ -159,6 +161,7 @@ export function workdaysBetween(from: string, to: string): number {
 const daysBetween = (from: string, to: string) => Math.round((atNoon(to).getTime() - atNoon(from).getTime()) / 86400000);
 const dayName = (date: string) => atNoon(date).toLocaleDateString('en-US', { weekday: 'short' });
 const shortDate = (date: string) => atNoon(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+const perWeek = (n: number) => (n < 0.5 ? 'almost none' : `about ${n} a week`);
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const listNames = (names: string[], max = 2) => (names.length <= max ? names.join(' and ') : `${names.slice(0, max).join(', ')} and ${names.length - max} more`);
 
@@ -304,6 +307,46 @@ export function repReport(input: SignalInput): RepReport {
       repTitle: risk.length === 1 ? `${risk[0].dealershipName} is at risk (health ${risk[0].clientHealthScore}). Worth a proper visit.` : `${risk.length} of your clients are at risk`,
       detail: risk.length > 1 ? listNames(risk.map(d => `${d.dealershipName} (${d.clientHealthScore})`), 3) : undefined,
       dealershipIds: risk.map(d => d.id)
+    });
+  }
+
+  // ── deals: Keyfetch keychains running low, counts due, contracts dropping ──
+  const stock = input.stock ?? [];
+  const low = stock.filter(s => s.status === 'out' || s.status === 'order_now');
+  if (low.length) {
+    const phrase = (s: (typeof low)[number]) =>
+      s.status === 'out' ? `${s.name} is out of keychains${s.onTheWayQty ? ` (${s.onTheWayQty} on the way)` : ''}` : `${s.name} has about ${Math.round(s.weeksLeft ?? 0)} weeks of keychains left`;
+    flags.push({
+      id: 'keyfetch_low',
+      kind: 'deals',
+      level: 'watch',
+      title: low.length === 1 ? phrase(low[0]) : `${low.length} clients low on Keyfetch keychains`,
+      repTitle: low.length === 1 ? `${phrase(low[0])}. Check an order is in with the inventory team.` : `${low.length} of your clients are low on keychains. Check orders are in with the inventory team.`,
+      detail: low.length > 1 ? listNames(low.map(phrase), 3) : undefined,
+      dealershipIds: low.map(s => s.dealerId)
+    });
+  }
+  const counts = stock.filter(s => s.countDue);
+  if (counts.length) {
+    flags.push({
+      id: 'keyfetch_count',
+      kind: 'deals',
+      level: 'watch',
+      title: `Keyfetch count due at ${listNames(counts.map(s => s.name))}`,
+      repTitle: `Count the Keyfetch keychains at ${listNames(counts.map(s => s.name))} on your next visit`,
+      dealershipIds: counts.map(s => s.dealerId)
+    });
+  }
+  const drops = stock.filter(s => s.drop);
+  if (drops.length) {
+    const d0 = drops[0];
+    flags.push({
+      id: 'contracts_drop',
+      kind: 'deals',
+      level: 'watch',
+      title: drops.length === 1 ? `${d0.name}: contracts down to ${perWeek(d0.drop!.recent)} (usually ${d0.drop!.usual} a week)` : `Contracts dropping at ${drops.length} clients`,
+      repTitle: drops.length === 1 ? `${d0.name} is selling far fewer contracts lately (${perWeek(d0.drop!.recent)}, usually ${d0.drop!.usual} a week). Worth a visit.` : `Contracts are dropping at ${listNames(drops.map(s => s.name))}. Worth a visit.`,
+      dealershipIds: drops.map(s => s.dealerId)
     });
   }
 

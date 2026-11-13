@@ -17,11 +17,13 @@ import {
   Gamepad2,
   FileCheck2,
   MapPin,
-  Users
+  Users,
+  Boxes
 } from 'lucide-react';
 
 export type ActiveView = 
   | 'team'
+  | 'inventory'
   | 'planner'
   | 'pipeline'
   | 'bench'
@@ -38,6 +40,7 @@ export type ActiveView =
 /** Pages each role can open, in menu order (also used by search). */
 export function pagesFor(role: string): { id: ActiveView; label: string }[] {
   const L: Record<ActiveView, string> = {
+    inventory: 'Keyfetch stock',
     team: role === 'manager' || role === 'team_lead' ? 'My team' : 'Teams',
     planner: 'My plan',
     pipeline: 'Pipeline',
@@ -58,10 +61,12 @@ export function pagesFor(role: string): { id: ActiveView; label: string }[] {
       : role === 'manager' || role === 'team_lead'
         ? ['team', 'assists', 'pipeline', 'planner', 'bench', 'clients', 'pool', 'groups', 'executive_desk', 'gamification', 'game_rules', 'settings']
         : role === 'finance'
-          ? ['finance', 'assists', 'executive_desk', 'clients', 'pipeline', 'bench', 'settings']
+          ? ['finance', 'inventory', 'assists', 'executive_desk', 'clients', 'pipeline', 'bench', 'settings']
+          : role === 'inventory_manager'
+            ? ['inventory', 'clients', 'groups', 'pipeline', 'settings']
           : role === 'admin'
             ? ['settings', 'game_rules', 'bench', 'pool', 'clients', 'groups']
-            : ['executive_desk', 'team', 'pipeline', 'assists', 'finance', 'planner', 'bench', 'clients', 'groups', 'pool', 'gamification', 'game_rules', 'settings'];
+            : ['executive_desk', 'team', 'inventory', 'pipeline', 'assists', 'finance', 'planner', 'bench', 'clients', 'groups', 'pool', 'gamification', 'game_rules', 'settings'];
   return ids.map(id => ({ id, label: L[id] }));
 }
 
@@ -74,6 +79,8 @@ interface SidebarProps {
   hotDealCount: number;
   pendingAssistCount: number;
   pendingFinanceCount: number;
+  /** Dealerships that need keychains ordered now (inventory, owners, finance). */
+  stockOrderCount?: number;
   /** Reps who need help (managers, owners). */
   teamHelpCount?: number;
 }
@@ -87,7 +94,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   hotDealCount,
   pendingAssistCount,
   pendingFinanceCount,
-  teamHelpCount = 0
+  teamHelpCount = 0,
+  stockOrderCount = 0
 }) => {
   const role = currentUser.role;
 
@@ -198,6 +206,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       description: 'Who needs help, and why'
     };
 
+    const inventoryItem: NavItem = {
+      id: 'inventory',
+      label: 'Keyfetch stock',
+      icon: <Boxes className="w-4 h-4" />,
+      badge: stockOrderCount > 0 ? `${stockOrderCount} to order` : undefined,
+      badgeColor: 'bg-amber-100 text-amber-800 font-bold',
+      description: 'Keychains left, orders on the way, when to order'
+    };
+
     const settingsItem: NavItem = {
       id: 'settings',
       label: 'Settings',
@@ -243,12 +260,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return [
         {
           title: 'Finance',
-          items: [financeItem, assistsItem, executiveDeskItem]
+          items: [financeItem, inventoryItem, assistsItem, executiveDeskItem]
         },
         {
           title: 'Records',
           items: [clientsItem, pipelineItem, benchItem, settingsItem]
         }
+      ];
+    }
+
+    if (role === 'inventory_manager') {
+      return [
+        { title: 'Stock', items: [inventoryItem] },
+        { title: 'Records', items: [clientsItem, groupsItem, pipelineItem, settingsItem] }
       ];
     }
 
@@ -269,7 +293,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return [
       {
         title: 'Overview',
-        items: [executiveDeskItem, teamItem, pipelineItem, assistsItem, financeItem]
+        items: [executiveDeskItem, teamItem, inventoryItem, pipelineItem, assistsItem, financeItem]
       },
       {
         title: 'Field work',

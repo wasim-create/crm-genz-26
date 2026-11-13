@@ -51,6 +51,8 @@ import { repReport, RepReport } from './features/team/signals';
 import { resetTeam, useTeamState } from './features/team/store';
 import { TeamView } from './features/team/TeamView';
 import { WorthALook } from './features/team/WorthALook';
+import { InventoryProvider, useBuildInventory } from './features/inventory/context';
+import { InventoryView } from './features/inventory/InventoryView';
 import { CheckCircle2, X, Sparkles, Flame } from 'lucide-react';
 
 const storage = new LocalStorageAdapter();
@@ -162,6 +164,13 @@ export default function App() {
     [planState.slots]
   );
   const nextSteps = useMemo(() => computeNextSteps(dealerships, activities, plannedRefs, assists, todayISO()), [dealerships, activities, plannedRefs, assists]);
+  // Keyfetch stock (from the sheets; demo data until they're uploaded).
+  const inventory = useBuildInventory(dealerships, groups, users);
+  const stockOrderCount = useMemo(
+    () => [...inventory.stocks.values()].filter(s => s.status === 'out' || s.status === 'order_now' || s.status === 'send').length + (inventory.office && inventory.office.status === 'order_now' ? 1 : 0),
+    [inventory]
+  );
+
   // Who needs help: one report per rep (same rules for the manager's screen and the rep's own card).
   const teamState = useTeamState();
   const plannedContacts = useMemo(
@@ -185,10 +194,14 @@ export default function App() {
           streak: gamification[rep.id]?.streakDays,
           rules: teamState.rules,
           handled: teamState.handled[rep.id],
+          stock: [...inventory.stocks.values()]
+            .map(s => ({ s, d: dealerships.find(x => x.id === s.dealerId) }))
+            .filter(x => x.d?.assignedRepId === rep.id)
+            .map(({ s, d }) => ({ dealerId: s.dealerId, name: d!.dealershipName, status: s.status, weeksLeft: s.weeksLeft, onTheWayQty: s.onTheWayQty, countDue: s.countDue, drop: s.drop })),
           today
         });
       });
-  }, [users, dealerships, activities, nextSteps, plannedContacts, assists, gamification, teamState]);
+  }, [users, dealerships, activities, nextSteps, plannedContacts, assists, gamification, teamState, inventory]);
   const myTeamReports = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'manager' || currentUser.role === 'team_lead') return teamReports.filter(r => r.rep.managerId === currentUser.id);
@@ -286,7 +299,7 @@ export default function App() {
 
     // Contextual view routing
     const home: ActiveView | null =
-      u.role === 'finance' ? 'finance' : u.role === 'manager' ? 'team' : u.role === 'executive' || u.role === 'owner' ? 'executive_desk' : u.role === 'admin' ? 'settings' : null;
+      u.role === 'finance' ? 'finance' : u.role === 'manager' ? 'team' : u.role === 'executive' || u.role === 'owner' ? 'executive_desk' : u.role === 'admin' ? 'settings' : u.role === 'inventory_manager' ? 'inventory' : null;
     // Keep the screen if the new persona can open it; otherwise go to their usual first screen.
     const target = home ?? (pagesFor(u.role).some(pg => pg.id === viewRef.current) ? null : pagesFor(u.role)[0]?.id ?? null);
     if (target) {
@@ -693,6 +706,7 @@ export default function App() {
   const pendingFinanceCount = incentives.filter(i => i.state === 'Pending verification' || i.state === 'Verified').length;
 
   return (
+    <InventoryProvider value={inventory}>
     <div className="min-h-screen bg-slate-50 flex flex-col antialiased text-slate-800">
       {/* Toast Notification Container with Live Points Burst */}
       {toastMessage && (
@@ -737,10 +751,15 @@ export default function App() {
           pendingAssistCount={pendingAssistCount}
           pendingFinanceCount={pendingFinanceCount}
           teamHelpCount={myTeamReports.filter(r => r.status === 'help').length}
+          stockOrderCount={['inventory_manager', 'owner', 'executive', 'finance'].includes(currentUser.role) ? stockOrderCount : 0}
         />
 
         {/* Viewport Content */}
         <main ref={mainRef} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar">
+          {currentView === 'inventory' && (
+            <InventoryView dealerships={dealerships} groups={groups} users={users} currentUser={currentUser} onOpenDealership={d => setSelectedDealership(d)} />
+          )}
+
           {currentView === 'team' && (
             <TeamView
               reports={myTeamReports}
@@ -1086,5 +1105,6 @@ export default function App() {
         />
       )}
     </div>
+    </InventoryProvider>
   );
 }

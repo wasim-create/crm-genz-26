@@ -8,6 +8,7 @@ export type UserRole =
   | 'finance' 
   | 'executive' 
   | 'owner'
+  | 'inventory_manager'
   | 'admin';
 
 export type USRegion = 'Northeast' | 'Midwest' | 'Southeast' | 'West' | 'Texas / South Central';

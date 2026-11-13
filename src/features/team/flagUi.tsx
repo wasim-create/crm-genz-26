@@ -1,7 +1,7 @@
 // Shared bits for showing flags: the icon for each rule and the status badge.
 
 import React from 'react';
-import { Activity, CalendarX2, Flag as FlagIcon, HeartCrack, Hourglass, LifeBuoy, Sprout, Target, TrendingDown } from 'lucide-react';
+import { Activity, Boxes, CalendarX2, ClipboardCheck, Flag as FlagIcon, HeartCrack, Hourglass, LifeBuoy, Sprout, Target, TrendingDown } from 'lucide-react';
 import { Badge, Tone } from '../../components/ui/kit';
 import type { Flag, RepStatus } from './signals';
 import { STATUS_LABEL } from './signals';
@@ -32,6 +32,12 @@ export function FlagGlyph({ flag, className = 'h-4 w-4' }: { flag: Pick<Flag, 'i
       return <Sprout className={className} />;
     case 'assist_waiting':
       return <LifeBuoy className={className} />;
+    case 'keyfetch_low':
+      return <Boxes className={className} />;
+    case 'keyfetch_count':
+      return <ClipboardCheck className={className} />;
+    case 'contracts_drop':
+      return <TrendingDown className={className} />;
     default:
       return <FlagIcon className={className} />;
   }

@@ -165,14 +165,25 @@ export function Switch<T extends string>({ value, options, onChange, label }: { 
 
 /** A simple centred dialog. Click outside or Cancel to close. */
 /** Gives an overlay a Back-button step while it is on screen. */
-export const BackLayer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  useBackLayer(true, onBack);
+export const BackLayer: React.FC<{ onBack: () => void; escape?: boolean }> = ({ onBack, escape }) => {
+  const isTop = useBackLayer(true, onBack);
+  React.useEffect(() => {
+    if (!escape) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isTop()) {
+        e.stopPropagation();
+        onBack();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
   return null;
 };
 
 export const Dialog: React.FC<{ title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }> = ({ title, onClose, children, wide }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-scrim/50 p-4" role="dialog" aria-modal="true" aria-label={title} onClick={e => { e.stopPropagation(); onClose(); }}>
-    <BackLayer onBack={onClose} />
+    <BackLayer onBack={onClose} escape />
     <Panel className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'} space-y-4 p-6 shadow-2xl`} onClick={e => e.stopPropagation()}>
       <h2 className="text-[18px] font-bold text-slate-900">{title}</h2>
       {children}
