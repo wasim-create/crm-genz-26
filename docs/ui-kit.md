@@ -55,3 +55,4 @@ Don't build a second visit form.
 - Status: Needs help if any rule says so or three things need an eye at once; Keep an eye if anything is open; otherwise On track. Acting on a flag (nudge, offer to join, note, check-in, "It's fine") quietens it for a week unless it gets worse.
 - Owners and admins change the numbers in Settings → Team rules. Check-ins, notes and handled flags live in `src/features/team/store.ts`.
 - Demo: Jason's team has Marcus (gone quiet), Priya (losing at Negotiation, one deal stuck), Ellie (new starter), Kelley (keep an eye) and Kevin (on track). See `REP_SITUATIONS` in `src/data/demo/places.ts`.
+- Weekly summary (`src/features/team/summary.ts`, `WeeklySummary.tsx`): opens by itself on the manager's first visit each week, then folds to one line. Compares with a snapshot of statuses taken at the start of the previous week. "Copy" gives plain text for email or chat.

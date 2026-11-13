@@ -4,7 +4,8 @@
 
 import { useSyncExternalStore } from 'react';
 import { SEED_VERSION } from '../../data/seedData';
-import { DEFAULT_RULES, Flag, HandledMark, TeamRules, workdaysBefore } from './signals';
+import { DEFAULT_RULES, Flag, HandledMark, RepStatus, TeamRules, workdaysBefore } from './signals';
+import { weekStart } from './summary';
 
 export const TEAM_KEY = `apexdrive_team_v1_${SEED_VERSION}`;
 
@@ -30,6 +31,10 @@ export interface TeamState {
   notes: Record<string, CheckInNote[]>;
   handled: Record<string, Record<string, HandledMark>>;
   rules: TeamRules;
+  /** Each rep's status at the start of each week (key: that Monday), for "since last week". */
+  snapshots: Record<string, Record<string, RepStatus>>;
+  /** Weeks whose summary has been opened, per manager (so it opens by itself once a week). */
+  summarySeen: Record<string, string>;
 }
 
 // Demo history: when Jason last spoke to each rep (relative to today).
@@ -46,7 +51,15 @@ function demoCheckIns(): Record<string, CheckIn[]> {
   };
 }
 
-const empty = (): TeamState => ({ checkIns: demoCheckIns(), notes: {}, handled: {}, rules: DEFAULT_RULES });
+// Demo history: how the team looked at the start of last week.
+function demoSnapshots(): Record<string, Record<string, RepStatus>> {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  const key = weekStart(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+  return { [key]: { u_marcus: 'watch', u_priya: 'help', u_ellie: 'good', u_kelley: 'watch', u_kevin: 'watch' } };
+}
+
+const empty = (): TeamState => ({ checkIns: demoCheckIns(), notes: {}, handled: {}, rules: DEFAULT_RULES, snapshots: demoSnapshots(), summarySeen: {} });
 
 function load(): TeamState {
   try {
@@ -137,6 +150,27 @@ export const resetRules = () => set({ ...state, rules: DEFAULT_RULES });
 
 export function resetTeam() {
   set(empty());
+}
+
+/** Remember how the team looks at the start of this week (only the first time it's seen). */
+export function takeSnapshot(week: string, statuses: Record<string, RepStatus>) {
+  const existing = state.snapshots[week] ?? {};
+  const missing = Object.keys(statuses).filter(id => !(id in existing));
+  if (!missing.length) return;
+  const merged = { ...existing };
+  missing.forEach(id => (merged[id] = statuses[id]));
+  set({ ...state, snapshots: { ...state.snapshots, [week]: merged } });
+}
+
+/** The most recent snapshot from before `week`. */
+export function previousSnapshot(s: TeamState, week: string): Record<string, RepStatus> | null {
+  const earlier = Object.keys(s.snapshots).filter(k => k < week).sort();
+  return earlier.length ? s.snapshots[earlier[earlier.length - 1]] : null;
+}
+
+export function markSummarySeen(userId: string, week: string) {
+  if (state.summarySeen[userId] === week) return;
+  set({ ...state, summarySeen: { ...state.summarySeen, [userId]: week } });
 }
 
 export const lastCheckIn = (s: TeamState, repId: string): CheckIn | undefined => s.checkIns[repId]?.[0];
