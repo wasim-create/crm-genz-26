@@ -1,3 +1,5 @@
+// Must come first: the demo clock shifts "now" for everything that follows.
+import './utils/simClock';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
