@@ -87,9 +87,16 @@ function migrateContactTitles(list: Contact[]): Contact[] {
   });
 }
 
+/**
+ * People added to the app after a browser first saved its user list (the demo
+ * admin, the Inventory Manager). Without this they'd never appear for anyone
+ * who opened the app before they were added.
+ */
+const ADDED_LATER = ['u_admin', 'u_monica'];
+
 function withAdmin(list: User[]): User[] {
-  const admin = USERS.find(u => u.role === 'admin');
-  return admin && !list.some(u => u.id === admin.id) ? [...list, admin] : list;
+  const missing = USERS.filter(u => (u.role === 'admin' || ADDED_LATER.includes(u.id)) && !list.some(x => x.id === u.id));
+  return missing.length ? [...list, ...missing] : list;
 }
 
 const STORAGE_KEYS = {

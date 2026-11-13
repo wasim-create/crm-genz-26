@@ -3,6 +3,7 @@
 // actions. Tabs: Overview · Activity · Contacts · Products · History.
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { KeyfetchCard } from '../../features/inventory/KeyfetchCard';
 import { useBackLayer } from '../../utils/backStack';
 import {
   Briefcase,
@@ -411,6 +412,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = props
           {tab === 'products' && (
             <div className="space-y-5">
               <OnboardingChecklist dealership={d} users={allUsers} />
+              <KeyfetchCard dealership={d} currentUser={currentUser} />
               {isClient ? <ClientProducts d={d} catalog={catalog} onTopup={() => setDialog('topup')} /> : <InterestList d={d} catalog={catalog} currentUser={currentUser} onUpdate={onUpdateDealership} />}
               <LotHistory dealership={d} users={allUsers} />
             </div>

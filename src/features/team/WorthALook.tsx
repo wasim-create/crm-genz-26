@@ -97,7 +97,7 @@ export const WorthALook: React.FC<{
                   <span className={`mt-0.5 ${flagColour({ ...f, handled: undefined })}`}>
                     <FlagGlyph flag={f} />
                   </span>
-                  <div className="min-w-0 flex-1 text-[14px] text-slate-800">
+                  <div className="min-w-[65%] flex-1 text-[14px] text-slate-800">
                     {f.repTitle}
                     {f.detail && f.id !== 'assist_waiting' && <div className="text-[13px] text-slate-500">{f.detail}</div>}
                   </div>

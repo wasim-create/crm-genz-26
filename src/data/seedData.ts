@@ -217,6 +217,20 @@ export const USERS: User[] = [
     hireDate: '2016-01-01'
   },
   {
+    // Keeps Keyfetch keychain stock topped up at every dealership.
+    id: 'u_monica',
+    firstName: 'Monica',
+    lastName: 'Belaunde',
+    email: 'monica.belaunde@example.com',
+    role: 'inventory_manager',
+    region: 'Northeast',
+    managerId: 'u_john',
+    homeZipCode: '02110',
+    homeCoords: { lat: 42.3557, lng: -71.0505 },
+    phone: '(617) 555-0156',
+    hireDate: '2020-03-02'
+  },
+  {
     id: 'u_donna',
     firstName: 'Donna',
     lastName: 'Clark',

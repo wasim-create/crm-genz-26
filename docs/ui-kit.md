@@ -66,3 +66,9 @@ Don't build a second visit form.
 ## Demo clock (test phase)
 
 - Clock button in the top bar (amber when on). Pick a day and time or a shortcut; the app reloads and runs as if it's that moment, with the clock ticking on from there. `src/utils/simClock.ts` shifts `new Date()` / `Date.now()` and must be the first import in `main.tsx`. Turn off for go-live with `DEMO_CLOCK_ENABLED = false`.
+
+## Keyfetch stock
+
+- `src/features/inventory/stock.ts` (rules, tested): on hand = opening stock or latest count + deliveries/office dispatches − contracts (each contract number once) since the tracking start date. Pace = contracts per week (or the drop between counts for stores where not every contract uses a keychain). Factory-supplied stores: Order now under lead time + cushion (9 + 1 weeks), Order soon under 14. Office-supplied stores (the held group): Send from office under 3 weeks. Office stock: the group's whole pace against office + store stock.
+- Sheets: `csv.ts` reads the order tracking sheet, the weekly contracts sheet (replaces the last upload) and the group's "Form Responses 1" by header name. `demo.ts` builds the same shapes from the CRM; `store.ts` keeps uploads, counts, switches and rules.
+- Screens: Keyfetch stock (Inventory Manager home), the Keyfetch card on a dealership's Products tab, and stock flags in reps' "Worth a look" and on My team.
