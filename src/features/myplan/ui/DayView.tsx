@@ -277,7 +277,8 @@ export const DayView: React.FC = () => {
   });
 
   return (
-    <div className="pb-32">
+    <div className="pb-32 xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start xl:gap-6">
+      <div className="min-w-0">
       {(clockToday || clockTomorrow) && (
         <Card className="mb-3 flex items-center gap-2 border-sky-200 bg-sky-50 p-3 text-[15px] text-sky-950">
           <Clock className="h-5 w-5 text-sky-700" />
@@ -305,7 +306,7 @@ export const DayView: React.FC = () => {
 
       {(sequence.length > 0 || messages.length > 0) && (
         <>
-          <SectionTitle>Visits, calls &amp; meetings</SectionTitle>
+          <SectionTitle>Visits, calls and meetings</SectionTitle>
           {editable && !tipSeen && sequence.length > 1 && (
             <Card className="mb-3 flex items-start gap-3 border-blue-200 bg-blue-50 p-3 text-[15px] text-blue-950">
               <span className="flex-1">
@@ -326,7 +327,7 @@ export const DayView: React.FC = () => {
 
           {messages.length > 0 && (
             <>
-              <SectionTitle>Emails &amp; texts</SectionTitle>
+              <SectionTitle>Emails and texts</SectionTitle>
               <p className="-mt-1 mb-2 text-[15px] text-slate-500">These don’t take time out of 10–4. Write them when it suits you; they go out at the time shown.</p>
               <div className="space-y-3">
                 {messages.map(m => (
@@ -349,6 +350,10 @@ export const DayView: React.FC = () => {
         </>
       )}
 
+      </div>
+
+      {/* Side column on wide screens: to-dos and the basket stay in view. */}
+      <aside className="min-w-0 xl:sticky xl:top-0 xl:pt-0 [&>div:first-child]:xl:mt-0">
       <DayTodo />
 
       {editable && basket.length > 0 && sequence.length + messages.length > 0 && (
@@ -365,6 +370,7 @@ export const DayView: React.FC = () => {
           </Button>
         </Card>
       )}
+      </aside>
 
       {editable && (
         <div className="fixed bottom-4 right-4 z-40 flex items-center gap-3 md:hidden">
@@ -640,7 +646,7 @@ const NextCard: React.FC<{ sequence: PlanSlot[]; messages: PlanSlot[]; layout: D
 
   return (
     <div className="mt-4">
-      <div className="mb-2 text-[15px] font-bold uppercase tracking-wide text-blue-700">{target.status === 'in_progress' ? 'Now' : 'Next'}</div>
+      <h2 className="mb-2 text-[17px] font-bold text-slate-900">{target.status === 'in_progress' ? 'Happening now' : 'Next up'}</h2>
       <SlotCard
         slot={target}
         start={timing?.start}

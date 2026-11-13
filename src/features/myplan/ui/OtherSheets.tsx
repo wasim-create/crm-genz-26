@@ -98,7 +98,7 @@ export const TodoSheet: React.FC<{ onClose: () => void; dealershipId?: string }>
       {groups.map(g =>
         g.items.length === 0 ? null : (
           <div key={g.label} className="mb-5">
-            <div className="mb-2 text-[15px] font-bold uppercase tracking-wide text-slate-500">
+            <div className="mb-2 text-[16px] font-bold text-slate-900">
               {g.label} <span className="text-slate-400">({g.items.length})</span>
             </div>
             <Card className="divide-y divide-slate-100">
