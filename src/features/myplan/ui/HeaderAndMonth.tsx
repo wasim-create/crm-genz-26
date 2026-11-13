@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, CircleHelp, Eye, Inbox, ListTodo, Plus, Settings, Star, WifiOff } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, CircleHelp, Eye, Inbox, ListTodo, Plus, Settings, Star, WifiOff } from 'lucide-react';
 import { User } from '../../../types/crm';
 import { addDays, formatDayLong, parseISODate, startOfWeek, toISODate, weekDates } from '../engine/time';
 import { isScheduled } from '../engine/schedule';
@@ -8,7 +8,7 @@ import { Button, Card, WORK_STYLE } from './primitives';
 import { useMyPlan } from './context';
 import { WorkType } from '../types';
 
-export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => void }> = ({ viewers, onViewUser }) => {
+export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => void; banner?: React.ReactNode }> = ({ viewers, onViewUser, banner }) => {
   const { view, setView, date, setDate, today, openSheet, basket, viewUser, user, readOnly } = useMyPlan();
   const state = useMyPlanState();
   const offline = state.simulateOffline || !state.online;
@@ -32,25 +32,31 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
 
   return (
     <div className="mb-4 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <h1 className="text-[26px] font-extrabold tracking-tight text-slate-900">My Plan</h1>
-          <button
-            type="button"
-            aria-label="Help: how My Plan works"
-            title="How My Plan works"
-            onClick={() => openSheet({ kind: 'walkthrough', start: view === 'week' ? 3 : 0 })}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-blue-700"
-          >
-            <CircleHelp className="h-6 w-6" />
-          </button>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2.5 text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">
+            <CalendarDays className="h-6 w-6 text-blue-600" />
+            {readOnly ? `${viewUser.firstName}’s plan` : 'My plan'}
+            <button
+              type="button"
+              aria-label="Help: how My Plan works"
+              title="How My Plan works"
+              onClick={() => openSheet({ kind: 'walkthrough', start: view === 'week' ? 3 : 0 })}
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-blue-700"
+            >
+              <CircleHelp className="h-5 w-5" />
+            </button>
+          </h1>
+          <p className="mt-1 max-w-3xl text-[15px] text-slate-600">
+            {readOnly ? 'Read-only. You can suggest a priority for them.' : 'Plan your visits, calls and messages, then log how they went. The CRM updates itself.'}
+          </p>
           {offline && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-ink-2 px-3 py-1 text-[13px] font-semibold text-onaccent">
-              <WifiOff className="h-4 w-4" /> Offline — will sync when you’re back online
+            <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-ink-2 px-3 py-1 text-[13px] font-semibold text-onaccent">
+              <WifiOff className="h-4 w-4" /> Offline. Everything you log is saved on this device and syncs when you’re back online.
             </span>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:pt-1">
           {viewers.length > 0 && (
             <label className="flex items-center gap-2 text-[15px] font-medium text-slate-700">
               <Eye className="h-5 w-5 text-slate-500" />
@@ -79,6 +85,8 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
         </div>
       </div>
 
+      {banner}
+
       {readOnly && (
         <Card className="flex flex-wrap items-center justify-between gap-3 border-indigo-200 bg-indigo-50 p-3">
           <span className="text-[16px] font-semibold text-indigo-950">
@@ -94,7 +102,7 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
         </Card>
       )}
 
-      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-slate-200/70 p-1" role="tablist" aria-label="Plan view">
+      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-slate-200/70 p-1 md:inline-grid md:w-auto" role="tablist" aria-label="Plan view">
         {(
           [
             ['day', 'Day'],
@@ -114,9 +122,16 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
               }
               setView(v);
             }}
-            className={`min-h-[52px] rounded-xl text-[16px] font-bold transition ${view === v ? 'bg-white text-slate-900 shadow' : 'text-slate-600 hover:text-slate-900'}`}
+            className={`min-h-[48px] cursor-pointer rounded-xl text-[16px] font-bold transition md:min-h-[40px] md:px-6 md:text-[15px] ${view === v ? 'bg-white text-slate-900 shadow' : 'text-slate-600 hover:text-slate-900'}`}
           >
-            {label}
+            {v === 'week' ? (
+              <>
+                <span className="sm:hidden">Week</span>
+                <span className="hidden sm:inline">{label}</span>
+              </>
+            ) : (
+              label
+            )}
           </button>
         ))}
       </div>
@@ -125,12 +140,26 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
         <Button variant="secondary" aria-label="Previous" onClick={() => shift(-1)} icon={<ChevronLeft className="h-6 w-6" />} />
         <div className="min-w-0 flex-1 text-center text-[17px] font-bold text-slate-900 sm:text-[19px]">
           <span className="hidden sm:inline">{title}</span>
-          <span className="whitespace-nowrap text-[15px] sm:hidden">{view === 'day' ? parseISODate(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : title.replace('Week of ', 'Wk of ')}</span>
+          <span className="whitespace-nowrap text-[15px] sm:hidden">{view === 'day' ? parseISODate(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : view === 'week'
+              ? (() => {
+                  const w = weekDates(date);
+                  const a = parseISODate(w[0]);
+                  const z = parseISODate(w[w.length - 1]);
+                  return `${a.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}–${a.getMonth() === z.getMonth() ? z.getDate() : z.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+                })()
+              : parseISODate(date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
         </div>
         <Button variant="secondary" aria-label="Next" onClick={() => shift(1)} icon={<ChevronRight className="h-6 w-6" />} />
         <Button variant={date === today ? 'ghost' : 'soft'} onClick={() => setDate(today)}>
           Today
         </Button>
+        {view === 'day' && !readOnly && date === today && viewUser.id === user.id && (
+          <span className="hidden sm:block">
+            <Button variant="secondary" onClick={() => openSheet({ kind: 'logpick' })} icon={<ClipboardCheck className="h-5 w-5" />}>
+              Log a visit
+            </Button>
+          </span>
+        )}
         {view === 'day' && !readOnly && date >= today && (
           <span className="hidden sm:block">
             <Button variant="primary" onClick={() => openSheet({ kind: 'add', preset: { date, nonce: Date.now() } })} icon={<Plus className="h-5 w-5" />}>
@@ -158,7 +187,7 @@ export const MonthView: React.FC = () => {
 
   return (
     <div className="pb-16">
-      <div className="mb-3 grid gap-2 sm:grid-cols-4">
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           ['Planned visits', visits.length],
           ['Done so far', doneCount],

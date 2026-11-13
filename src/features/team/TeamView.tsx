@@ -11,6 +11,7 @@ import { FlagKind, RepReport, RepStatus, sortReports } from './signals';
 import { FlagGlyph, flagColour, initials, KIND_LABEL, StatusBadge } from './flagUi';
 import { lastCheckIn, useTeamState } from './store';
 import { RepPanel, RepPanelActions } from './RepPanel';
+import { WeeklySummary } from './WeeklySummary';
 
 interface Props extends RepPanelActions {
   reports: RepReport[];
@@ -59,6 +60,8 @@ export const TeamView: React.FC<Props> = props => {
         title={isManager ? 'My team' : 'Teams'}
         subtitle="Who needs help, and why. Worked out from what your team logs and plans, using rules you can see in Settings. Reps see their own flags too."
       />
+
+      <WeeklySummary reports={scoped} currentUser={currentUser} onOpenRep={setOpenRep} />
 
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Needs help" value={count('help')} tone="red" active={status === 'help'} onClick={() => setStatus(status === 'help' ? 'all' : 'help')} />

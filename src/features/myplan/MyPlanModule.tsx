@@ -36,6 +36,7 @@ import { WeekView } from './ui/WeekView';
 import { AddFlow } from './ui/AddFlow';
 import { EditSlotSheet, MoveSheet } from './ui/SlotSheets';
 import { OutcomeSheet } from './ui/OutcomeSheet';
+import { LogPickerSheet } from './ui/LogPickerSheet';
 import { buildLoggedSlot } from './ui/logVisit';
 import { BasketSheet, ReminderBanner, SettingsSheet, TodoSheet, Walkthrough } from './ui/OtherSheets';
 import { LunchSheet, QuickViewSheet, ReplanSheet, TimeSheet } from './ui/DaySheets';
@@ -64,6 +65,8 @@ export interface MyPlanModuleProps {
   pageVisible?: boolean;
   /** Go to the My Plan screen (link in the saved message when you're elsewhere). */
   onOpenPlan?: () => void;
+  /** Shown under the page title (e.g. the rep's "Worth a look" card). */
+  banner?: React.ReactNode;
 }
 
 const VIEWER_ROLES = ['manager', 'team_lead', 'owner', 'executive'];
@@ -255,12 +258,12 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
     <MyPlanProvider value={value}>
       {pageVisible && (
       <div className="mx-auto max-w-6xl text-[16px]" style={settings.biggerText ? { zoom: 1.15 } : undefined}>
-        <Header viewers={viewers} onViewUser={setViewUserId} />
+        <Header viewers={viewers} onViewUser={setViewUserId} banner={props.banner} />
         <ReminderBanner />
         {!state.seededOn ? (
           <div className="py-16 text-center text-slate-500">Loading your plan…</div>
         ) : view === 'day' ? (
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto max-w-3xl xl:max-w-none">
             <DayView />
           </div>
         ) : view === 'week' ? (
@@ -274,6 +277,7 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
       {sheet?.kind === 'add' && <AddFlow key={sheet.preset?.nonce ?? 'add'} preset={sheet.preset} onClose={close} />}
       {sheet?.kind === 'edit' && <EditSlotSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
       {sheet?.kind === 'nextstep' && <NextStepSheet key={sheet.dealershipId} dealershipId={sheet.dealershipId} onClose={close} />}
+      {sheet?.kind === 'logpick' && <LogPickerSheet onClose={close} />}
       {sheet?.kind === 'outcome' && <OutcomeSheet key={sheet.slotId} slotId={sheet.slotId} draft={sheet.draft} onClose={close} />}
       {sheet?.kind === 'move' && <MoveSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
       {sheet?.kind === 'todo' && <TodoSheet onClose={close} />}

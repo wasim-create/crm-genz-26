@@ -55,3 +55,14 @@ Don't build a second visit form.
 - Status: Needs help if any rule says so or three things need an eye at once; Keep an eye if anything is open; otherwise On track. Acting on a flag (nudge, offer to join, note, check-in, "It's fine") quietens it for a week unless it gets worse.
 - Owners and admins change the numbers in Settings → Team rules. Check-ins, notes and handled flags live in `src/features/team/store.ts`.
 - Demo: Jason's team has Marcus (gone quiet), Priya (losing at Negotiation, one deal stuck), Ellie (new starter), Kelley (keep an eye) and Kevin (on track). See `REP_SITUATIONS` in `src/data/demo/places.ts`.
+- Weekly summary (`src/features/team/summary.ts`, `WeeklySummary.tsx`): opens by itself on the manager's first visit each week, then folds to one line. Compares with a snapshot of statuses taken at the start of the previous week. "Copy" gives plain text for email or chat.
+
+## Logging in the field
+
+- **Log a visit** in My Plan (button on a computer, floating pill on a phone) opens `LogPickerSheet`. `engine/whereAmI.ts` picks the likely dealership: one of the rep's within 300 m of the phone, else the stop on today's plan that's happening now (or starts within 20 minutes), else the next stop. Planned stops open "How did it go?"; anything else is logged as unplanned.
+- **Speak** in the outcome form keeps listening until Stop, showing words as they come; finished sentences are added to the note, which the note reader then uses for next steps.
+- **No signal:** `public/sw.js` keeps a copy of the app on the phone so it opens offline (live site only, not previews). Logs were already saved on the phone and queued for sync.
+
+## Demo clock (test phase)
+
+- Clock button in the top bar (amber when on). Pick a day and time or a shortcut; the app reloads and runs as if it's that moment, with the clock ticking on from there. `src/utils/simClock.ts` shifts `new Date()` / `Date.now()` and must be the first import in `main.tsx`. Turn off for go-live with `DEMO_CLOCK_ENABLED = false`.

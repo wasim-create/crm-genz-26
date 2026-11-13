@@ -1,5 +1,6 @@
 import React from 'react';
 import { ThemeMenu } from '../ui/ThemeToggle';
+import { DemoClock } from '../ui/DemoClock';
 import { User, UserRole, GamificationProfile } from '../../types/crm';
 import { 
   Compass, 
@@ -116,6 +117,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
 
+        <DemoClock />
         <ThemeMenu />
 
         <button

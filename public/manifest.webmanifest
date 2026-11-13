@@ -1,0 +1,11 @@
+{
+  "name": "ApexDrive CRM",
+  "short_name": "ApexDrive",
+  "description": "Field sales for dealership reps and their managers.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

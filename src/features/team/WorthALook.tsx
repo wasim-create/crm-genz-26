@@ -48,7 +48,7 @@ export const WorthALook: React.FC<{
   const shown = expanded ? flags : flags.slice(0, 3);
 
   return (
-    <div className="mx-auto mb-4 max-w-6xl">
+    <div>
       <Panel className="border-amber-200 p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-[16px] font-bold text-slate-900">Worth a look</h2>

@@ -153,7 +153,7 @@ export const Card: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className
 
 export const SectionTitle: React.FC<{ children: React.ReactNode; right?: React.ReactNode }> = ({ children, right }) => (
   <div className="mb-2 mt-6 flex items-end justify-between gap-2">
-    <h2 className="text-[15px] font-bold uppercase tracking-wide text-slate-500">{children}</h2>
+    <h2 className="text-[17px] font-bold text-slate-900">{children}</h2>
     {right}
   </div>
 );

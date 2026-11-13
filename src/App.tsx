@@ -756,7 +756,13 @@ export default function App() {
             />
           )}
 
-          {currentView === 'planner' && (currentUser.role === 'new_rep' || currentUser.role === 'veteran_rep') && (() => {
+
+          {/* Always mounted: on other screens it only shows its forms, on top of that screen. */}
+          {(
+            <MyPlanModule
+              pageVisible={currentView === 'planner'}
+              banner={(() => {
+              if (!(currentUser.role === 'new_rep' || currentUser.role === 'veteran_rep')) return null;
             const mine = teamReports.find(r => r.rep.id === currentUser.id);
             const nudges = managerPriorities.filter(p => p.id.startsWith('nudge_') && p.targetType === 'rep' && p.targetId === currentUser.id && p.status === 'pending');
             return mine ? (
@@ -774,11 +780,6 @@ export default function App() {
               />
             ) : null;
           })()}
-
-          {/* Always mounted: on other screens it only shows its forms, on top of that screen. */}
-          {(
-            <MyPlanModule
-              pageVisible={currentView === 'planner'}
               onOpenPlan={() => {
                 setSelectedDealership(null);
                 goTo('planner');
