@@ -46,6 +46,7 @@ export type SheetState =
   | { kind: 'lunch'; date: string }
   | { kind: 'replan'; date: string }
   | { kind: 'nextstep'; dealershipId: string }
+  | { kind: 'logpick' }
   | null;
 
 export interface MyPlanContextValue {

@@ -5,7 +5,7 @@
 
 import React, { useMemo, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { CheckCircle2, Clock, Lock, Mic, Plus, Trophy, WifiOff } from 'lucide-react';
+import { CheckCircle2, Clock, Lock, Mic, Plus, Square, Trophy, WifiOff } from 'lucide-react';
 import { PipelineStage } from '../../../types/crm';
 import { ActionPoint, HowType, InterestLevel, PlanSlot, SimpleResult, SlotTask, TaskOutcome, UpsellResult } from '../types';
 import { durationFor, HOW_LABEL, HOW_SHORT, isMessage, TASK_BY_ID } from '../engine/tasks';
@@ -125,21 +125,52 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
 
   const setOutcome = (taskId: string, outcome: TaskOutcome) => setTasks(ts => ts.map(t => (t.taskId === taskId ? { ...t, outcome } : t)));
 
+  // Speak a note: keeps listening until you tap Stop (or pause for a while),
+  // showing the words as they come. Works in Chrome and Safari.
+  const recRef = React.useRef<any>(null);
+  const [heard, setHeard] = useState('');
   const listen = () => {
+    if (listening) {
+      recRef.current?.stop();
+      return;
+    }
     const SR = (window as unknown as { webkitSpeechRecognition?: any; SpeechRecognition?: any }).SpeechRecognition ??
       (window as unknown as { webkitSpeechRecognition?: any }).webkitSpeechRecognition;
     if (!SR) {
-      alertless('Voice notes need Chrome or Safari. You can type instead.');
+      alertless('Voice notes need Chrome or Safari. You can type instead, or use the microphone on your phone keyboard.');
       return;
     }
     const rec = new SR();
     rec.lang = 'en-US';
-    rec.interimResults = false;
-    rec.onresult = (e: any) => setNote(n => `${n ? `${n} ` : ''}${e.results[0][0].transcript}`);
-    rec.onend = () => setListening(false);
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = (e: any) => {
+      let finalText = '';
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t;
+        else interim += t;
+      }
+      if (finalText.trim()) {
+        const clean = finalText.trim();
+        setNote(n => `${n ? `${n.replace(/\s+$/, '')} ` : ''}${clean.charAt(0).toUpperCase()}${clean.slice(1)}${/[.?!]$/.test(clean) ? '' : '.'}`);
+      }
+      setHeard(interim);
+    };
+    rec.onerror = (e: any) => {
+      if (e.error === 'not-allowed') alertless('The microphone is blocked for this app. Allow it in your browser settings, or type instead.');
+    };
+    rec.onend = () => {
+      setListening(false);
+      setHeard('');
+      recRef.current = null;
+    };
+    recRef.current = rec;
     setListening(true);
     rec.start();
   };
+  React.useEffect(() => () => recRef.current?.stop(), []);
 
   const keyfetchQty = tasks.map(t => t.outcome).find(o => o?.kind === 'keyfetch' && o.needsRefill) as Extract<TaskOutcome, { kind: 'keyfetch' }> | undefined;
   const missingQty = keyfetchQty && !(keyfetchQty.quantity && keyfetchQty.quantity > 0);
@@ -450,8 +481,8 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
         <Card className="p-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-[17px] font-bold text-slate-900">Notes (optional)</span>
-            <Button variant="secondary" onClick={listen} icon={<Mic className="h-5 w-5" />} disabled={listening}>
-              {listening ? 'Listening…' : 'Speak'}
+            <Button variant={listening ? 'primary' : 'secondary'} onClick={listen} icon={listening ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />} aria-pressed={listening}>
+              {listening ? 'Stop' : 'Speak'}
             </Button>
           </div>
           <textarea
@@ -460,6 +491,12 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
             value={note}
             onChange={e => setNote(e.target.value)}
           />
+          {listening && (
+            <div className="mt-2 flex items-center gap-2 text-[15px] text-slate-600" role="status">
+              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-rose-600" />
+              {heard ? <span className="italic">{heard}…</span> : 'Listening. Say what happened, who you saw and what happens next.'}
+            </div>
+          )}
         </Card>
 
         {showNext && (

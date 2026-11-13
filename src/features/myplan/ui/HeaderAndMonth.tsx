@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, CircleHelp, Eye, Inbox, ListTodo, Plus, Settings, Star, WifiOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClipboardCheck, CircleHelp, Eye, Inbox, ListTodo, Plus, Settings, Star, WifiOff } from 'lucide-react';
 import { User } from '../../../types/crm';
 import { addDays, formatDayLong, parseISODate, startOfWeek, toISODate, weekDates } from '../engine/time';
 import { isScheduled } from '../engine/schedule';
@@ -131,6 +131,13 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
         <Button variant={date === today ? 'ghost' : 'soft'} onClick={() => setDate(today)}>
           Today
         </Button>
+        {view === 'day' && !readOnly && date === today && viewUser.id === user.id && (
+          <span className="hidden sm:block">
+            <Button variant="secondary" onClick={() => openSheet({ kind: 'logpick' })} icon={<ClipboardCheck className="h-5 w-5" />}>
+              Log a visit
+            </Button>
+          </span>
+        )}
         {view === 'day' && !readOnly && date >= today && (
           <span className="hidden sm:block">
             <Button variant="primary" onClick={() => openSheet({ kind: 'add', preset: { date, nonce: Date.now() } })} icon={<Plus className="h-5 w-5" />}>

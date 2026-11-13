@@ -17,7 +17,8 @@ import {
   Send,
   Timer,
   Video,
-  X
+  X,
+  ClipboardCheck
 } from 'lucide-react';
 import { PlanSlot } from '../types';
 import { DayLayout, dragIntent, holdRestOfDay, layoutDay, nudgedTime, replanPreview } from '../engine/schedule';
@@ -366,7 +367,16 @@ export const DayView: React.FC = () => {
       )}
 
       {editable && (
-        <div className="fixed bottom-4 right-4 z-40 md:hidden">
+        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-3 md:hidden">
+          {date === ctx.today && viewUser.id === ctx.user.id && (
+            <button
+              type="button"
+              onClick={() => openSheet({ kind: 'logpick' })}
+              className="flex h-14 items-center gap-2 rounded-full border border-slate-200 bg-white px-5 text-[16px] font-bold text-slate-900 shadow-xl active:scale-95"
+            >
+              <ClipboardCheck className="h-5 w-5 text-blue-600" /> Log a visit
+            </button>
+          )}
           <button
             type="button"
             aria-label="Add to my plan"
