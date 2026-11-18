@@ -37,7 +37,7 @@ export const QuickViewSheet: React.FC<{ dealershipId?: string; groupId?: string;
   const address = d ? [d.address, d.city, `${d.state} ${d.zipCode}`].filter(Boolean).join(', ') : g ? [g.hqAddress, g.hqCity, g.hqState].filter(Boolean).join(', ') : '';
 
   return (
-    <Sheet title={d ? d.dealershipName : g!.name} onClose={onClose} summary={d ? `${d.city}, ${d.state}` : `Dealer group · ${rooftops.length} rooftops`}>
+    <Sheet title={d ? d.dealershipName : g!.name} onClose={onClose} closeOnOutside summary={d ? `${d.city}, ${d.state}` : `Dealer group · ${rooftops.length} rooftops`}>
       <div className="space-y-4">
         <Card className="space-y-2 p-4">
           <div className="flex flex-wrap items-center gap-2">

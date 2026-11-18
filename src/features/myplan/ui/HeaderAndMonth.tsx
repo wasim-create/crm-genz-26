@@ -184,7 +184,7 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
               }
               setView(v);
             }}
-            className={`min-h-[48px] cursor-pointer rounded-xl text-[16px] font-bold transition md:min-h-[40px] md:px-6 md:text-[15px] ${view === v ? 'bg-white text-slate-900 shadow' : 'text-slate-600 hover:text-slate-900'}`}
+            className={`min-h-[48px] cursor-pointer rounded-xl text-[16px] font-bold transition md:min-h-[44px] md:px-6 md:text-[15px] ${view === v ? 'bg-white text-slate-900 shadow' : 'text-slate-600 hover:text-slate-900'}`}
           >
             {v === 'week' ? (
               <>
@@ -259,15 +259,15 @@ export const MonthView: React.FC = () => {
           </Card>
         ))}
       </div>
-      <Card className="p-2 sm:p-3">
-        <div className="grid grid-cols-7 gap-1 text-center text-[13px] font-semibold text-slate-500">
+      <Card className="p-1 sm:p-3">
+        <div className="grid grid-cols-7 gap-0.5 text-center sm:gap-1 text-[13px] font-semibold text-slate-500">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(x => (
             <div key={x} className="py-1">
               {x}
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
           {cells.map(c => {
             const inMonth = c.startsWith(monthKey);
             const items = daySlots(c).filter(isScheduled);

@@ -228,7 +228,7 @@ const MiniCard: React.FC<{ slot: PlanSlot; time?: number; disabled?: boolean; ov
         <button
           type="button"
           onClick={() => openSheet(done || slot.status === 'skipped' ? { kind: 'outcome', slotId: slot.id } : { kind: 'edit', slotId: slot.id })}
-          className="min-w-0 flex-1 text-left"
+          className="min-h-[44px] min-w-0 flex-1 text-left"
         >
           <div className="flex flex-wrap items-center gap-x-1.5 text-[13px] font-semibold text-slate-500">
             <Icon className="h-4 w-4" />
@@ -247,7 +247,7 @@ const MiniCard: React.FC<{ slot: PlanSlot; time?: number; disabled?: boolean; ov
           <button
             type="button"
             aria-label={`Drag ${slot.target.name}`}
-            className="flex h-9 w-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
+            className="flex h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
             ref={sortable.setActivatorNodeRef}
             {...sortable.attributes}
             {...sortable.listeners}

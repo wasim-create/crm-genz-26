@@ -348,7 +348,7 @@ export const BlockSheet: React.FC<{ date?: string; slotId?: string; past?: boole
               </>
             )}
           </div>
-          <label className="flex items-center gap-2 text-[15px] text-slate-700">
+          <label className="flex min-h-[44px] cursor-pointer items-center gap-2 text-[15px] text-slate-700">
             <input type="checkbox" className="h-5 w-5 accent-blue-600" checked={allDay} onChange={e => setAllDay(e.target.checked)} /> All day (no visits planned that day)
           </label>
 
@@ -394,12 +394,12 @@ export const BlockSheet: React.FC<{ date?: string; slotId?: string; past?: boole
 
           {!existing && !happened && (
             <div className="space-y-2">
-              <label className="flex items-center gap-2 text-[15px] text-slate-700">
+              <label className="flex min-h-[44px] cursor-pointer items-center gap-2 text-[15px] text-slate-700">
                 <input type="checkbox" className="h-5 w-5 accent-blue-600" checked={repeat} onChange={e => setRepeat(e.target.checked)} />
                 <Repeat className="h-4 w-4 text-slate-500" /> Repeats every week (next {REPEAT_WEEKS} weeks)
               </label>
               {!isPersonal && (
-                <label className="flex items-center gap-2 text-[15px] text-slate-700">
+                <label className="flex min-h-[44px] cursor-pointer items-center gap-2 text-[15px] text-slate-700">
                   <input type="checkbox" className="h-5 w-5 accent-blue-600" checked={toCalendar} onChange={e => setToCalendar(e.target.checked)} /> Add it to my Google Calendar too
                 </label>
               )}

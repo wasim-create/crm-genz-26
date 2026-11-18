@@ -104,11 +104,11 @@ export const WorthALook: React.FC<{
                 </div>
                 <div className="flex gap-1.5">
                   {deal(n.linkedDealershipId) && (
-                    <Btn size="sm" onClick={() => onOpenDealership(deal(n.linkedDealershipId)!)}>
+                    <Btn className="min-h-[44px]" onClick={() => onOpenDealership(deal(n.linkedDealershipId)!)}>
                       Open {deal(n.linkedDealershipId)!.dealershipName}
                     </Btn>
                   )}
-                  <Btn size="sm" icon={<Check className="h-4 w-4" />} onClick={() => onAckNudge(n)}>
+                  <Btn className="min-h-[44px]" icon={<Check className="h-4 w-4" />} onClick={() => onAckNudge(n)}>
                     Got it
                   </Btn>
                 </div>
@@ -132,12 +132,12 @@ export const WorthALook: React.FC<{
                     {f.detail && f.id !== 'assist_waiting' && <div className="text-[13px] text-slate-500">{f.detail}</div>}
                   </div>
                   {first && f.id === 'no_next' && (
-                    <Btn size="sm" onClick={() => onPlanNext(first)}>
+                    <Btn className="min-h-[44px]" onClick={() => onPlanNext(first)}>
                       Plan {deals.length > 1 ? 'the first one' : 'it'}
                     </Btn>
                   )}
                   {first && f.id !== 'no_next' && (
-                    <Btn size="sm" onClick={() => onOpenDealership(first)}>
+                    <Btn className="min-h-[44px]" onClick={() => onOpenDealership(first)}>
                       Open {first.dealershipName}
                     </Btn>
                   )}

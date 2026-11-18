@@ -122,14 +122,16 @@ export const TodoSheet: React.FC<{ onClose: () => void; dealershipId?: string }>
             <Card className="divide-y divide-slate-100">
               {g.items.map(a => (
                 <div key={a.id} className="flex min-h-[60px] items-center gap-3 px-4 py-3">
-                  <input
-                    type="checkbox"
-                    aria-label={`Done: ${a.title}`}
-                    className="h-6 w-6 accent-emerald-600"
-                    checked={a.done}
-                    disabled={readOnly}
-                    onChange={e => updateActionPoint(a.id, { done: e.target.checked, doneAt: e.target.checked ? new Date().toISOString() : undefined }, e.target.checked ? 'Ticked off' : 'Re-opened')}
-                  />
+                  <label className="-m-2.5 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg hover:bg-slate-100">
+                    <input
+                      type="checkbox"
+                      aria-label={`Done: ${a.title}`}
+                      className="h-6 w-6 cursor-pointer accent-emerald-600"
+                      checked={a.done}
+                      disabled={readOnly}
+                      onChange={e => updateActionPoint(a.id, { done: e.target.checked, doneAt: e.target.checked ? new Date().toISOString() : undefined }, e.target.checked ? 'Ticked off' : 'Re-opened')}
+                    />
+                  </label>
                   <div className="min-w-0 flex-1">
                     <div className={`text-[16px] ${a.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{a.title}</div>
                     <div className="text-[13px] text-slate-500">
@@ -219,7 +221,7 @@ const GoogleTasksDemo: React.FC = () => {
 export const BasketSheet: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { basket, openSheet, readOnly, setView } = useMyPlan();
   return (
-    <Sheet title="Plan-later basket" onClose={onClose} summary={`${basket.length} waiting`}>
+    <Sheet title="Plan-later basket" onClose={onClose} closeOnOutside summary={`${basket.length} waiting`}>
       <p className="mb-4 text-[16px] text-slate-600">Dealerships you want to contact soon. Put each one on a day, or plan them all at once in “Plan my week”.</p>
       <Button
         variant="soft"
