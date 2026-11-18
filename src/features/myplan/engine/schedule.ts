@@ -167,7 +167,8 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
       // A time the rep chose is respected (even outside 10–4, with a gentle
       // note below); we only complain if they can't physically make it.
       const fixed = toMin(slot.fixedTime);
-      if (reachable > fixed + 2) {
+      // Something already logged as done happened when it happened: nothing to warn about.
+      if (reachable > fixed + 2 && slot.status !== 'done') {
         const late = reachable - fixed;
         warnings.push({
           code: 'late_for_fixed',

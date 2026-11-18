@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarClock, CheckCircle2, ChevronDown, ChevronUp, GripVertical, Lock, MinusCircle, Pencil, Star, UserRound } from 'lucide-react';
+import { Building2, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, GripVertical, Lock, MinusCircle, Pencil, Star, UserRound } from 'lucide-react';
 import { PlanSlot } from '../types';
 import { distanceBand, milesBetween } from '../engine/geo';
 import { estimatePoints } from '../services/writeback';
@@ -10,6 +10,7 @@ import { ZONE_SHORT } from '../engine/timezones';
 import { format12h } from '../engine/time';
 import { Clock3, Info } from 'lucide-react';
 import { NextStepLine } from './NextStepLine';
+import { BLOCK_LABEL } from './BlockSheets';
 
 export interface SlotCardProps {
   slot: PlanSlot;
@@ -51,7 +52,8 @@ export const SlotCard: React.FC<SlotCardProps> = ({
   const done = slot.status === 'done';
   const skipped = slot.status === 'skipped';
   const tasks = taskSummary(slot, catalog);
-  const points = done ? slot.pointsAwarded : estimatePoints(slot, gameRules);
+  // Meetings and time blocks the rep adds don't earn points.
+  const points = slot.blockType ? 0 : done ? slot.pointsAwarded : estimatePoints(slot, gameRules);
   const showArrows = !readOnly && !done && !skipped && (onMoveUp || onMoveDown);
   const open = onOpen ?? (() => openSheet(done || skipped ? { kind: 'outcome', slotId: slot.id } : { kind: 'edit', slotId: slot.id }));
 
@@ -99,7 +101,23 @@ export const SlotCard: React.FC<SlotCardProps> = ({
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[15px]">
             {slot.target.kind !== 'block' && <WorkChip workType={slot.workType} />}
-            {slot.target.kind === 'block' && slot.target.id.startsWith('blk_personal') ? <span className="text-slate-600">Personal · busy</span> : <HowLabel how={slot.how} />}
+            {slot.blockType ? (
+              <span className="text-slate-600">
+                {BLOCK_LABEL[slot.blockType]}
+                {slot.blockType !== 'personal' && ` · ${slot.how === 'meet' ? 'Online' : slot.how === 'phone' ? 'Phone' : 'In person'}`}
+                {slot.allDay && ' · All day'}
+                {slot.target.address && ` · ${slot.target.address}`}
+              </span>
+            ) : slot.target.kind === 'block' && slot.target.id.startsWith('blk_personal') ? (
+              <span className="text-slate-600">Personal · busy</span>
+            ) : (
+              <HowLabel how={slot.how} />
+            )}
+            {slot.relatedDealershipName && (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-0.5 text-[14px] font-medium text-slate-700">
+                <Building2 className="h-3.5 w-3.5" /> {slot.relatedDealershipName}
+              </span>
+            )}
             {slot.how === 'in_person' && band && miles !== undefined && <BandChip band={band} miles={miles} />}
           </div>
 

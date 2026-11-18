@@ -21,7 +21,7 @@ import { newId } from './slotHelpers';
 // ---------- To do (action points) ----------
 
 export const TodoSheet: React.FC<{ onClose: () => void; dealershipId?: string }> = ({ onClose, dealershipId }) => {
-  const { viewUser, today, readOnly, dealerships } = useMyPlan();
+  const { viewUser, today, readOnly, dealerships, openSheet } = useMyPlan();
   const state = useMyPlanState();
   const [title, setTitle] = useState('');
   const [due, setDue] = useState(today);
@@ -89,9 +89,14 @@ export const TodoSheet: React.FC<{ onClose: () => void; dealershipId?: string }>
               </select>
             </label>
           </div>
-          <Button variant="primary" disabled={!title.trim()} onClick={add} icon={<Plus className="h-5 w-5" />}>
-            Add
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="primary" disabled={!title.trim()} onClick={add} icon={<Plus className="h-5 w-5" />}>
+              Add
+            </Button>
+            <Button variant="ghost" onClick={() => openSheet({ kind: 'block', date: due || today, title: title.trim() || undefined, blockType: 'focus' })}>
+              Block time for it instead
+            </Button>
+          </div>
         </Card>
       )}
 

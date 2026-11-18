@@ -187,7 +187,7 @@ export const WeekView: React.FC = () => {
                       </div>
                     </SortableContext>
                     {!readOnly && !past && (
-                      <Button variant="ghost" className="mt-2" icon={<Plus className="h-4 w-4" />} onClick={() => openSheet({ kind: 'add', preset: { date: d, nonce: Date.now() } })}>
+                      <Button variant="ghost" className="mt-2" icon={<Plus className="h-4 w-4" />} onClick={() => openSheet({ kind: 'addchoose', date: d })}>
                         Add
                       </Button>
                     )}
