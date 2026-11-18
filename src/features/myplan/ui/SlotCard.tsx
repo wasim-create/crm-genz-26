@@ -52,8 +52,8 @@ export const SlotCard: React.FC<SlotCardProps> = ({
   const done = slot.status === 'done';
   const skipped = slot.status === 'skipped';
   const tasks = taskSummary(slot, catalog);
-  // Meetings and time blocks the rep adds don't earn points.
-  const points = slot.blockType ? 0 : done ? slot.pointsAwarded : estimatePoints(slot, gameRules);
+  // Meetings and time blocks (added here or from the calendar) don't earn points.
+  const points = slot.target.kind === 'block' ? 0 : done ? slot.pointsAwarded : estimatePoints(slot, gameRules);
   const showArrows = !readOnly && !done && !skipped && (onMoveUp || onMoveDown);
   const open = onOpen ?? (() => openSheet(done || skipped ? { kind: 'outcome', slotId: slot.id } : { kind: 'edit', slotId: slot.id }));
 

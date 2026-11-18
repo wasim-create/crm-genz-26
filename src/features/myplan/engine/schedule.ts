@@ -82,6 +82,20 @@ const takesTime = (s: PlanSlot): boolean => !isMessage(s.how);
 
 const byOrder = (a: PlanSlot, b: PlanSlot) => a.orderIndex - b.orderIndex || a.createdAt.localeCompare(b.createdAt);
 
+/**
+ * The "late" message, worded for what the item is: a visit you can't reach in
+ * time, a stop held at its old time after checking in late, or a call / Meet /
+ * meeting that overlaps whatever comes before it.
+ */
+function lateMessage(slot: PlanSlot, fixed: number, reachable: number, late: number, before: string, isVisit: boolean): string {
+  if (slot.autoPinned && !slot.locked) {
+    return `Running behind: ${slot.target.name} was planned for ${format12h(fixed)}. At this pace it starts around ${format12h(reachable)} (about ${late} min late).`;
+  }
+  if (isVisit) return `You can't reach ${slot.target.name} by ${format12h(fixed)} — about ${late} min late.`;
+  const what = slot.how === 'phone' ? 'call' : slot.how === 'meet' ? 'Google Meet' : 'meeting';
+  return `${slot.target.name} (${what}, ${format12h(fixed)}) overlaps ${before || 'what comes before it'}, which runs until ${format12h(reachable)} — about ${late} min.`;
+}
+
 /** Lay out one day's slots: real start/end times, travel rows, lunch, leave-by, warnings. */
 export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
   const s = ctx.settings;
@@ -107,43 +121,71 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
   let homeAt: number | undefined;
 
   const lastInPersonIdx = sequence.map(x => x.how === 'in_person' && x.target.kind !== 'block').lastIndexOf(true);
+  // After the last visit the rep drives home. Calls and Meets booked for a set
+  // time can be taken where they are first (parked up), so the drive waits.
+  let homePending = false;
+  let lastName = '';
+  const driveHome = () => {
+    const homeMiles = milesBetween(location, ctx.home);
+    const homeDrive = estimateDriveMinutes(homeMiles);
+    cursor += homeDrive;
+    homeAt = cursor;
+    driveMin += homeDrive;
+    rows.push({ kind: 'home', minutes: homeDrive, miles: homeMiles, at: cursor });
+    location = ctx.home;
+    homePending = false;
+    lastName = 'your drive home';
+  };
 
   sequence.forEach((slot, i) => {
     const isVisit = slot.how === 'in_person' && slot.target.kind !== 'block';
     const live = isLive(slot.how) && slot.target.kind !== 'block';
+    // Calls, Meets and online / phone meetings: no need to be anywhere in particular.
+    const remote = slot.how !== 'in_person';
+    const holdsTime = slot.locked || slot.autoPinned;
+    const fixedAt = (holdsTime || slot.timeMode === 'exact') && slot.fixedTime && slot.status === 'planned' ? toMin(slot.fixedTime) : undefined;
 
-    // Lunch. Flexible: taken in the first free moment from the preferred
-    // time (± 1 hour). Fixed: taken at its time, before anything that would
-    // run into it.
-    if (!lunchTaken && i > 0) {
-      const wouldEnd = cursor + slot.durationMin + 10;
-      if (lunchFlexible) {
-        if (cursor >= lunchAt - 15 && cursor <= lunchAt + LUNCH_WINDOW) {
-          rows.push({ kind: 'lunch', start: cursor, end: cursor + lunchLen });
-          cursor += lunchLen;
-          lunchTaken = true;
-        }
-      } else if (wouldEnd > lunchAt || cursor >= lunchAt) {
-        const ls = Math.max(cursor, lunchAt);
-        rows.push({ kind: 'lunch', start: ls, end: ls + lunchLen });
-        cursor = ls + lunchLen;
-        lunchTaken = true;
-      }
+    if (homePending) {
+      const homeArrival = cursor + estimateDriveMinutes(milesBetween(location, ctx.home));
+      if (!(remote && fixedAt !== undefined && fixedAt < homeArrival)) driveHome();
     }
 
     // Travel (visits only): drive from the previous visit or from home, plus parking.
     let travel = 0;
     let miles = 0;
+    const fromHome = location === ctx.home;
     if (isVisit) {
-      const fromHome = location === ctx.home;
       if (slot.target.coords) {
         miles = milesBetween(location, slot.target.coords);
         travel = estimateDriveMinutes(miles) + s.parkingMin;
       } else {
         travel = UNKNOWN_DRIVE_MIN + s.parkingMin;
       }
-      rows.push({ kind: 'travel', toSlotId: slot.id, minutes: travel, miles, fromHome });
     }
+
+    // Lunch. Flexible: taken in the first free moment from the preferred
+    // time (± 1 hour), but never where it would make a set time late.
+    // Fixed: taken at its time, before anything that would run into it.
+    if (!lunchTaken && i > 0) {
+      const wouldEnd = cursor + slot.durationMin + 10;
+      if (lunchFlexible) {
+        const makesLate = fixedAt !== undefined && cursor + lunchLen + travel > fixedAt + 2;
+        if (cursor >= lunchAt - 15 && cursor <= lunchAt + LUNCH_WINDOW && !makesLate) {
+          rows.push({ kind: 'lunch', start: cursor, end: cursor + lunchLen });
+          cursor += lunchLen;
+          lunchTaken = true;
+          lastName = 'lunch';
+        }
+      } else if (wouldEnd > lunchAt || cursor >= lunchAt) {
+        const ls = Math.max(cursor, lunchAt);
+        rows.push({ kind: 'lunch', start: ls, end: ls + lunchLen });
+        cursor = ls + lunchLen;
+        lunchTaken = true;
+        lastName = 'lunch';
+      }
+    }
+
+    if (isVisit) rows.push({ kind: 'travel', toSlotId: slot.id, minutes: travel, miles, fromHome });
 
     // The dealership may be in another time zone: 10–4 is THEIR time.
     const tz = ctx.tzDiff ? ctx.tzDiff(slot) : 0;
@@ -157,7 +199,6 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
     if (slot.timeMode === 'afternoon') earliest = Math.max(earliest, AFTERNOON_START);
 
     let start = earliest;
-    const holdsTime = slot.locked || slot.autoPinned;
     const pinned = (holdsTime || slot.timeMode === 'exact') && slot.fixedTime;
     const actualStart = slot.checkInAt && (slot.status === 'in_progress' || slot.status === 'done') ? isoToLocalMin(slot.checkInAt) : undefined;
     if (actualStart !== undefined) {
@@ -167,14 +208,12 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
       // A time the rep chose is respected (even outside 10–4, with a gentle
       // note below); we only complain if they can't physically make it.
       const fixed = toMin(slot.fixedTime);
+      // The first thing of the day: the rep just starts (or leaves) earlier than usual.
+      const firstOfDay = i === 0;
       // Something already logged as done happened when it happened: nothing to warn about.
-      if (reachable > fixed + 2 && slot.status !== 'done') {
+      if (!firstOfDay && reachable > fixed + 2 && slot.status !== 'done') {
         const late = reachable - fixed;
-        warnings.push({
-          code: 'late_for_fixed',
-          slotId: slot.id,
-          message: `You can't reach ${slot.target.name} by ${format12h(fixed)} — about ${late} min late.`
-        });
+        warnings.push({ code: 'late_for_fixed', slotId: slot.id, message: lateMessage(slot, fixed, reachable, late, lastName, isVisit) });
         start = holdsTime ? fixed : reachable;
       } else {
         start = fixed;
@@ -227,18 +266,12 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
     cursor = end;
 
     if (isVisit) location = slot.target.coords ?? location;
+    lastName = slot.target.name;
 
-    // Drive home straight after the last visit of the day.
-    if (i === lastInPersonIdx) {
-      const homeMiles = milesBetween(location, ctx.home);
-      const homeDrive = estimateDriveMinutes(homeMiles);
-      cursor += homeDrive;
-      homeAt = cursor;
-      driveMin += homeDrive;
-      rows.push({ kind: 'home', minutes: homeDrive, miles: homeMiles, at: cursor });
-      location = ctx.home;
-    }
+    // Drive home after the last visit of the day (after any set-time calls taken on the spot).
+    if (i === lastInPersonIdx) homePending = true;
   });
+  if (homePending) driveHome();
 
   const messages = messageSlots
     .map(m => ({ slotId: m.id, sendTime: toMin(m.sendTime ?? '10:30') }))
@@ -500,11 +533,18 @@ export interface ReplanChange {
 export function replanPreview(daySlots: PlanSlot[], ctx: LayoutContext): { slots: PlanSlot[]; changes: ReplanChange[] } {
   const current = layoutDay(daySlots, ctx);
   const late = new Set(current.warnings.filter(w => w.code === 'late_for_fixed').map(w => w.slotId));
-  const freed = daySlots.map(x =>
-    x.status === 'planned' && !x.locked && (x.autoPinned || (x.timeMode === 'exact' && late.has(x.id)))
-      ? { ...x, timeMode: 'flow' as const, fixedTime: undefined, autoPinned: false }
-      : x
-  );
+  // A call or Meet the rep set with a dealer is an appointment: re-planning
+  // moves the things around it, never the appointment itself.
+  const bookedWithDealer = (x: PlanSlot) => x.timeMode === 'exact' && !x.autoPinned && x.how !== 'in_person' && x.target.kind !== 'block';
+  const canFree = (x: PlanSlot) => x.status === 'planned' && !x.locked && !bookedWithDealer(x) && (x.autoPinned || (x.timeMode === 'exact' && late.has(x.id)));
+  const release = (keep: (x: PlanSlot) => boolean) =>
+    daySlots.map(x => (canFree(x) && keep(x) ? { ...x, timeMode: 'flow' as const, fixedTime: undefined, autoPinned: false } : x));
+  // Try letting every held time flow, then keep only the ones that help:
+  // late ones, and held ones that could now happen earlier. Moving a stop
+  // that's on time to later isn't a re-plan, it's a nuisance.
+  const trial = layoutDay(release(() => true), ctx);
+  const helps = (x: PlanSlot) => late.has(x.id) || (trial.timings[x.id]?.start ?? Infinity) < (current.timings[x.id]?.start ?? -Infinity) - 4;
+  const freed = release(helps);
   const next = layoutDay(freed, ctx);
   const changes: ReplanChange[] = [];
   for (const id of next.sequence) {

@@ -469,7 +469,9 @@ const DaySummary: React.FC<{ layout: DayLayout; slots: PlanSlot[] }> = ({ layout
   const { date, today, readOnly, openSheet, basket } = useMyPlan();
   const scheduled = slots.filter(s => s.status !== 'skipped');
   const visits = scheduled.filter(s => s.how === 'in_person' && s.target.kind !== 'block').length;
-  const calls = scheduled.filter(s => s.how === 'phone' || s.how === 'meet').length;
+  const calls = scheduled.filter(s => (s.how === 'phone' || s.how === 'meet') && s.target.kind !== 'block').length;
+  // Team calls, training and other meetings are counted as meetings, not dealer calls. Personal time isn't counted.
+  const meetings = scheduled.filter(s => s.target.kind === 'block' && s.blockType !== 'personal' && !s.target.id.startsWith('blk_personal')).length;
   const msgs = scheduled.filter(s => s.how === 'email' || s.how === 'text').length;
   const isPast = date < today;
   const f = FULLNESS_TEXT[layout.fullness];
@@ -504,6 +506,7 @@ const DaySummary: React.FC<{ layout: DayLayout; slots: PlanSlot[] }> = ({ layout
   const parts = [
     visits ? `${visits} visit${visits === 1 ? '' : 's'}` : '',
     calls ? `${calls} call${calls === 1 ? '' : 's'} / Meet${calls === 1 ? '' : 's'}` : '',
+    meetings ? `${meetings} meeting${meetings === 1 ? '' : 's'}` : '',
     msgs ? `${msgs} email${msgs === 1 ? '' : 's'} / text${msgs === 1 ? '' : 's'}` : ''
   ].filter(Boolean);
 
@@ -619,9 +622,9 @@ const StillToLog: React.FC<{ slots: PlanSlot[]; layout: DayLayout }> = ({ slots,
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" className="!px-3" onClick={() => openSheet({ kind: 'outcome', slotId: s.id })}>
-                  {s.blockType ? 'Log it' : 'How did it go?'}
+                  {s.target.kind === 'block' ? 'Log it' : 'How did it go?'}
                 </Button>
-                {!s.blockType && (
+                {s.target.kind !== 'block' && (
                   <Button variant="ghost" className="!px-3" onClick={() => openSheet({ kind: 'move', slotId: s.id })}>
                     Didn't happen
                   </Button>
@@ -686,7 +689,38 @@ const NextCard: React.FC<{ target?: PlanSlot; layout: DayLayout }> = ({ target, 
   };
 
   let actions: React.ReactNode;
-  if (target.how === 'in_person') {
+  if (target.target.kind === 'block') {
+    // Meetings, training and personal time: no driving, check-in or dialling as if it were a dealership.
+    const where = target.target.address;
+    actions = (
+      <>
+        {target.how === 'meet' && target.meetUrl && (
+          <a
+            href={target.meetUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[17px] font-semibold text-onaccent shadow-sm hover:bg-brand-hover"
+          >
+            <Video className="h-5 w-5" /> Join meeting
+          </a>
+        )}
+        {target.how === 'in_person' && where && (
+          <a
+            href={mapsUrl(target)}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-6 text-[17px] font-semibold text-slate-800 hover:bg-slate-50"
+          >
+            <MapPin className="h-5 w-5" /> Directions
+          </a>
+        )}
+        <Button variant={target.how === 'meet' && target.meetUrl ? 'secondary' : 'primary'} size="lg" onClick={() => openSheet({ kind: 'outcome', slotId: target.id })} icon={<CheckCircle2 className="h-5 w-5" />}>
+          Log it
+        </Button>
+        {target.how === 'meet' && !target.meetUrl && <p className="self-center text-[15px] text-slate-600">Join from the link in your calendar invite.</p>}
+      </>
+    );
+  } else if (target.how === 'in_person') {
     actions =
       target.status === 'in_progress' ? (
         <>
@@ -734,12 +768,12 @@ const NextCard: React.FC<{ target?: PlanSlot; layout: DayLayout }> = ({ target, 
     actions = (
       <>
         <a
-          href="https://meet.google.com/new"
+          href={target.meetUrl ?? 'https://meet.google.com/new'}
           target="_blank"
           rel="noreferrer"
           className="inline-flex min-h-[56px] items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[17px] font-semibold text-onaccent shadow-sm hover:bg-brand-hover"
         >
-          <Video className="h-5 w-5" /> Join meeting
+          <Video className="h-5 w-5" /> {target.meetUrl ? 'Join meeting' : 'Start Google Meet'}
         </a>
         <Button variant="secondary" size="lg" onClick={() => openSheet({ kind: 'outcome', slotId: target.id })}>
           How did it go?
@@ -782,8 +816,8 @@ const NextCard: React.FC<{ target?: PlanSlot; layout: DayLayout }> = ({ target, 
         footer={
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {actions}
-            <Button variant="ghost" onClick={() => openSheet({ kind: 'move', slotId: target.id })}>
-              Can't do it?
+            <Button variant="ghost" onClick={() => openSheet(target.target.kind === 'block' ? { kind: 'edit', slotId: target.id } : { kind: 'move', slotId: target.id })}>
+              {target.target.kind === 'block' ? 'Change or remove' : "Can't do it?"}
             </Button>
           </div>
         }

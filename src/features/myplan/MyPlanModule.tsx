@@ -274,12 +274,12 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
       )}
 
       {sheet?.kind === 'add' && <AddFlow key={sheet.preset?.nonce ?? 'add'} preset={sheet.preset} onClose={close} />}
-      {sheet?.kind === 'edit' && (state.slots.find(s => s.id === sheet.slotId)?.blockType ? <BlockSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} /> : <EditSlotSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />)}
+      {sheet?.kind === 'edit' && (state.slots.find(s => s.id === sheet.slotId)?.target.kind === 'block' ? <BlockSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} /> : <EditSlotSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />)}
       {sheet?.kind === 'addchoose' && <AddChooserSheet date={sheet.date} insertIndex={sheet.insertIndex} onClose={close} />}
       {sheet?.kind === 'block' && <BlockSheet key={`${sheet.slotId ?? 'new'}${sheet.past ? 'p' : ''}`} {...sheet} onClose={close} />}
       {sheet?.kind === 'nextstep' && <NextStepSheet key={sheet.dealershipId} dealershipId={sheet.dealershipId} onClose={close} />}
       {sheet?.kind === 'logpick' && <LogPickerSheet onClose={close} />}
-      {sheet?.kind === 'outcome' && (!sheet.draft && state.slots.find(s => s.id === sheet.slotId)?.blockType ? <BlockSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} /> : <OutcomeSheet key={sheet.slotId} slotId={sheet.slotId} draft={sheet.draft} onClose={close} />)}
+      {sheet?.kind === 'outcome' && (!sheet.draft && state.slots.find(s => s.id === sheet.slotId)?.target.kind === 'block' ? <BlockSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} /> : <OutcomeSheet key={sheet.slotId} slotId={sheet.slotId} draft={sheet.draft} onClose={close} />)}
       {sheet?.kind === 'move' && <MoveSheet key={sheet.slotId} slotId={sheet.slotId} onClose={close} />}
       {sheet?.kind === 'todo' && <TodoSheet onClose={close} />}
       {sheet?.kind === 'basket' && <BasketSheet onClose={close} />}
