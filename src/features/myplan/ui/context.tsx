@@ -97,6 +97,8 @@ export interface MyPlanContextValue {
   onOpenDealership: (d: Dealership) => void;
   /** When a form was opened from another screen: go to the My Plan screen. */
   showPlanPage?: () => void;
+  /** The rep's "Worth a look" card: one line on phones, in full below the day on bigger screens. */
+  banner?: (mode: 'line' | 'full') => React.ReactNode;
 }
 
 export const MyPlanContext = createContext<MyPlanContextValue | null>(null);

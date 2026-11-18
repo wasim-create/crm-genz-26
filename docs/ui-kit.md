@@ -77,3 +77,13 @@ Don't build a second visit form.
 
 - Every general "+ Add" opens "What are you adding?" (`ui/BlockSheets.tsx`): Dealership work (the Add flow), A meeting or time block, A to-do, or Something that already happened. Adding from a dealership still goes straight to the Add flow.
 - Meetings and time blocks are block slots with `blockType` (meeting, training, travel, admin, personal, focus), a fixed time or all day, optional place, people, notes, weekly repeats and an optional dealership. They hold their time on the timeline, earn no points, and only count as dealership contact (an Activity) when linked to a dealership and done.
+
+## Ease-of-use rules (from the My Plan review, stage 1)
+
+- **Today comes first.** "Worth a look" is one tappable line at the top on phones (`mode="line"`) and the full card below the day on bigger screens (`mode="full"`). Week and month show the line.
+- **Date row:** the arrows, date and Today stay on one line; Log a visit and Add drop to the next line when there isn't room. On phones Today only shows once you've moved off today.
+- **Header:** To do and Basket always show their words. Less-used things (How My Plan works, My Plan settings) sit in the ⋯ menu.
+- **No unexplained greyed-out buttons.** The main button stays usable; pressing it with something missing says what, next to the field, and moves the cursor there.
+- **Short messages** (the app's toasts) appear top centre, so they never cover the + button.
+- **Contrast and size:** text at least 12 px and 4.5 : 1 against its background in light and dark. Forms and slide-ins respect the device's reduce-motion setting.
+- **Top bar on phones:** only the initials show for "Viewing as"; the chip is the picker. Nothing in the top bar may make the page wider than a 344-pixel folded phone.

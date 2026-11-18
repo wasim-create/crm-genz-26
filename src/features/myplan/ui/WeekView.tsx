@@ -238,7 +238,7 @@ const MiniCard: React.FC<{ slot: PlanSlot; time?: number; disabled?: boolean; ov
           </div>
           <div className="flex items-center gap-1.5">
             <TargetIcon kind={slot.target.kind} className="h-4 w-4 shrink-0 text-slate-400" />
-            <span className="line-clamp-2 text-[15px] font-bold leading-snug text-slate-900">{slot.target.name}</span>
+            <span className="line-clamp-2 text-[15px] font-bold leading-snug text-slate-900 [overflow-wrap:anywhere]">{slot.target.name}</span>
           </div>
           {slot.basketNote && <div className="mt-0.5 text-[13px] text-slate-500">“{slot.basketNote}”</div>}
           {slot.managerPriorityFrom && <div className="mt-0.5 text-[13px] font-semibold text-rose-700">From {slot.managerPriorityFrom}</div>}

@@ -100,7 +100,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {profile && (
           <button
             type="button"
@@ -108,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex min-h-[40px] cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[14px] font-semibold text-slate-800 transition hover:border-slate-400"
             title={`Level ${profile.level} · ${profile.levelTitle} · ${profile.pointsToday} of ${profile.dailyTarget} points today${profile.activeMultiplier ? ` · ${profile.activeMultiplier.label}` : ''}`}
           >
-            <span className="inline-flex items-center gap-0.5 text-orange-600">
+            <span className="inline-flex items-center gap-0.5 text-orange-700">
               <Flame className="h-4 w-4 fill-orange-500 text-orange-500" />
               {profile.streakDays}
             </span>
@@ -132,7 +132,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           <RefreshCw className={`h-4 w-4 ${syncState.isSyncing ? 'animate-spin text-blue-600' : ''}`} />
         </button>
 
-        <label className="flex min-h-[40px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 pl-1.5 pr-1">
+        {/* On phones only the initials show; the whole chip is the picker (the list opens on tap). */}
+        <label className="relative flex min-h-[40px] min-w-[40px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-1.5 focus-within:ring-2 focus-within:ring-blue-500 sm:justify-start sm:pl-1.5 sm:pr-1" title={`Viewing as ${currentUser.firstName} ${currentUser.lastName}`}>
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-2 text-[12px] font-bold text-onaccent" aria-hidden>
             {currentUser.firstName[0]}
             {currentUser.lastName[0]}
@@ -144,7 +145,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               const u = allUsers.find(x => x.id === e.target.value);
               if (u) onSelectUser(u);
             }}
-            className="max-w-[140px] cursor-pointer bg-transparent py-1 text-[14px] font-semibold text-slate-900 focus:outline-hidden sm:max-w-[280px]"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0 sm:static sm:h-auto sm:w-auto sm:max-w-[280px] sm:bg-transparent sm:py-1 sm:text-[14px] sm:font-semibold sm:text-slate-900 sm:opacity-100 sm:focus:outline-hidden"
             aria-label="Switch Role Persona"
           >
             {groupsList.map(g => (

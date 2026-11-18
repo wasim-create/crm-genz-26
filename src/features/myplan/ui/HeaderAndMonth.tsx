@@ -1,5 +1,5 @@
-import React from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, CircleHelp, Eye, Inbox, ListTodo, Plus, Settings, Star, WifiOff } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, CircleHelp, Eye, Inbox, ListTodo, MoreHorizontal, Plus, Settings, Star, WifiOff } from 'lucide-react';
 import { User } from '../../../types/crm';
 import { addDays, formatDayLong, parseISODate, startOfWeek, toISODate, weekDates } from '../engine/time';
 import { isScheduled } from '../engine/schedule';
@@ -8,8 +8,64 @@ import { Button, Card, WORK_STYLE } from './primitives';
 import { useMyPlan } from './context';
 import { WorkType } from '../types';
 
-export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => void; banner?: React.ReactNode }> = ({ viewers, onViewUser, banner }) => {
-  const { view, setView, date, setDate, today, openSheet, basket, viewUser, user, readOnly } = useMyPlan();
+/** "⋯" menu beside To do and Basket: the less-used things (help, settings). */
+const MoreMenu: React.FC<{ items: { label: string; icon: React.ReactNode; onSelect: () => void }[] }> = ({ items }) => {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => !wrap.current?.contains(e.target as Node) && setOpen(false);
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(false);
+        trigger.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', key, true);
+    wrap.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    return () => {
+      document.removeEventListener('pointerdown', away);
+      document.removeEventListener('keydown', key, true);
+    };
+  }, [open]);
+  const move = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const list = [...(wrap.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])];
+    const i = list.indexOf(document.activeElement as HTMLButtonElement);
+    list[(i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length]?.focus();
+  };
+  return (
+    <div ref={wrap} className="relative">
+      <Button ref={trigger} variant="secondary" aria-label="More" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)} icon={<MoreHorizontal className="h-5 w-5" />} />
+      {open && (
+        <div role="menu" aria-label="More" onKeyDown={move} className="absolute right-0 top-full z-50 mt-2 w-60 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
+          {items.map(it => (
+            <button
+              key={it.label}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                it.onSelect();
+              }}
+              className="flex min-h-[48px] w-full cursor-pointer items-center gap-3 rounded-xl px-3 text-left text-[16px] font-medium text-slate-800 hover:bg-slate-100 focus:bg-slate-100"
+            >
+              <span className="text-slate-500">{it.icon}</span>
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => void }> = ({ viewers, onViewUser }) => {
+  const { view, setView, date, setDate, today, openSheet, basket, viewUser, user, readOnly, banner } = useMyPlan();
   const state = useMyPlanState();
   const offline = state.simulateOffline || !state.online;
   const todo = state.actionPoints.filter(a => a.userId === viewUser.id && !a.done && a.dueDate && a.dueDate <= today).length;
@@ -30,6 +86,18 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
         ? `Week of ${parseISODate(weekDates(date)[0]).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`
         : parseISODate(date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
+  const shortTitle =
+    view === 'day'
+      ? parseISODate(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      : view === 'week'
+        ? (() => {
+            const w = weekDates(date);
+            const a = parseISODate(w[0]);
+            const z = parseISODate(w[w.length - 1]);
+            return `${a.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}–${a.getMonth() === z.getMonth() ? z.getDate() : z.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+          })()
+        : parseISODate(date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
   return (
     <div className="mb-4 space-y-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -37,18 +105,9 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
           <h1 className="flex items-center gap-2.5 text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">
             <CalendarDays className="h-6 w-6 text-blue-600" />
             {readOnly ? `${viewUser.firstName}’s plan` : 'My plan'}
-            <button
-              type="button"
-              aria-label="Help: how My Plan works"
-              title="How My Plan works"
-              onClick={() => openSheet({ kind: 'walkthrough', start: view === 'week' ? 3 : 0 })}
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-blue-700"
-            >
-              <CircleHelp className="h-5 w-5" />
-            </button>
           </h1>
-          <p className="mt-1 max-w-3xl text-[15px] text-slate-600">
-            {readOnly ? 'Read-only. You can suggest a priority for them.' : 'Plan your visits, calls and messages, then log how they went. The CRM updates itself.'}
+          <p className={`mt-1 max-w-3xl text-[15px] text-slate-600 ${readOnly ? '' : 'hidden sm:block'}`}>
+            {readOnly ? 'Read-only. You can suggest a priority for them.' : 'Plan your visits, calls and messages, then log how they went.'}
           </p>
           {offline && (
             <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-ink-2 px-3 py-1 text-[13px] font-semibold text-onaccent">
@@ -75,17 +134,20 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
               </select>
             </label>
           )}
-          <Button variant="secondary" aria-label="To do" onClick={() => openSheet({ kind: 'todo' })} icon={<ListTodo className="h-5 w-5" />}>
-            <span className="hidden sm:inline">To do</span>{todo ? <span className="ml-1 rounded-full bg-danger px-2 text-[13px] text-onaccent">{todo}</span> : null}
+          <Button variant="secondary" aria-label={`To do, ${todo} due`} onClick={() => openSheet({ kind: 'todo' })} icon={<ListTodo className="h-5 w-5" />}>
+            To do{todo ? <span className="ml-1 rounded-full bg-danger px-2 text-[13px] text-onaccent">{todo}</span> : null}
           </Button>
-          <Button variant="secondary" aria-label="Basket" onClick={() => openSheet({ kind: 'basket' })} icon={<Inbox className="h-5 w-5" />}>
-            <span className="hidden sm:inline">Basket</span> <span className="ml-1 rounded-full bg-slate-100 px-2 text-[13px]">{basket.length}</span>
+          <Button variant="secondary" aria-label={`Plan-later basket, ${basket.length} waiting`} onClick={() => openSheet({ kind: 'basket' })} icon={<Inbox className="h-5 w-5" />}>
+            Basket <span className="ml-1 rounded-full bg-slate-100 px-2 text-[13px]">{basket.length}</span>
           </Button>
-          {!readOnly && <Button variant="ghost" aria-label="My Plan settings" onClick={() => openSheet({ kind: 'settings' })} icon={<Settings className="h-5 w-5" />} />}
+          <MoreMenu
+            items={[
+              { label: 'How My Plan works', icon: <CircleHelp className="h-5 w-5" />, onSelect: () => openSheet({ kind: 'walkthrough', start: view === 'week' ? 3 : 0 }) },
+              ...(!readOnly ? [{ label: 'My Plan settings', icon: <Settings className="h-5 w-5" />, onSelect: () => openSheet({ kind: 'settings' }) }] : [])
+            ]}
+          />
         </div>
       </div>
-
-      {banner}
 
       {readOnly && (
         <Card className="flex flex-wrap items-center justify-between gap-3 border-indigo-200 bg-indigo-50 p-3">
@@ -136,36 +198,33 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
         ))}
       </div>
 
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        <Button variant="secondary" aria-label="Previous" onClick={() => shift(-1)} icon={<ChevronLeft className="h-6 w-6" />} />
-        <div className="min-w-0 flex-1 text-center text-[17px] font-bold text-slate-900 sm:text-[19px]">
-          <span className="hidden sm:inline">{title}</span>
-          <span className="whitespace-nowrap text-[15px] sm:hidden">{view === 'day' ? parseISODate(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : view === 'week'
-              ? (() => {
-                  const w = weekDates(date);
-                  const a = parseISODate(w[0]);
-                  const z = parseISODate(w[w.length - 1]);
-                  return `${a.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}–${a.getMonth() === z.getMonth() ? z.getDate() : z.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-                })()
-              : parseISODate(date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
-        </div>
-        <Button variant="secondary" aria-label="Next" onClick={() => shift(1)} icon={<ChevronRight className="h-6 w-6" />} />
-        <Button variant={date === today ? 'ghost' : 'soft'} onClick={() => setDate(today)}>
-          Today
-        </Button>
-        {view === 'day' && !readOnly && date === today && viewUser.id === user.id && (
-          <span className="hidden sm:block">
-            <Button variant="secondary" onClick={() => openSheet({ kind: 'logpick' })} icon={<ClipboardCheck className="h-5 w-5" />}>
-              Log a visit
-            </Button>
-          </span>
-        )}
-        {view === 'day' && !readOnly && date >= today && (
-          <span className="hidden sm:block">
-            <Button variant="primary" onClick={() => openSheet({ kind: 'addchoose', date })} icon={<Plus className="h-5 w-5" />}>
-            <span className="hidden sm:inline">Add</span>
+      {view !== 'day' && !readOnly && banner?.('line')}
+
+      {/* Date and arrows stay together on one line; the action buttons drop to the next line when there isn't room. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:min-w-[24rem] sm:gap-2">
+          <Button variant="secondary" aria-label={view === 'day' ? 'Previous day' : view === 'week' ? 'Previous week' : 'Previous month'} onClick={() => shift(-1)} icon={<ChevronLeft className="h-6 w-6" />} className="w-12 shrink-0 !px-0" />
+          <h2 className="min-w-0 flex-1 truncate whitespace-nowrap text-center text-[17px] font-bold text-slate-900 sm:text-[19px]" aria-live="polite">
+            <span className="hidden sm:inline">{title}</span>
+            <span className="text-[15px] sm:hidden">{shortTitle}</span>
+          </h2>
+          <Button variant="secondary" aria-label={view === 'day' ? 'Next day' : view === 'week' ? 'Next week' : 'Next month'} onClick={() => shift(1)} icon={<ChevronRight className="h-6 w-6" />} className="w-12 shrink-0 !px-0" />
+          {/* On phones, "Today" only shows once you've moved away from today. */}
+          <Button variant={date === today ? 'ghost' : 'soft'} onClick={() => setDate(today)} className={`shrink-0 !px-3 ${date === today ? 'max-sm:!hidden' : ''}`}>
+            Today
           </Button>
-          </span>
+        </div>
+        {view === 'day' && !readOnly && date >= today && (
+          <div className="ml-auto hidden shrink-0 items-center gap-2 sm:flex">
+            {date === today && viewUser.id === user.id && (
+              <Button variant="secondary" onClick={() => openSheet({ kind: 'logpick' })} icon={<ClipboardCheck className="h-5 w-5" />}>
+                Log a visit
+              </Button>
+            )}
+            <Button variant="primary" onClick={() => openSheet({ kind: 'addchoose', date })} icon={<Plus className="h-5 w-5" />}>
+              Add
+            </Button>
+          </div>
         )}
       </div>
     </div>
@@ -224,7 +283,7 @@ export const MonthView: React.FC = () => {
                 }}
                 className={`flex min-h-[76px] flex-col items-start rounded-xl border p-1.5 text-left transition hover:border-blue-400 sm:min-h-[92px] ${
                   c === today ? 'border-blue-600 ring-1 ring-blue-600' : 'border-slate-200'
-                } ${inMonth ? 'bg-white' : 'bg-slate-50 text-slate-400'}`}
+                } ${inMonth ? 'bg-white' : 'bg-slate-50 text-slate-500'}`}
                 aria-label={`${formatDayLong(c)}: ${items.length} items`}
               >
                 <span className={`text-[15px] font-bold ${c < today && inMonth ? 'text-slate-500' : ''}`}>{parseISODate(c).getDate()}</span>
@@ -237,7 +296,7 @@ export const MonthView: React.FC = () => {
                     ) : null
                   )}
                 </div>
-                {trip && <span className="mt-auto rounded bg-rose-100 px-1 text-[11px] font-bold text-rose-800">Trip</span>}
+                {trip && <span className="mt-auto rounded bg-rose-100 px-1 text-[12px] font-bold text-rose-800">Trip</span>}
               </button>
             );
           })}

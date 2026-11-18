@@ -66,8 +66,8 @@ export interface MyPlanModuleProps {
   pageVisible?: boolean;
   /** Go to the My Plan screen (link in the saved message when you're elsewhere). */
   onOpenPlan?: () => void;
-  /** Shown under the page title (e.g. the rep's "Worth a look" card). */
-  banner?: React.ReactNode;
+  /** The rep's "Worth a look" card, drawn as one line ('line') or in full ('full'). */
+  banner?: (mode: 'line' | 'full') => React.ReactNode;
 }
 
 const VIEWER_ROLES = ['manager', 'team_lead', 'owner', 'executive'];
@@ -250,7 +250,8 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
     onSaveProspect: props.onSaveProspect,
     onClaimDealership: props.onClaimDealership,
     onOpenDealership: props.onOpenDealership,
-    showPlanPage: pageVisible ? undefined : props.onOpenPlan
+    showPlanPage: pageVisible ? undefined : props.onOpenPlan,
+    banner: props.banner
   };
 
   const close = () => setSheet(null);
@@ -259,7 +260,7 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
     <MyPlanProvider value={value}>
       {pageVisible && (
       <div className="mx-auto max-w-6xl text-[16px]" style={settings.biggerText ? { zoom: 1.15 } : undefined}>
-        <Header viewers={viewers} onViewUser={setViewUserId} banner={props.banner} />
+        <Header viewers={viewers} onViewUser={setViewUserId} />
         <ReminderBanner />
         {!state.seededOn ? (
           <div className="py-16 text-center text-slate-500">Loading your plan…</div>

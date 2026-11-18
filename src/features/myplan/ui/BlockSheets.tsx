@@ -5,7 +5,7 @@
 //   - Something that already happened
 // The meeting / time block form lives here too, for adding and editing.
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Building2, CalendarClock, CalendarPlus, CheckCircle2, History, ListTodo, Repeat, Trash2, XCircle } from 'lucide-react';
 import type { Activity } from '../../../types/crm';
 import { indexForTime, insertAt } from '../engine/schedule';
@@ -118,6 +118,10 @@ export const BlockSheet: React.FC<{ date?: string; slotId?: string; past?: boole
   const [repeat, setRepeat] = useState(false);
   const [toCalendar, setToCalendar] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The main button stays usable: pressing it with something missing says what, next to the field.
+  const [tried, setTried] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const startRef = useRef<HTMLInputElement>(null);
 
   const mine = dealerships.filter(d => d.assignedRepId === viewUser.id && !d.isPlaceholder).sort((a, b) => a.dealershipName.localeCompare(b.dealershipName));
   const deal = dealerships.find(d => d.id === dealerId);
@@ -203,7 +207,12 @@ export const BlockSheet: React.FC<{ date?: string; slotId?: string; past?: boole
   };
 
   const save = () => {
-    if (!valid) return;
+    if (!valid) {
+      setTried(true);
+      if (!title.trim()) titleRef.current?.focus();
+      else if (!allDay && !start) startRef.current?.focus();
+      return;
+    }
     const id = existing?.id ?? newId('slot');
     const batch = repeat && !existing ? newId('rep') : undefined;
     const first = { ...build(id, date, existing), ...(batch ? { batchId: batch } : {}) };
@@ -254,7 +263,7 @@ export const BlockSheet: React.FC<{ date?: string; slotId?: string; past?: boole
       footer={
         readOnly ? undefined : (
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="primary" size="lg" block onClick={save} disabled={!valid}>
+            <Button variant="primary" size="lg" block onClick={save}>
               {existing ? 'Save changes' : happened ? 'Log it' : 'Add to my plan'}
             </Button>
           </div>
@@ -295,7 +304,21 @@ export const BlockSheet: React.FC<{ date?: string; slotId?: string; past?: boole
 
           <label className="block">
             <span className="text-[15px] font-semibold text-slate-700">Title</span>
-            <input autoFocus={!existing} className={`mt-1 ${field}`} value={title} onChange={e => setTitle(e.target.value)} placeholder={placeholder} />
+            <input
+              ref={titleRef}
+              autoFocus={!existing}
+              className={`mt-1 ${field}`}
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder={placeholder}
+              aria-invalid={tried && !title.trim()}
+              aria-describedby={tried && !title.trim() ? 'block-title-msg' : undefined}
+            />
+            {tried && !title.trim() && (
+              <span id="block-title-msg" className="mt-1 block text-[14px] font-medium text-rose-700">
+                Add a title first, so you can spot it in your plan.
+              </span>
+            )}
           </label>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -307,7 +330,8 @@ export const BlockSheet: React.FC<{ date?: string; slotId?: string; past?: boole
               <>
                 <label className="block">
                   <span className="text-[15px] font-semibold text-slate-700">Starts</span>
-                  <input type="time" step={300} className={`mt-1 ${field}`} value={start} onChange={e => setStart(e.target.value)} />
+                  <input ref={startRef} type="time" step={300} className={`mt-1 ${field}`} value={start} onChange={e => setStart(e.target.value)} aria-invalid={tried && !start} />
+                  {tried && !start && <span className="mt-1 block text-[14px] font-medium text-rose-700">Pick a start time.</span>}
                 </label>
                 <label className="block">
                   <span className="text-[15px] font-semibold text-slate-700">How long</span>

@@ -3,7 +3,7 @@
 // the manager show here too until the rep ticks them off.
 
 import React, { useState } from 'react';
-import { Check, ChevronDown, ChevronUp, Send } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, ChevronUp, Lightbulb, Send } from 'lucide-react';
 import type { Dealership, ManagerPriority } from '../../types/crm';
 import { Btn, Panel } from '../../components/ui/kit';
 import { formatRelative } from '../../utils/format';
@@ -20,7 +20,10 @@ export const WorthALook: React.FC<{
   onOpenDealership: (d: Dealership) => void;
   onPlanNext: (d: Dealership) => void;
   onAckNudge: (p: ManagerPriority) => void;
-}> = ({ report, nudges, dealerships, onOpenDealership, onPlanNext, onAckNudge }) => {
+  /** 'line': one tappable line that opens the full card in place (phones). 'full': the whole card. */
+  mode?: 'line' | 'full';
+}> = ({ report, nudges, dealerships, onOpenDealership, onPlanNext, onAckNudge, mode = 'full' }) => {
+  const [open, setOpen] = useState(false);
   const [hiddenOn, setHiddenOn] = useState<string | null>(() => {
     try {
       return localStorage.getItem(HIDE_KEY);
@@ -46,17 +49,44 @@ export const WorthALook: React.FC<{
 
   const deal = (id?: string) => dealerships.find(d => d.id === id);
   const shown = expanded ? flags : flags.slice(0, 3);
+  const total = flags.length + nudges.length;
+
+  if (mode === 'line' && !open) {
+    const fromManager = nudges.length ? ` · ${nudges.length} from ${nudges[0].managerName.split(' ')[0]}` : '';
+    return (
+      <button
+        type="button"
+        aria-expanded={false}
+        onClick={() => setOpen(true)}
+        className="flex min-h-[48px] w-full cursor-pointer items-center gap-2.5 rounded-2xl border border-amber-200 bg-white px-4 text-left text-[15px] font-semibold text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-amber-300"
+      >
+        <Lightbulb className="h-5 w-5 shrink-0 text-amber-700" />
+        <span className="min-w-0 flex-1">
+          {total} {total === 1 ? 'thing' : 'things'} worth a look
+          {fromManager && <span className="font-medium text-violet-800">{fromManager}</span>}
+        </span>
+        <ChevronRight className="h-5 w-5 shrink-0 text-slate-500" />
+      </button>
+    );
+  }
 
   return (
     <div>
       <Panel className="border-amber-200 p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-[16px] font-bold text-slate-900">Worth a look</h2>
-          {!nudges.length && (
-            <button type="button" onClick={hide} className="cursor-pointer rounded-lg px-2 py-1 text-[13px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800">
-              Hide for today
-            </button>
-          )}
+          <div className="flex items-center gap-1">
+            {!nudges.length && (
+              <button type="button" onClick={hide} className="min-h-[44px] cursor-pointer rounded-lg px-3 text-[14px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                Hide for today
+              </button>
+            )}
+            {mode === 'line' && (
+              <button type="button" aria-expanded onClick={() => setOpen(false)} className="inline-flex min-h-[44px] cursor-pointer items-center gap-1 rounded-lg px-3 text-[14px] font-semibold text-blue-700 hover:bg-blue-50">
+                <ChevronUp className="h-4 w-4" /> Close
+              </button>
+            )}
+          </div>
         </div>
 
         {nudges.length > 0 && (
@@ -117,12 +147,12 @@ export const WorthALook: React.FC<{
           </ul>
         )}
         {flags.length > 3 && (
-          <button type="button" onClick={() => setExpanded(e => !e)} className="mt-1 inline-flex cursor-pointer items-center gap-1 text-[13px] font-semibold text-blue-700 hover:underline">
+          <button type="button" onClick={() => setExpanded(e => !e)} className="mt-1 inline-flex min-h-[44px] cursor-pointer items-center gap-1 text-[14px] font-semibold text-blue-700 hover:underline">
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             {expanded ? 'Show fewer' : `Show all ${flags.length}`}
           </button>
         )}
-        <p className="mt-2 text-[12px] text-slate-500">Your manager sees the same list on their team screen.</p>
+        <p className="mt-2 text-[13px] text-slate-500">Your manager sees the same list on their team screen.</p>
       </Panel>
     </div>
   );

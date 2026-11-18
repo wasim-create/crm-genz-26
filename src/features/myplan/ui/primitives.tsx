@@ -59,7 +59,7 @@ export const BandChip: React.FC<{ band: DistanceBand; miles: number }> = ({ band
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'soft';
 
 export const Button: React.FC<
-  React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: 'md' | 'lg'; icon?: React.ReactNode; block?: boolean }
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: 'md' | 'lg'; icon?: React.ReactNode; block?: boolean; ref?: React.Ref<HTMLButtonElement> }
 > = ({ variant = 'secondary', size = 'md', icon, block, className = '', children, ...rest }) => {
   const v: Record<ButtonVariant, string> = {
     primary: 'bg-brand text-onaccent hover:bg-brand-hover shadow-sm disabled:bg-slate-300',
@@ -121,7 +121,7 @@ export const Sheet: React.FC<{
               <span className="w-2" />
             )}
             <div className="min-w-0 flex-1 text-center">
-              <div className="truncate text-[18px] font-bold text-slate-900">{title}</div>
+              <div className="line-clamp-2 text-[17px] font-bold leading-tight text-slate-900 sm:text-[18px]">{title}</div>
               {step && (
                 <div className="text-[13px] font-medium text-slate-500">
                   Step {step.current} of {step.total}
