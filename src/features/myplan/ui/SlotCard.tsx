@@ -96,7 +96,7 @@ export const SlotCard: React.FC<SlotCardProps> = ({
 
           <div className="mt-1 flex items-center gap-2">
             <TargetIcon kind={slot.target.kind} className="h-5 w-5 shrink-0 text-slate-400" />
-            <span className={`line-clamp-2 text-[19px] font-bold leading-snug ${done || skipped ? 'text-slate-600' : 'text-slate-900'}`}>{slot.target.name}</span>
+            <span className={`line-clamp-2 text-[19px] font-bold leading-snug [overflow-wrap:anywhere] ${done || skipped ? 'text-slate-600' : 'text-slate-900'}`}>{slot.target.name}</span>
           </div>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[15px]">

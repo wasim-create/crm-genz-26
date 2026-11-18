@@ -236,8 +236,8 @@ export const NextStepCard: React.FC<{
                 >
                   <div className="text-[13px] font-bold text-slate-900">{parseISODate(d.date).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })}</div>
                   <div className="text-[12px] text-slate-600">{d.stops ? `${d.stops} stop${d.stops > 1 ? 's' : ''}` : 'Free'}</div>
-                  <div className={`text-[11px] font-semibold ${d.fits || value.how === 'email' ? 'text-emerald-700' : 'text-amber-700'}`}>{value.how === 'email' ? 'Send' : d.fits ? 'Fits' : 'Tight'}</div>
-                  {d.busy.length > 0 && <div className="mt-0.5 truncate text-[11px] text-slate-500" title={d.busy.map(b => b.target.name).join(', ')}>Busy: {d.busy[0].target.name}</div>}
+                  <div className={`text-[12px] font-semibold ${d.fits || value.how === 'email' ? 'text-emerald-700' : 'text-amber-700'}`}>{value.how === 'email' ? 'Send' : d.fits ? 'Fits' : 'Tight'}</div>
+                  {d.busy.length > 0 && <div className="mt-0.5 line-clamp-2 text-[12px] text-slate-600 [overflow-wrap:anywhere]" title={d.busy.map(b => b.target.name).join(', ')}>Busy: {d.busy[0].target.name}</div>}
                 </button>
               );
             })}

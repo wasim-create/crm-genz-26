@@ -93,7 +93,7 @@ export const LogPickerSheet: React.FC<{ onClose: () => void }> = ({ onClose }) =
     >
       <MapPin className="h-5 w-5 shrink-0 text-slate-400" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[16px] font-semibold text-slate-900">{c.dealership.dealershipName}</span>
+        <span className="block break-words text-[16px] font-semibold leading-snug text-slate-900">{c.dealership.dealershipName}</span>
         <span className="block text-[14px] text-slate-500">
           {c.dealership.city}
           {why(c) ? ` · ${why(c)}` : ''}

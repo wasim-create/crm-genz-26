@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BellRing, CalendarRange, CheckCircle2, Inbox, ListTodo, Plus, RefreshCw, Trash2, WifiOff } from 'lucide-react';
 import { ActionPoint } from '../types';
 import { DAY_NAMES, format12h, formatDayShort, startOfWeek, toISODate } from '../engine/time';
@@ -27,6 +27,8 @@ export const TodoSheet: React.FC<{ onClose: () => void; dealershipId?: string }>
   const [due, setDue] = useState(today);
   const [dealer, setDealer] = useState(dealershipId ?? '');
   const [showGoogle, setShowGoogle] = useState(false);
+  const [tried, setTried] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
   const mine = state.actionPoints.filter(a => a.userId === viewUser.id && (!dealershipId || a.dealershipId === dealershipId));
   const open = mine.filter(a => !a.done);
   const groups: { label: string; items: ActionPoint[] }[] = [
@@ -37,6 +39,12 @@ export const TodoSheet: React.FC<{ onClose: () => void; dealershipId?: string }>
   ];
 
   const add = () => {
+    if (!title.trim()) {
+      setTried(true);
+      titleRef.current?.focus();
+      return;
+    }
+    setTried(false);
     const d = dealerships.find(x => x.id === dealer);
     const now = new Date().toISOString();
     addActionPoints(
@@ -67,11 +75,16 @@ export const TodoSheet: React.FC<{ onClose: () => void; dealershipId?: string }>
         <Card className="mb-5 space-y-3 p-4">
           <div className="text-[17px] font-bold text-slate-900">Add an action point</div>
           <input
+            ref={titleRef}
+            aria-label="What needs doing?"
             className="min-h-[52px] w-full rounded-xl border border-slate-300 px-3 text-[17px]"
             placeholder="e.g. Send brochure to Smith Motors"
             value={title}
             onChange={e => setTitle(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && add()}
+            aria-invalid={tried && !title.trim()}
           />
+          {tried && !title.trim() && <p className="-mt-1 text-[14px] font-medium text-rose-700">Type what needs doing first.</p>}
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="block">
               <span className="text-[14px] font-medium text-slate-600">Due</span>
@@ -90,7 +103,7 @@ export const TodoSheet: React.FC<{ onClose: () => void; dealershipId?: string }>
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="primary" disabled={!title.trim()} onClick={add} icon={<Plus className="h-5 w-5" />}>
+            <Button variant="primary" onClick={add} icon={<Plus className="h-5 w-5" />}>
               Add
             </Button>
             <Button variant="ghost" onClick={() => openSheet({ kind: 'block', date: due || today, title: title.trim() || undefined, blockType: 'focus' })}>
@@ -392,9 +405,9 @@ export const ReminderBanner: React.FC = () => {
 
 const TOUR = [
   { title: 'This is your day', text: 'Everything you plan to do — visits, calls, Google Meets, emails and texts — in order, with real drive times and when to leave home.' },
-  { title: 'Tap “Add to my plan”', text: 'Start with a dealership or with what you want to do. Tick everything you’ll do there, and we suggest the best times.' },
+  { title: 'Tap “+ Add”', text: 'Start with a dealership or with what you want to do. Tick everything you’ll do there, and we suggest the best times.' },
   { title: 'Tap a card to change it', text: 'Change the day, time, how or tasks any time. ▲ ▼ swaps the order. Hold ⋮⋮ and drag a little to move the time, or further to swap. “Details” shows the dealership.' },
-  { title: 'Plan your week on Sunday', text: 'During the week, tap “Plan later” on any dealership. On Sunday, drag them into days in “Plan my week”.' }
+  { title: 'Plan your week on Sunday', text: 'During the week, tap “Plan later” on any dealership. On Sunday, drag them into days in “Plan my week”. You can see these tips again from ⋯ at the top of My Plan.' }
 ];
 
 export const Walkthrough: React.FC<{ onClose: () => void; start?: number }> = ({ onClose, start = 0 }) => {

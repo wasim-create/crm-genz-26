@@ -111,9 +111,11 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; points?: number } | null>(null);
 
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (text: string, points?: number) => {
     setToastMessage({ text, points });
-    setTimeout(() => setToastMessage(null), 3500);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastMessage(null), 3500);
   };
 
   // Initial load
@@ -709,8 +711,12 @@ export default function App() {
     <InventoryProvider value={inventory}>
     <div className="min-h-screen bg-slate-50 flex flex-col antialiased text-slate-800">
       {/* Toast Notification Container with Live Points Burst */}
+      {/* Short confirmations: top centre, so they never cover the + button or anything at the bottom. */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-100 bg-ink text-onaccent px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in slide-in-from-bottom-2 duration-200 border border-ink-2">
+        <div
+          role="status"
+          className="fixed left-1/2 top-3 z-100 flex w-max max-w-[92vw] -translate-x-1/2 items-center gap-2.5 rounded-2xl border border-ink-2 bg-ink py-1.5 pl-4 pr-1.5 text-[14px] font-semibold text-onaccent shadow-xl animate-in fade-in slide-in-from-top-2 duration-200"
+        >
           {toastMessage.points ? (
             <span className="w-6 h-6 rounded-lg bg-amber-500 text-darkink font-mono font-black text-xs flex items-center justify-center shrink-0">
               +{toastMessage.points}
@@ -718,9 +724,9 @@ export default function App() {
           ) : (
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           )}
-          <span>{toastMessage.text}</span>
-          <button type="button" onClick={() => setToastMessage(null)} className="ml-2 text-slate-400 hover:text-onaccent">
-            <X className="w-3.5 h-3.5" />
+          <span className="min-w-0">{toastMessage.text}</span>
+          <button type="button" aria-label="Dismiss" onClick={() => setToastMessage(null)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-onink-muted hover:bg-onaccent/10 hover:text-onaccent">
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -780,12 +786,13 @@ export default function App() {
           {(
             <MyPlanModule
               pageVisible={currentView === 'planner'}
-              banner={(() => {
+              banner={(mode: 'line' | 'full') => {
               if (!(currentUser.role === 'new_rep' || currentUser.role === 'veteran_rep')) return null;
             const mine = teamReports.find(r => r.rep.id === currentUser.id);
             const nudges = managerPriorities.filter(p => p.id.startsWith('nudge_') && p.targetType === 'rep' && p.targetId === currentUser.id && p.status === 'pending');
             return mine ? (
               <WorthALook
+                mode={mode}
                 report={mine}
                 nudges={nudges}
                 dealerships={dealerships}
@@ -798,7 +805,7 @@ export default function App() {
                 }}
               />
             ) : null;
-          })()}
+          }}
               onOpenPlan={() => {
                 setSelectedDealership(null);
                 goTo('planner');

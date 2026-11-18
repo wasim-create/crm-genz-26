@@ -300,6 +300,9 @@ export const DayView: React.FC = () => {
         </Card>
       )}
 
+      {/* Phones: "Worth a look" as one line, so the day comes first. Bigger screens: in full, below the day. */}
+      {ctx.banner && !readOnly && <div className="mb-3 md:hidden">{ctx.banner('line')}</div>}
+
       <DaySummary layout={lay} slots={slots} />
 
       {isToday && !readOnly && <NextCard sequence={sequence} messages={messages} layout={lay} />}
@@ -310,9 +313,9 @@ export const DayView: React.FC = () => {
           {editable && !tipSeen && sequence.length > 1 && (
             <Card className="mb-3 flex items-start gap-3 border-blue-200 bg-blue-50 p-3 text-[15px] text-blue-950">
               <span className="flex-1">
-                <span className="font-bold">Tip:</span> use ▲ ▼ to swap the order. Or hold the ⋮⋮ handle and drag: a little to change the time (5, 10 or 30 minutes), further to swap with the next stop.
+                <span className="font-bold">Tip:</span> ▲ ▼ swap stops. Hold ⋮⋮ and drag to fine-tune the time.
               </span>
-              <button type="button" aria-label="Dismiss tip" onClick={dismissTip} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-blue-100">
+              <button type="button" aria-label="Dismiss tip" onClick={dismissTip} className="-my-2 -mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-blue-100">
                 <X className="h-5 w-5" />
               </button>
             </Card>
@@ -349,6 +352,8 @@ export const DayView: React.FC = () => {
           </div>
         </>
       )}
+
+      {ctx.banner && !readOnly && <div className="mt-6 hidden md:block">{ctx.banner('full')}</div>}
 
       </div>
 

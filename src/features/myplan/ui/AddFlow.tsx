@@ -388,15 +388,15 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
     >
       {step === 'start' && (
         <div className="space-y-3">
-          <p className="text-[17px] text-slate-700">How would you like to start?</p>
+          <p className="text-[17px] text-slate-700">Two ways in. Pick whichever you know first.</p>
           <ChoiceCard
             onClick={() => {
               setEntry('dealership');
               setStepIndex(1);
             }}
             icon={<Building2 className="h-8 w-8 text-blue-600" />}
-            title="Choose a dealership"
-            subtitle="Pick a prospect, a sign-up, a client or a dealer group"
+            title="Start with the dealership"
+            subtitle="A prospect, sign-up, client or dealer group. Then choose visit, call or message."
           />
           <ChoiceCard
             onClick={() => {
@@ -404,8 +404,8 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
               setStepIndex(1);
             }}
             icon={<ListChecks className="h-8 w-8 text-blue-600" />}
-            title="Choose what to do"
-            subtitle="Visit, call, Google Meet, or email / text several at once"
+            title="Start with visit, call or message"
+            subtitle="Then pick who. Handy for emailing or texting several dealerships at once."
           />
         </div>
       )}
