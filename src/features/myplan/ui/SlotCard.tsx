@@ -176,7 +176,7 @@ export const SlotCard: React.FC<SlotCardProps> = ({
               <button
                 type="button"
                 aria-label={`Drag ${slot.target.name} to a new position`}
-                className="flex h-9 w-12 cursor-grab touch-none items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 active:cursor-grabbing"
+                className="flex h-11 w-12 cursor-grab touch-none items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 active:cursor-grabbing"
                 {...dragHandle}
               >
                 <GripVertical className="h-5 w-5" />

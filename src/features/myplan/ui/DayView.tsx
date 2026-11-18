@@ -18,7 +18,11 @@ import {
   Timer,
   Video,
   X,
-  ClipboardCheck
+  ClipboardCheck,
+  ChevronUp,
+  ChevronDown,
+  ArrowUp,
+  History
 } from 'lucide-react';
 import { PlanSlot } from '../types';
 import { DayLayout, dragIntent, holdRestOfDay, layoutDay, nudgedTime, replanPreview } from '../engine/schedule';
@@ -29,6 +33,7 @@ import { Button, Card, EmptyState, SectionTitle } from './primitives';
 import { SlotCard } from './SlotCard';
 import { useMyPlan } from './context';
 import { mapsUrl } from './slotHelpers';
+import { pickNextUp } from '../engine/nextUp';
 
 const FULLNESS_TEXT: Record<DayLayout['fullness'], { label: string; tone: string; width: string }> = {
   empty: { label: 'Nothing planned', tone: 'bg-slate-200', width: 'w-0' },
@@ -62,6 +67,19 @@ export const DayView: React.FC = () => {
   const isPast = date < today;
   const isToday = date === today;
   const editable = !readOnly && !isPast;
+
+  // Next up = what's happening now, or the next thing that isn't over yet.
+  // Anything already over and not logged goes in "Still to log" instead.
+  const nowMin = ctx.now.getHours() * 60 + ctx.now.getMinutes();
+  const showNext = isToday && !readOnly;
+  const picked = showNext ? pickNextUp(sequence, id => lay.timings[id]?.end, nowMin) : { next: undefined, missed: [] as PlanSlot[] };
+  const nextSlot = picked.next;
+  const missed = picked.missed;
+  const goToNext = () => {
+    const el = document.getElementById('next-up');
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el?.focus({ preventScroll: true });
+  };
 
   const refs = useRef(new Map<string, HTMLLIElement>());
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -211,6 +229,42 @@ export const DayView: React.FC = () => {
       const slot = byId.get(row.slotId);
       if (!slot) return;
       const idx = lay.sequence.indexOf(slot.id);
+      // Already shown in full in Next up: a short marker here, so it isn't on the page twice.
+      if (slot.id === nextSlot?.id) {
+        const movable = editable && !slot.locked && slot.status === 'planned';
+        items.push(
+          <li
+            key={slot.id}
+            ref={el => {
+              if (el) refs.current.set(slot.id, el);
+              else refs.current.delete(slot.id);
+            }}
+          >
+            <div className="flex items-center gap-2 rounded-2xl border-2 border-dashed border-blue-300 bg-blue-50/60 p-2 pl-3">
+              <button type="button" onClick={goToNext} className="flex min-h-[44px] min-w-0 flex-1 cursor-pointer flex-col items-start justify-center gap-0.5 rounded-lg px-1 py-1 text-left hover:bg-blue-100/60">
+                <span className="flex items-center gap-2 text-[14px] font-semibold text-slate-700">
+                  <span className="rounded-full bg-brand px-2.5 py-0.5 text-[13px] font-bold text-onaccent">{slot.status === 'in_progress' ? 'Now' : 'Next'}</span>
+                  {format12h(row.start)}
+                </span>
+                <span className="text-[16px] font-bold leading-snug text-slate-900 break-words">{slot.target.name}</span>
+                <span className="inline-flex items-center gap-1 text-[14px] text-blue-800">
+                  <ArrowUp className="h-3.5 w-3.5" /> Shown in Next up
+                </span>
+              </button>
+              {movable && (
+                <div className="flex shrink-0 flex-col gap-1">
+                  <button type="button" onClick={() => arrow(slot, 'up')} disabled={idx === 0} aria-label={`Move ${slot.target.name} earlier`} className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-25">
+                    <ChevronUp className="h-5 w-5" />
+                  </button>
+                  <button type="button" onClick={() => arrow(slot, 'down')} disabled={idx === lay.sequence.length - 1} aria-label={`Move ${slot.target.name} later`} className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-25">
+                    <ChevronDown className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </li>
+        );
+      } else {
       const canDrag = editable && !slot.locked && slot.status === 'planned';
       const label = dragLabel(slot);
       const dragging = drag?.id === slot.id;
@@ -252,6 +306,7 @@ export const DayView: React.FC = () => {
           </div>
         </li>
       );
+      }
     }
     // "+ Add here" after a stop (and its drive home), when another stop follows.
     const next = rows[i + 1];
@@ -267,7 +322,7 @@ export const DayView: React.FC = () => {
           <button
             type="button"
             onClick={() => openSheet({ kind: 'addchoose', date, insertIndex: k + 1 })}
-            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-dashed border-blue-300 bg-blue-50/60 px-3 text-[14px] font-semibold text-blue-800 hover:bg-blue-100"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-dashed border-blue-300 bg-blue-50/60 px-3 text-[14px] font-semibold text-blue-800 hover:bg-blue-100"
           >
             <Plus className="h-4 w-4" /> Add here{free >= 10 ? ` · ${formatDuration(free)} free` : ''}
           </button>
@@ -305,7 +360,13 @@ export const DayView: React.FC = () => {
 
       <DaySummary layout={lay} slots={slots} />
 
-      {isToday && !readOnly && <NextCard sequence={sequence} messages={messages} layout={lay} />}
+      {showNext && (() => {
+        const target = nextSlot ?? messages.find(m => m.status === 'planned');
+        // "All done" only once nothing is left to log either.
+        return target || missed.length === 0 ? <NextCard target={target} layout={lay} /> : null;
+      })()}
+
+      {missed.length > 0 && <StillToLog slots={missed} layout={lay} />}
 
       {(sequence.length > 0 || messages.length > 0) && (
         <>
@@ -516,13 +577,53 @@ const DaySummary: React.FC<{ layout: DayLayout; slots: PlanSlot[] }> = ({ layout
   );
 };
 
-const NextCard: React.FC<{ sequence: PlanSlot[]; messages: PlanSlot[]; layout: DayLayout }> = ({ sequence, messages, layout }) => {
+/** Things on today's plan whose time has passed and haven't been logged. */
+const StillToLog: React.FC<{ slots: PlanSlot[]; layout: DayLayout }> = ({ slots, layout }) => {
+  const { openSheet } = useMyPlan();
+  const [all, setAll] = useState(false);
+  const shown = all ? slots : slots.slice(0, 2);
+  return (
+    <Card className="mt-4 border-amber-200 bg-amber-50/60 p-4">
+      <h2 className="flex items-center gap-2 text-[17px] font-bold text-slate-900">
+        <History className="h-5 w-5 text-amber-700" /> Still to log
+      </h2>
+      <p className="mt-0.5 text-[15px] text-slate-700">{slots.length === 1 ? 'This time has passed.' : 'These times have passed.'} Say how it went, or that it didn't happen.</p>
+      <ul className="mt-2 divide-y divide-amber-200/70">
+        {shown.map(s => {
+          const t = layout.timings[s.id];
+          return (
+            <li key={s.id} className="flex flex-wrap items-center gap-2 py-2.5">
+              <div className="min-w-[10rem] flex-1">
+                <div className="text-[16px] font-semibold text-slate-900 [overflow-wrap:anywhere]">{s.target.name}</div>
+                {t && <div className="text-[14px] text-slate-600">{format12h(t.start)} – {format12h(t.end)}</div>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" className="!px-3" onClick={() => openSheet({ kind: 'outcome', slotId: s.id })}>
+                  {s.blockType ? 'Log it' : 'How did it go?'}
+                </Button>
+                {!s.blockType && (
+                  <Button variant="ghost" className="!px-3" onClick={() => openSheet({ kind: 'move', slotId: s.id })}>
+                    Didn't happen
+                  </Button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {slots.length > 2 && (
+        <button type="button" onClick={() => setAll(a => !a)} className="inline-flex min-h-[44px] cursor-pointer items-center gap-1 text-[15px] font-semibold text-blue-700 hover:underline">
+          {all ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          {all ? 'Show fewer' : `Show all ${slots.length}`}
+        </button>
+      )}
+    </Card>
+  );
+};
+
+const NextCard: React.FC<{ target?: PlanSlot; layout: DayLayout }> = ({ target, layout }) => {
   const ctx = useMyPlan();
   const { openSheet, contacts } = ctx;
-  const inProgress = sequence.find(s => s.status === 'in_progress');
-  const next = inProgress ?? sequence.find(s => s.status === 'planned');
-  const dueMessage = messages.find(m => m.status === 'planned');
-  const target = next ?? dueMessage;
   if (!target) {
     return (
       <Card className="mt-4 flex items-center gap-3 border-emerald-200 bg-emerald-50 p-4">
@@ -650,7 +751,7 @@ const NextCard: React.FC<{ sequence: PlanSlot[]; messages: PlanSlot[]; layout: D
   }
 
   return (
-    <div className="mt-4">
+    <div className="mt-4 scroll-mt-20 outline-none" id="next-up" tabIndex={-1}>
       <h2 className="mb-2 text-[17px] font-bold text-slate-900">{target.status === 'in_progress' ? 'Happening now' : 'Next up'}</h2>
       <SlotCard
         slot={target}

@@ -731,6 +731,18 @@ export default function App() {
         </div>
       )}
 
+      {/* Keyboard users: first Tab offers a jump past the menus to the page itself. */}
+      <a
+        href="#main-content"
+        onClick={e => {
+          e.preventDefault();
+          mainRef.current?.focus();
+        }}
+        className="sr-only z-[200] rounded-xl bg-brand px-4 py-3 text-[16px] font-bold text-onaccent focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
+      >
+        Skip to main content
+      </a>
+
       {/* Top Navbar with Persistent Game Strip */}
       <Navbar
         currentUser={currentUser}
@@ -761,7 +773,7 @@ export default function App() {
         />
 
         {/* Viewport Content */}
-        <main ref={mainRef} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar">
+        <main ref={mainRef} id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 outline-none md:p-6 lg:p-8 custom-scrollbar">
           {currentView === 'inventory' && (
             <InventoryView dealerships={dealerships} groups={groups} users={users} currentUser={currentUser} onOpenDealership={d => setSelectedDealership(d)} />
           )}

@@ -87,3 +87,10 @@ Don't build a second visit form.
 - **Short messages** (the app's toasts) appear top centre, so they never cover the + button.
 - **Contrast and size:** text at least 12 px and 4.5 : 1 against its background in light and dark. Forms and slide-ins respect the device's reduce-motion setting.
 - **Top bar on phones:** only the initials show for "Viewing as"; the chip is the picker. Nothing in the top bar may make the page wider than a 344-pixel folded phone.
+
+## Ease-of-use rules, stage 2
+
+- **Next up means next** (`engine/nextUp.ts`, tested): the visit you've checked in to, else the first planned item that isn't over yet. Anything over and not logged goes in **Still to log** below it (How did it go? / Didn't happen). The timeline shows the Next up item as a short "Next" marker with ▲▼, not a second full card.
+- **Slide-in panels** (`Sheet`): the cursor moves into the panel when it opens, Tab stays inside, Escape closes it, and the cursor goes back to the button that opened it. Read-only panels (dealership details, basket) also close on a click outside (`closeOnOutside`); forms don't, so typing isn't lost.
+- **Tap areas** are at least 44 × 44 px. Tick boxes sit in a 44-px label. The month grid on phones is the one exception until the bottom bar replaces the icon menu (stage 3).
+- **Skip to main content** is the first thing Tab reaches on every screen.

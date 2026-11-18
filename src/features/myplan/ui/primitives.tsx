@@ -1,7 +1,7 @@
 // Small, accessible building blocks used across My Plan.
 // Big tap targets (≥ 48px), words with every icon, high contrast.
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ArrowLeft, Building2, Car, Coffee, Mail, MessageSquare, Phone, Users, Video, X } from 'lucide-react';
 import { DistanceBand, HowType, WorkType } from '../types';
 import { HOW_LABEL, WORK_TYPE_LABEL } from '../engine/tasks';
@@ -99,17 +99,63 @@ export const Sheet: React.FC<{
   onClose: () => void;
   footer?: React.ReactNode;
   wide?: boolean;
+  /** Read-only panels (details, basket): a click on the dark area beside it closes it. Forms keep what you typed. */
+  closeOnOutside?: boolean;
   children: React.ReactNode;
-}> = ({ title, step, summary, onBack, onClose, footer, wide, children }) => {
+}> = ({ title, step, summary, onBack, onClose, footer, wide, closeOnOutside, children }) => {
+  const root = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     sheetStepBack.current = onBack ?? null;
   });
   useEffect(() => () => {
     sheetStepBack.current = null;
   }, []);
+
+  // Keyboard and screen readers: the cursor moves into the panel when it opens,
+  // Tab stays inside it, Escape closes it, and the cursor goes back to where it was.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const t = setTimeout(() => {
+      if (!root.current?.contains(document.activeElement)) heading.current?.focus({ preventScroll: true });
+    }, 0);
+    return () => {
+      clearTimeout(t);
+      if (opener && opener.isConnected && opener !== document.body) opener.focus({ preventScroll: true });
+    };
+  }, []);
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const panel = root.current;
+    if (!panel || e.defaultPrevented) return;
+    // Leave keys alone when they belong to something opened inside this panel.
+    if ((e.target as Element).closest('[role="dialog"]') !== panel) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      close.current();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const list = [...panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter(
+      el => el.offsetParent !== null || el === document.activeElement
+    );
+    if (!list.length) return;
+    const first = list[0];
+    const last = list[list.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === heading.current)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="hidden flex-1 bg-scrim/50 md:block" aria-hidden />
+    <div ref={root} className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label={title} onKeyDown={onKeyDown}>
+      <div className="hidden flex-1 bg-scrim/50 md:block" aria-hidden onClick={closeOnOutside ? onClose : undefined} />
       <div className={`sheet-panel flex h-full w-full flex-col bg-slate-50 md:max-w-[94vw] md:border-l md:border-slate-200 md:shadow-2xl ${wide ? 'md:w-[960px]' : 'md:w-[680px]'}`}>
         <div className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-2xl items-center gap-2 px-3 py-2 md:max-w-none">
@@ -121,7 +167,9 @@ export const Sheet: React.FC<{
               <span className="w-2" />
             )}
             <div className="min-w-0 flex-1 text-center">
-              <div className="line-clamp-2 text-[17px] font-bold leading-tight text-slate-900 sm:text-[18px]">{title}</div>
+              <div ref={heading} tabIndex={-1} className="line-clamp-2 text-[17px] font-bold leading-tight text-slate-900 outline-none sm:text-[18px]">
+                {title}
+              </div>
               {step && (
                 <div className="text-[13px] font-medium text-slate-500">
                   Step {step.current} of {step.total}
@@ -178,7 +226,7 @@ export const ChoiceCard: React.FC<{
     {icon && <span className="shrink-0 text-slate-600">{icon}</span>}
     <span className="min-w-0 flex-1">
       <span className="block text-[17px] font-semibold text-slate-900">{title}</span>
-      {subtitle && <span className="block text-[14px] text-slate-500">{subtitle}</span>}
+      {subtitle && <span className="block text-[14px] text-slate-600">{subtitle}</span>}
     </span>
     {selected && <span className="shrink-0 rounded-full bg-brand px-2 py-0.5 text-[12px] font-bold text-onaccent">Chosen</span>}
   </button>
@@ -205,7 +253,7 @@ export const Checkbox: React.FC<{ checked: boolean; onChange: (v: boolean) => vo
     />
     <span>
       <span className="block text-[17px] font-semibold text-slate-900">{label}</span>
-      {hint && <span className="block text-[14px] text-slate-500">{hint}</span>}
+      {hint && <span className="block text-[14px] text-slate-600">{hint}</span>}
     </span>
   </label>
 );

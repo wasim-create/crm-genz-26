@@ -218,7 +218,7 @@ export const NextStepCard: React.FC<{
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-[15px] font-semibold text-slate-800">When — your week at a glance</div>
-            <button type="button" className="text-[13px] font-semibold text-blue-700 underline" onClick={() => setShowDate(s => !s)}>
+            <button type="button" className="-my-2 inline-flex min-h-[44px] items-center px-2 text-[14px] font-semibold text-blue-700 underline" onClick={() => setShowDate(s => !s)}>
               {showDate ? 'Hide date' : 'Another date'}
             </button>
           </div>
