@@ -109,3 +109,12 @@ Don't build a second visit form.
 - **Re-plan** only suggests moves that help (late items, or held items that can now be earlier) and never moves a call or Meet the rep set with a dealer.
 - **Meetings and time blocks** (`target.kind === 'block'`, including calendar items): no points, no customer activity, the "Did it happen?" sheet, no Start driving / I've arrived / Call now, no "turn into a call" or basket. "Join meeting" uses the meeting's own `meetUrl`; without one, the card says to use the calendar invite. Counted as "meetings" in the day summary.
 - **Turning a visit into a call today** places the call from now on.
+
+## Logic rules (logic review, stage B)
+
+- **After the leave time** today, the day card's headline is "Home around …" (with "Planned to leave by …" beside it).
+- **Emails and texts** past their send time and not marked sent go to Still to log ("Mark as sent" / "Not sent"); Next up only offers ones still to go out (`engine/nextUp.ts`).
+- **Empty days** show "Nothing planned" only; "All done for today. Nice work!" needs something to have been planned and logged.
+- **Fits earlier** (`suggestEarlierGap` in `engine/schedule.ts`, tests in `dayflow.test.ts`): when a flexible visit or call ends after 4 PM their time and fits in free time earlier without making anything else late, the day offers "Move it earlier". One tap, never automatic, never before now.
+- **Evenings and midnight:** ending after 6 PM their time reads "too late in the day"; times past midnight show "(next day)" and the day says it can't all happen.
+- **Card points** are estimated from the planned time, so an evening visit shows the outside-10–4 rate.

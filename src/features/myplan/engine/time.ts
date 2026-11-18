@@ -21,7 +21,8 @@ export const format12h = (t: string | number): string => {
   const m = Math.round(min % 60);
   const ampm = h >= 12 ? 'PM' : 'AM';
   const dh = h % 12 === 0 ? 12 : h % 12;
-  return `${dh}:${String(m).padStart(2, '0')} ${ampm}`;
+  // A day that runs past midnight says so, rather than wrapping round to the morning.
+  return `${dh}:${String(m).padStart(2, '0')} ${ampm}${min >= 24 * 60 ? ' (next day)' : ''}`;
 };
 
 export const formatDuration = (min: number): string => {
