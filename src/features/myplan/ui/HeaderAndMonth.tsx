@@ -40,9 +40,9 @@ const MoreMenu: React.FC<{ items: { label: string; icon: React.ReactNode; onSele
   };
   return (
     <div ref={wrap} className="relative">
-      <Button ref={trigger} variant="secondary" aria-label="More" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)} icon={<MoreHorizontal className="h-5 w-5" />} />
+      <Button ref={trigger} variant="secondary" aria-label="More My Plan options" title="More" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)} icon={<MoreHorizontal className="h-5 w-5" />} />
       {open && (
-        <div role="menu" aria-label="More" onKeyDown={move} className="absolute right-0 top-full z-50 mt-2 w-60 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
+        <div role="menu" aria-label="More My Plan options" onKeyDown={move} className="absolute right-0 top-full z-50 mt-2 w-60 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl">
           {items.map(it => (
             <button
               key={it.label}
@@ -202,7 +202,7 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
 
       {/* Date and arrows stay together on one line; the action buttons drop to the next line when there isn't room. */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:min-w-[24rem] sm:gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:min-w-[28rem] sm:gap-2">
           <Button variant="secondary" aria-label={view === 'day' ? 'Previous day' : view === 'week' ? 'Previous week' : 'Previous month'} onClick={() => shift(-1)} icon={<ChevronLeft className="h-6 w-6" />} className="w-12 shrink-0 !px-0" />
           <h2 className="min-w-0 flex-1 truncate whitespace-nowrap text-center text-[17px] font-bold text-slate-900 sm:text-[19px]" aria-live="polite">
             <span className="hidden sm:inline">{title}</span>
@@ -259,15 +259,15 @@ export const MonthView: React.FC = () => {
           </Card>
         ))}
       </div>
-      <Card className="p-1 sm:p-3">
-        <div className="grid grid-cols-7 gap-0.5 text-center sm:gap-1 text-[13px] font-semibold text-slate-500">
+      <Card className="p-0.5 sm:p-3">
+        <div className="grid grid-cols-7 gap-px text-center sm:gap-1 text-[13px] font-semibold text-slate-500">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(x => (
             <div key={x} className="py-1">
               {x}
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
+        <div className="grid grid-cols-7 gap-px sm:gap-1">
           {cells.map(c => {
             const inMonth = c.startsWith(monthKey);
             const items = daySlots(c).filter(isScheduled);

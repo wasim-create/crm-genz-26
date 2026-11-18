@@ -28,7 +28,7 @@ import { PlanSlot } from '../types';
 import { DayLayout, dragIntent, holdRestOfDay, layoutDay, nudgedTime, replanPreview } from '../engine/schedule';
 import { addDays, format12h, formatDayLong, formatDuration, toHHMM } from '../engine/time';
 import { isClockChangeDay } from '../engine/timezones';
-import { arrowMove, updateActionPoint, updateSlot, upsertSlots, useMyPlanState } from '../data/store';
+import { arrowMove, updateActionPoint, updateSettings, updateSlot, upsertSlots, useMyPlanState } from '../data/store';
 import { Button, Card, EmptyState, SectionTitle } from './primitives';
 import { SlotCard } from './SlotCard';
 import { useMyPlan } from './context';
@@ -332,7 +332,7 @@ export const DayView: React.FC = () => {
   });
 
   return (
-    <div className="pb-32 xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start xl:gap-6">
+    <div className="pb-32 xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start xl:gap-6 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:gap-8">
       <div className="min-w-0">
       {(clockToday || clockTomorrow) && (
         <Card className="mb-3 flex items-center gap-2 border-sky-200 bg-sky-50 p-3 text-[15px] text-sky-950">
@@ -354,6 +354,8 @@ export const DayView: React.FC = () => {
           </Button>
         </Card>
       )}
+
+      {!readOnly && !ctx.settings.walkthroughDone && <TourHint />}
 
       {/* Phones: "Worth a look" as one line, so the day comes first. Bigger screens: in full, below the day. */}
       {ctx.banner && !readOnly && <div className="mb-3 md:hidden">{ctx.banner('line')}</div>}
@@ -439,7 +441,7 @@ export const DayView: React.FC = () => {
       </aside>
 
       {editable && (
-        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-3 md:hidden">
+        <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-40 flex items-center gap-3 md:hidden">
           {date === ctx.today && viewUser.id === ctx.user.id && (
             <button
               type="button"
@@ -573,6 +575,24 @@ const DaySummary: React.FC<{ layout: DayLayout; slots: PlanSlot[] }> = ({ layout
           ))}
         </div>
       )}
+    </Card>
+  );
+};
+
+/** First visit: offer the short tour in one line instead of opening it unasked. */
+const TourHint: React.FC = () => {
+  const { user, openSheet } = useMyPlan();
+  return (
+    <Card className="mb-3 flex items-center gap-2 border-blue-200 bg-blue-50 p-2 pl-4">
+      <span className="min-w-0 flex-1 text-[15px] text-blue-950">
+        <span className="font-semibold">New to My Plan?</span> A 1-minute tour shows the basics.
+      </span>
+      <Button variant="soft" className="!px-3" onClick={() => openSheet({ kind: 'walkthrough' })}>
+        Show me
+      </Button>
+      <button type="button" aria-label="Not now" title="Not now" onClick={() => updateSettings(user.id, { walkthroughDone: true })} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-blue-900 hover:bg-blue-100">
+        <X className="h-5 w-5" />
+      </button>
     </Card>
   );
 };

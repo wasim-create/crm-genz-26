@@ -156,7 +156,8 @@ export const Sheet: React.FC<{
   return (
     <div ref={root} className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label={title} onKeyDown={onKeyDown}>
       <div className="hidden flex-1 bg-scrim/50 md:block" aria-hidden onClick={closeOnOutside ? onClose : undefined} />
-      <div className={`sheet-panel flex h-full w-full flex-col bg-slate-50 md:max-w-[94vw] md:border-l md:border-slate-200 md:shadow-2xl ${wide ? 'md:w-[960px]' : 'md:w-[680px]'}`}>
+      {/* Short screens (a phone turned sideways): the whole panel scrolls, button included, so the form isn't squeezed to one line. */}
+      <div className={`sheet-panel flex h-full w-full flex-col bg-slate-50 md:max-w-[94vw] md:border-l md:border-slate-200 md:shadow-2xl [@media(max-height:500px)]:overflow-y-auto ${wide ? 'md:w-[960px]' : 'md:w-[680px]'}`}>
         <div className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-2xl items-center gap-2 px-3 py-2 md:max-w-none">
             {onBack ? (
@@ -167,7 +168,7 @@ export const Sheet: React.FC<{
               <span className="w-2" />
             )}
             <div className="min-w-0 flex-1 text-center">
-              <div ref={heading} tabIndex={-1} className="line-clamp-2 text-[17px] font-bold leading-tight text-slate-900 outline-none sm:text-[18px]">
+              <div ref={heading} tabIndex={-1} className="line-clamp-3 text-[17px] font-bold leading-tight text-slate-900 outline-none sm:text-[18px]">
                 {title}
               </div>
               {step && (
@@ -182,7 +183,7 @@ export const Sheet: React.FC<{
           </div>
           {summary && <div className="mx-auto max-w-2xl px-4 pb-2 text-center text-[14px] text-slate-600 md:max-w-none">{summary}</div>}
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto [@media(max-height:500px)]:flex-none [@media(max-height:500px)]:overflow-visible">
           <div className="mx-auto max-w-2xl px-4 py-5 md:max-w-none md:px-5">{children}</div>
         </div>
         {footer && (

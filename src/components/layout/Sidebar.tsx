@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { BackLayer } from '../ui/kit';
 import { User } from '../../types/crm';
 import {
   CalendarDays,
@@ -18,7 +19,9 @@ import {
   FileCheck2,
   MapPin,
   Users,
-  Boxes
+  Boxes,
+  MoreHorizontal,
+  X
 } from 'lucide-react';
 
 export type ActiveView = 
@@ -85,35 +88,36 @@ interface SidebarProps {
   teamHelpCount?: number;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  currentView,
-  onNavigate,
-  currentUser,
-  isCollapsed,
-  onToggleCollapse,
-  hotDealCount,
-  pendingAssistCount,
-  pendingFinanceCount,
-  teamHelpCount = 0,
-  stockOrderCount = 0
-}) => {
-  const role = currentUser.role;
+export interface NavItem {
+  id: ActiveView;
+  label: string;
+  icon: React.ReactNode;
+  badge?: number | string;
+  badgeColor?: string;
+  description?: string;
+}
+export interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+export interface NavCounts {
+  hotDealCount: number;
+  pendingAssistCount: number;
+  pendingFinanceCount: number;
+  stockOrderCount?: number;
+  teamHelpCount?: number;
+}
 
-  interface NavItem {
-    id: ActiveView;
-    label: string;
-    icon: React.ReactNode;
-    badge?: number | string;
-    badgeColor?: string;
-    description?: string;
-  }
+/** The menu for a role, in sections. Used by the side menu (tablets, computers) and the bottom bar's More (phones). */
+export function navSectionsFor(currentUser: User, { hotDealCount, pendingAssistCount, pendingFinanceCount, teamHelpCount = 0, stockOrderCount = 0 }: NavCounts): NavSection[] {
+  const role = currentUser.role;
 
   // Section 3: Navigation renaming
   const isManagerOrOwner = ['manager', 'owner', 'executive'].includes(role);
   const assistLabel = isManagerOrOwner ? 'Assist requests' : 'My assist requests';
   const assistBadge = isManagerOrOwner && pendingAssistCount > 0 ? pendingAssistCount : undefined;
 
-  const getNavSections = (): { title: string; items: NavItem[] }[] => {
+  const getNavSections = (): NavSection[] => {
     const plannerItem: NavItem = {
       id: 'planner',
       label: 'My plan',
@@ -306,38 +310,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ];
   };
 
-  const sections = getNavSections();
+  return getNavSections();
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({
+  currentView,
+  onNavigate,
+  currentUser,
+  isCollapsed,
+  onToggleCollapse,
+  hotDealCount,
+  pendingAssistCount,
+  pendingFinanceCount,
+  teamHelpCount = 0,
+  stockOrderCount = 0
+}) => {
+  const short = useShortScreen();
+  const collapsed = isCollapsed || short;
+  const sections = navSectionsFor(currentUser, { hotDealCount, pendingAssistCount, pendingFinanceCount, teamHelpCount, stockOrderCount });
 
   return (
     <aside
-      className={`bg-white border-r border-slate-200 flex flex-col transition-all duration-300 z-20 shrink-0 ${
-        isCollapsed ? 'w-16' : 'w-64'
-      }`}
+      className={`hidden shrink-0 flex-col border-r border-slate-200 bg-white transition-all duration-300 z-20 md:flex ${collapsed ? 'w-16' : 'w-64'}`}
+      aria-label="Main menu"
     >
-      {/* Collapse Toggle Button */}
-      <div className="p-3 border-b border-slate-100 flex items-center justify-between">
-        {!isCollapsed && (
-          <span className="text-[13px] font-semibold text-slate-500">Menu</span>
-        )}
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          className="w-7 h-7 mx-auto rounded-md bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer"
-          title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-        >
-          {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-        </button>
-      </div>
+      {/* Collapse toggle (not on short screens such as a phone turned sideways: there it stays narrow) */}
+      {!short && (
+        <div className="flex items-center justify-between border-b border-slate-100 p-2">
+          {!collapsed && <span className="px-1 text-[13px] font-semibold text-slate-500">Menu</span>}
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="mx-auto flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            aria-label={collapsed ? 'Show menu names' : 'Hide menu names'}
+            title={collapsed ? 'Show menu names' : 'Hide menu names'}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
+        </div>
+      )}
 
-      {/* Nav List */}
-      <nav className="flex-1 overflow-y-auto p-2 space-y-4 text-[14px] font-medium">
+      <nav className="flex-1 space-y-4 overflow-y-auto p-2 text-[14px] font-medium">
         {sections.map((section, sIdx) => (
           <div key={sIdx} className="space-y-1">
-            {!isCollapsed && (
-              <div className="px-3 pt-2 pb-1 text-[12px] font-semibold text-slate-500">
-                {section.title}
-              </div>
-            )}
+            {!collapsed && <div className="px-3 pb-1 pt-2 text-[12px] font-semibold text-slate-500">{section.title}</div>}
             {section.items.map(item => {
               const isActive = currentView === item.id;
               return (
@@ -345,24 +361,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   key={item.id}
                   type="button"
                   onClick={() => onNavigate(item.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-brand text-onaccent font-semibold shadow-xs'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
+                  aria-current={isActive ? 'page' : undefined}
+                  aria-label={collapsed ? `${item.label}${item.badge !== undefined ? `, ${item.badge}` : ''}` : undefined}
+                  className={`relative flex min-h-[44px] w-full cursor-pointer items-center gap-3 rounded-xl px-3 text-left transition-all ${
+                    isActive ? 'bg-brand font-semibold text-onaccent shadow-xs' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  } ${collapsed ? 'justify-center' : ''}`}
                   title={item.label}
                 >
-                  <span className={`shrink-0 ${isActive ? 'text-onaccent' : 'text-slate-500'}`}>
-                    {item.icon}
-                  </span>
-                  {!isCollapsed && (
-                    <div className="flex-1 flex items-center justify-between truncate">
+                  <span className={`shrink-0 ${isActive ? 'text-onaccent' : 'text-slate-500'}`}>{item.icon}</span>
+                  {collapsed && item.badge !== undefined && <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-white" aria-hidden />}
+                  {!collapsed && (
+                    <div className="flex flex-1 items-center justify-between truncate">
                       <span className="truncate">{item.label}</span>
-                      {item.badge !== undefined && (
-                        <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${item.badgeColor || 'bg-slate-200 text-slate-700'}`}>
-                          {item.badge}
-                        </span>
-                      )}
+                      {item.badge !== undefined && <span className={`rounded-full px-1.5 py-0.5 text-[12px] ${item.badgeColor || 'bg-slate-200 text-slate-700'}`}>{item.badge}</span>}
                     </div>
                   )}
                 </button>
@@ -372,16 +383,135 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
-      {/* Rep Territory Radius Badge (Bottom) */}
-      {!isCollapsed && (
-        <div className="p-3 m-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-[13px] space-y-0.5">
+      {!collapsed && (
+        <div className="m-2 space-y-0.5 rounded-xl border border-slate-200 bg-slate-50 p-3 text-[13px] text-slate-600">
           <div className="flex items-center gap-1.5 font-bold text-slate-800">
-            <MapPin className="w-3.5 h-3.5 text-blue-600" />
+            <MapPin className="h-3.5 w-3.5 text-blue-600" />
             <span>Home ZIP {currentUser.homeZipCode}</span>
           </div>
-          <p className="text-[12px] text-slate-500">Territory: 60 miles</p>
+          <p className="text-[12px] text-slate-600">Territory: 60 miles</p>
         </div>
       )}
     </aside>
+  );
+};
+
+/** True on short screens (a phone turned sideways). */
+function useShortScreen(): boolean {
+  const q = '(max-height: 500px)';
+  const [short, setShort] = useState(() => typeof window !== 'undefined' && window.matchMedia?.(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia?.(q);
+    if (!m) return;
+    const on = () => setShort(m.matches);
+    m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
+  return !!short;
+}
+
+// ---------------------------------------------------------------- phones
+
+/** The four most-used screens per role; everything else is under More. */
+const PRIMARY: Record<string, ActiveView[]> = {
+  new_rep: ['planner', 'bench', 'pipeline', 'clients'],
+  veteran_rep: ['planner', 'bench', 'pipeline', 'clients'],
+  manager: ['team', 'planner', 'pipeline', 'assists'],
+  team_lead: ['team', 'planner', 'pipeline', 'assists'],
+  finance: ['finance', 'inventory', 'assists', 'clients'],
+  inventory_manager: ['inventory', 'clients', 'groups', 'pipeline'],
+  admin: ['settings', 'game_rules', 'bench', 'clients']
+};
+const SHORT_LABEL: Partial<Record<ActiveView, string>> = {
+  bench: 'Prospects',
+  pool: 'Pool',
+  assists: 'Assists',
+  executive_desk: 'Desk',
+  finance: 'Incentives',
+  inventory: 'Stock',
+  gamification: 'Points',
+  game_rules: 'Rules',
+  groups: 'Groups',
+  team: 'Team'
+};
+
+/** Phones: labelled tabs along the bottom, with the rest of the menu under More. */
+export const BottomNav: React.FC<Omit<SidebarProps, 'isCollapsed' | 'onToggleCollapse'>> = props => {
+  const { currentView, onNavigate, currentUser } = props;
+  const [more, setMore] = useState(false);
+  const sections = navSectionsFor(currentUser, props);
+  const all = sections.flatMap(sec => sec.items);
+  const ids = PRIMARY[currentUser.role] ?? ['executive_desk', 'team', 'pipeline', 'planner'];
+  const primary = ids.map(id => all.find(it => it.id === id)).filter(Boolean) as NavItem[];
+  const onMore = !primary.some(it => it.id === currentView);
+  const moreBadge = all.some(it => !ids.includes(it.id) && it.badge !== undefined);
+
+  const tab = (key: string, label: string, icon: React.ReactNode, active: boolean, onClick: () => void, badge?: boolean, extra?: Record<string, unknown>) => (
+    <button
+      key={key}
+      type="button"
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={`relative flex min-h-[56px] min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 px-1 text-[12px] font-semibold ${active ? 'text-blue-700' : 'text-slate-600'}`}
+      {...extra}
+    >
+      <span className={`flex h-7 w-12 items-center justify-center rounded-full [&>svg]:h-5 [&>svg]:w-5 ${active ? 'bg-blue-100' : ''}`}>{icon}</span>
+      <span className="max-w-full truncate">{label}</span>
+      {badge && <span className="absolute right-[calc(50%-1.25rem)] top-1.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-white" aria-hidden />}
+    </button>
+  );
+
+  return (
+    <>
+      <nav
+        aria-label="Main menu"
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      >
+        {primary.map(it =>
+          tab(it.id, SHORT_LABEL[it.id] ?? it.label, it.icon, currentView === it.id, () => onNavigate(it.id), it.badge !== undefined, it.badge !== undefined ? { 'aria-label': `${it.label}, ${it.badge}` } : {})
+        )}
+        {tab('more', 'More', <MoreHorizontal className="h-5 w-5" />, onMore, () => setMore(true), moreBadge, { 'aria-haspopup': 'dialog', 'aria-expanded': more })}
+      </nav>
+
+      {more && (
+        <div className="fixed inset-0 z-[65] flex flex-col justify-end md:hidden" role="dialog" aria-modal="true" aria-label="More">
+          <BackLayer onBack={() => setMore(false)} escape />
+          <button type="button" aria-label="Close menu" className="flex-1 cursor-default bg-scrim/50" onClick={() => setMore(false)} />
+          <div className="max-h-[85vh] overflow-y-auto rounded-t-3xl bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl">
+            <div className="mb-1 flex items-center justify-between px-2">
+              <h2 className="text-[18px] font-bold text-slate-900">Menu</h2>
+              <button type="button" onClick={() => setMore(false)} className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100" aria-label="Close">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {sections.map(sec => (
+              <div key={sec.title} className="mb-2">
+                <div className="px-3 pb-1 pt-2 text-[13px] font-semibold text-slate-500">{sec.title}</div>
+                {sec.items.map(it => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    autoFocus={it.id === sections[0].items[0].id}
+                    onClick={() => {
+                      setMore(false);
+                      onNavigate(it.id);
+                    }}
+                    aria-current={currentView === it.id ? 'page' : undefined}
+                    className={`flex min-h-[52px] w-full cursor-pointer items-center gap-3 rounded-xl px-3 text-left text-[16px] font-medium ${currentView === it.id ? 'bg-blue-50 text-blue-800' : 'text-slate-800 hover:bg-slate-100'}`}
+                  >
+                    <span className="text-slate-500">{it.icon}</span>
+                    <span className="flex-1">{it.label}</span>
+                    {it.badge !== undefined && <span className={`rounded-full px-2 py-0.5 text-[13px] ${it.badgeColor || 'bg-slate-200 text-slate-700'}`}>{it.badge}</span>}
+                  </button>
+                ))}
+              </div>
+            ))}
+            <div className="mx-1 mt-1 flex items-center gap-1.5 rounded-xl bg-slate-50 px-3 py-2.5 text-[14px] text-slate-600">
+              <MapPin className="h-4 w-4 text-blue-600" /> Home ZIP {currentUser.homeZipCode} · territory 60 miles
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };

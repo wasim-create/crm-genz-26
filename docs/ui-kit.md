@@ -94,3 +94,11 @@ Don't build a second visit form.
 - **Slide-in panels** (`Sheet`): the cursor moves into the panel when it opens, Tab stays inside, Escape closes it, and the cursor goes back to the button that opened it. Read-only panels (dealership details, basket) also close on a click outside (`closeOnOutside`); forms don't, so typing isn't lost.
 - **Tap areas** are at least 44 × 44 px. Tick boxes sit in a 44-px label. The month grid on phones is the one exception until the bottom bar replaces the icon menu (stage 3).
 - **Skip to main content** is the first thing Tab reaches on every screen.
+
+## Ease-of-use rules, stage 3
+
+- **Phones (under 768 px wide):** labelled tabs along the bottom (`BottomNav` in `components/layout/Sidebar.tsx`): four per role (`PRIMARY`) plus **More**, which lists the whole menu. The side menu only shows from 768 px up. Both read `navSectionsFor()`, so a new page goes in one place. Anything fixed to the bottom of a phone screen must sit above the bar (`bottom-[calc(4.75rem+env(safe-area-inset-bottom))]`).
+- **Short screens (under 500 px tall, e.g. a phone sideways):** the side menu stays narrow, and slide-in forms scroll as a whole, button included.
+- **Visit cards:** points sit on the time line; the bottom line only shows when it has something in it.
+- **First visit:** a one-line "New to My Plan?" offer instead of opening the tour unasked. The tour stays under ⋯.
+- **Very wide screens (1536 px+):** My Plan widens a little and the side column grows to 380 px.

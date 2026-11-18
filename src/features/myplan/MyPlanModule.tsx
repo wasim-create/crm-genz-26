@@ -156,10 +156,7 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
     return reps.filter(u => u.id !== currentUser.id);
   }, [currentUser, users]);
 
-  // First visit: short walkthrough.
-  useEffect(() => {
-    if (pageVisible && !readOnly && state.seededOn && !settings.walkthroughDone && !sheet) setSheet({ kind: 'walkthrough' });
-  }, [pageVisible, readOnly, state.seededOn, settings.walkthroughDone]);
+  // First visit: a one-line offer of the tour at the top of the day (TourHint), rather than opening it unasked.
 
   // Phone / browser Back: step back inside a multi-step form, otherwise close it.
   useBackLayer(!!sheet, () => {
@@ -259,7 +256,7 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
   return (
     <MyPlanProvider value={value}>
       {pageVisible && (
-      <div className="mx-auto max-w-6xl text-[16px]" style={settings.biggerText ? { zoom: 1.15 } : undefined}>
+      <div className="mx-auto max-w-6xl text-[16px] 2xl:max-w-7xl" style={settings.biggerText ? { zoom: 1.15 } : undefined}>
         <Header viewers={viewers} onViewUser={setViewUserId} />
         <ReminderBanner />
         {!state.seededOn ? (
