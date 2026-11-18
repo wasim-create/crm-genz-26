@@ -21,7 +21,7 @@ import {
 } from './types/crm';
 import { LocalStorageAdapter } from './services/storageAdapter';
 import { Navbar } from './components/layout/Navbar';
-import { Sidebar, ActiveView, pagesFor } from './components/layout/Sidebar';
+import { Sidebar, BottomNav, ActiveView, pagesFor } from './components/layout/Sidebar';
 import { MyPlanModule } from './features/myplan/MyPlanModule';
 import { DealershipPlanPanel } from './features/myplan/DealershipPlanPanel';
 import { resetMyPlan, setCrmBridge } from './features/myplan/data/store';
@@ -771,9 +771,20 @@ export default function App() {
           teamHelpCount={myTeamReports.filter(r => r.status === 'help').length}
           stockOrderCount={['inventory_manager', 'owner', 'executive', 'finance'].includes(currentUser.role) ? stockOrderCount : 0}
         />
+        {/* Phones: labelled tabs along the bottom instead of the side menu. */}
+        <BottomNav
+          currentView={currentView}
+          onNavigate={(v) => goTo(v)}
+          currentUser={currentUser}
+          hotDealCount={hotDealCount}
+          pendingAssistCount={pendingAssistCount}
+          pendingFinanceCount={pendingFinanceCount}
+          teamHelpCount={myTeamReports.filter(r => r.status === 'help').length}
+          stockOrderCount={['inventory_manager', 'owner', 'executive', 'finance'].includes(currentUser.role) ? stockOrderCount : 0}
+        />
 
         {/* Viewport Content */}
-        <main ref={mainRef} id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 outline-none md:p-6 lg:p-8 custom-scrollbar">
+        <main ref={mainRef} id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto p-3 pb-28 outline-none sm:p-4 sm:pb-28 md:p-6 lg:p-8 custom-scrollbar">
           {currentView === 'inventory' && (
             <InventoryView dealerships={dealerships} groups={groups} users={users} currentUser={currentUser} onOpenDealership={d => setSelectedDealership(d)} />
           )}

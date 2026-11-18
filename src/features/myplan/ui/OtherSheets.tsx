@@ -451,7 +451,7 @@ export const Walkthrough: React.FC<{ onClose: () => void; start?: number }> = ({
           />
           <ChoiceCard onClick={() => finish(false)} title="No reminder, thanks" />
           <p className="flex items-center gap-2 pt-2 text-[15px] text-slate-500">
-            <CheckCircle2 className="h-4 w-4" /> Replay this tour any time from My Plan settings.
+            <CheckCircle2 className="h-4 w-4" /> See this tour again any time from ⋯ at the top of My Plan.
           </p>
         </div>
       )}

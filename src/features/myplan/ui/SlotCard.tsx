@@ -92,6 +92,8 @@ export const SlotCard: React.FC<SlotCardProps> = ({
             {slot.status === 'in_progress' && (
               <span className="rounded-full bg-brand px-2 py-0.5 text-[13px] font-semibold text-onaccent">You're here</span>
             )}
+            {/* Points sit on the time line, so the card is a line shorter. */}
+            {points ? <span className="ml-auto text-[14px] font-semibold text-amber-700">{done ? `+${points} pts earned` : `+${points} pts`}</span> : null}
           </div>
 
           <div className="mt-1 flex items-center gap-2">
@@ -141,6 +143,7 @@ export const SlotCard: React.FC<SlotCardProps> = ({
             </div>
           )}
 
+          {(slot.source === 'assist' || slot.managerPriorityFrom || slot.source === 'calendar' || (slot.notes && !compact) || (skipped && slot.skippedReason)) && (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[14px]">
             {slot.source === 'assist' && slot.assistManagerName && (
               <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-800">Manager Assist with {slot.assistManagerName}</span>
@@ -155,10 +158,10 @@ export const SlotCard: React.FC<SlotCardProps> = ({
                 <CalendarClock className="h-3.5 w-3.5" /> From Google Calendar
               </span>
             )}
-            {points ? <span className="font-semibold text-amber-700">{done ? `+${points} pts earned` : `+${points} pts`}</span> : null}
-            {slot.notes && !compact && <span className="text-slate-500">· {slot.notes}</span>}
-            {skipped && slot.skippedReason && <span className="text-slate-500">· {slot.skippedReason}</span>}
+            {slot.notes && !compact && <span className="text-slate-600">{slot.notes}</span>}
+            {skipped && slot.skippedReason && <span className="text-slate-600">{slot.skippedReason}</span>}
           </div>
+          )}
         </button>
 
         {showArrows ? (
