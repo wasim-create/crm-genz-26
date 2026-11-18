@@ -455,7 +455,7 @@ export const DayView: React.FC = () => {
               onClick={() => openSheet({ kind: 'logpick' })}
               className="flex h-14 items-center gap-2 rounded-full border border-slate-200 bg-white px-5 text-[16px] font-bold text-slate-900 shadow-xl active:scale-95"
             >
-              <ClipboardCheck className="h-5 w-5 text-blue-600" /> Log a visit
+              <ClipboardCheck className="h-5 w-5 text-blue-600" /> Log a visit or call
             </button>
           )}
           <button

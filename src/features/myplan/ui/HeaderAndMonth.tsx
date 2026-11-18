@@ -218,7 +218,7 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
           <div className="ml-auto hidden shrink-0 items-center gap-2 sm:flex">
             {date === today && viewUser.id === user.id && (
               <Button variant="secondary" onClick={() => openSheet({ kind: 'logpick' })} icon={<ClipboardCheck className="h-5 w-5" />}>
-                Log a visit
+                Log a visit or call
               </Button>
             )}
             <Button variant="primary" onClick={() => openSheet({ kind: 'addchoose', date })} icon={<Plus className="h-5 w-5" />}>

@@ -55,3 +55,18 @@ test('distance helpers', () => {
   assert.equal(distanceText(123), '120 m away');
   assert.equal(distanceText(3862), '2.4 miles away');
 });
+
+test('two of your dealerships on the same road: both offered, no single guess', () => {
+  const honda = d('lakeshore-honda', 41.7600, -88.1500);
+  const hyundai = d('lakeshore-hyundai', 41.7609, -88.1500); // ~100 m apart
+  const r = whereAmI({ mine: [honda, hyundai, nashua], stops: [], nowMin: 11 * 60, position: { lat: 41.7603, lng: -88.1500 }, accuracy: 30 });
+  assert.equal(r.best?.dealership.id, 'lakeshore-honda');
+  assert.deepEqual(r.alsoHere.map(a => a.dealership.id), ['lakeshore-hyundai']);
+  assert.ok(!r.others.some(o => o.dealership.id === 'lakeshore-hyundai'));
+});
+
+test('a vague location (indoors, 500 m) does not claim "you are here"', () => {
+  const r = whereAmI({ mine, stops, nowMin: 9 * 60 + 30, position: { lat: 42.9592, lng: -71.4412 }, accuracy: 500 });
+  assert.notEqual(r.best?.why, 'nearby');
+  assert.equal(r.best?.slotId, 's1');
+});

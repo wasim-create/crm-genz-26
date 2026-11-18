@@ -13,6 +13,8 @@ import { indexForTime, insertAt } from '../engine/schedule';
 import { format12h, formatDuration, toHHMM, toMin } from '../engine/time';
 import { isoToLocalMin, pastEditWindow, replanPreview } from '../engine/schedule';
 import { instantAt } from '../engine/timezones';
+import { streetLine } from '../engine/logSearch';
+import { RelChip } from './LogPickerSheet';
 import { addActionPoints, dismissToast, isOffline, submitWriteback, updateActionPoint, updateSlot, upsertSlots, useMyPlanState } from '../data/store';
 import { buildWriteback, describeTask, suggestActionPoints, suggestStageChange } from '../services/writeback';
 import { Button, Card, Checkbox, Segmented, Sheet } from './primitives';
@@ -397,7 +399,7 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
   // ---- Form ----
   return (
     <Sheet
-      title={wasDone ? `Edit: ${slot.target.name}` : slot.unplanned ? 'Log a visit' : 'How did it go?'}
+      title={wasDone ? `Edit: ${slot.target.name}` : slot.unplanned ? 'Log a visit or call' : 'How did it go?'}
       summary={`${HOW_LABEL[spoke.how]} · ${slot.target.name}`}
       onClose={onClose}
       footer={
@@ -424,6 +426,18 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
           </Card>
         )}
 
+        {slot.unplanned && !wasDone && dealership && (
+          // Say exactly which record this goes on, so a neighbour on the same road can't be logged by mistake.
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-slate-100 px-3 py-2.5 text-[15px] text-slate-700">
+            <span>Logging for</span>
+            <span className="font-bold text-slate-900">{dealership.dealershipName}</span>
+            <RelChip d={dealership} />
+            <span className="text-slate-600">{streetLine(dealership)}</span>
+            <button type="button" onClick={() => ctx.openSheet({ kind: 'logpick' })} className="ml-auto min-h-[44px] cursor-pointer px-1 text-[15px] font-semibold text-blue-700 underline">
+              Not this one?
+            </button>
+          </div>
+        )}
         {slot.unplanned && !wasDone && (
           <Card className="space-y-4 p-4">
             <div>
