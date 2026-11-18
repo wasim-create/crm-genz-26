@@ -2,6 +2,7 @@
 // the dealership record. It builds the same kind of slot My Plan uses, so the
 // rep answers the same "How did it go?" form and the CRM is updated the same way.
 
+import { wallClock } from '../engine/timezones';
 import { Contact, Dealership, ProductCatalogItem } from '../../../types/crm';
 import { HowType, PlanSlot, SlotTask } from '../types';
 import { defaultHow, defaultTaskIds, durationFor, TASK_BY_ID, workTypeForStage } from '../engine/tasks';
@@ -18,12 +19,12 @@ export function loggedTasks(d: Dealership, catalog: ProductCatalogItem[]): SlotT
 }
 
 /** Start time for something that just finished: now minus its length, on a 5-minute mark. */
-export function startedBefore(now: Date, minutes: number): string {
-  const m = now.getHours() * 60 + now.getMinutes() - minutes;
+export function startedBefore(now: Date, minutes: number, zone?: string): string {
+  const m = wallClock(now, zone).minutes - minutes;
   return toHHMM(Math.max(0, Math.floor(m / 5) * 5));
 }
 
-export function buildLoggedSlot(d: Dealership, userId: string, contacts: Contact[], catalog: ProductCatalogItem[], today: string, now: Date): PlanSlot {
+export function buildLoggedSlot(d: Dealership, userId: string, contacts: Contact[], catalog: ProductCatalogItem[], today: string, now: Date, zone?: string): PlanSlot {
   const tasks = loggedTasks(d, catalog);
   const how: HowType = defaultHow(d.stage, tasks.map(t => t.taskId));
   const durationMin = durationFor(how, tasks);
@@ -50,7 +51,7 @@ export function buildLoggedSlot(d: Dealership, userId: string, contacts: Contact
     contactIds: main ? [main.id] : [],
     contactNames: main ? [`${main.firstName} ${main.lastName}`] : [],
     timeMode: 'exact',
-    fixedTime: startedBefore(now, durationMin),
+    fixedTime: startedBefore(now, durationMin, zone),
     durationMin,
     source: 'manual',
     unplanned: true,

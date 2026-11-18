@@ -54,6 +54,9 @@ export type SheetState =
 export interface MyPlanContextValue {
   today: string;
   now: Date;
+  /** Minutes after midnight now, and the day of the week, in the rep's own time zone. */
+  nowMin: number;
+  weekday: number;
   /** Signed-in user. */
   user: User;
   /** Whose plan is on screen (managers can view a rep's plan). */

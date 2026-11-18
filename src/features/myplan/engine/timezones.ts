@@ -93,3 +93,44 @@ export const ZONE_SHORT: Record<string, string> = {
   'America/Anchorage': 'Alaska',
   'Pacific/Honolulu': 'Hawaii'
 };
+
+// ---------- Times in the rep's own time zone ----------
+// The plan always shows the rep's local time, wherever the phone or laptop is
+// (a rep travelling to another state, a manager in another zone, or someone
+// testing from the UK). Stored moments stay real instants; only reading them
+// as "a time of day" goes through the rep's zone.
+
+export interface WallClock {
+  /** YYYY-MM-DD in that zone. */
+  date: string;
+  /** Minutes after midnight in that zone. */
+  minutes: number;
+  /** 0 = Sunday … 6 = Saturday. */
+  weekday: number;
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const fmtCache = new Map<string, Intl.DateTimeFormat>();
+
+/** What a clock on the wall in `zone` shows at moment `at` (device time when no zone is given). */
+export function wallClock(at: Date, zone?: IanaZone): WallClock {
+  if (!zone) {
+    const p = (n: number) => String(n).padStart(2, '0');
+    return { date: `${at.getFullYear()}-${p(at.getMonth() + 1)}-${p(at.getDate())}`, minutes: at.getHours() * 60 + at.getMinutes(), weekday: at.getDay() };
+  }
+  let f = fmtCache.get(zone);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short', hourCycle: 'h23' });
+    fmtCache.set(zone, f);
+  }
+  const parts = f.formatToParts(at);
+  const get = (t: string) => parts.find(x => x.type === t)?.value ?? '';
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, minutes: (Number(get('hour')) % 24) * 60 + Number(get('minute')), weekday: WEEKDAYS.indexOf(get('weekday')) };
+}
+
+/** The real moment when the wall clock in `zone` shows `date` at `minutes` past midnight. */
+export function instantAt(date: string, minutes: number, zone: IanaZone): Date {
+  const [y, m, d] = date.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d, Math.floor(minutes / 60), minutes % 60);
+  return new Date(guess - utcOffsetMinutes(zone, date) * 60000);
+}

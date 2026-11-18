@@ -1,3 +1,4 @@
+import { managerJoinHow } from '../engine/geo';
 import { REP_SITUATIONS } from '../../../data/demo/places';
 // Demo plans for every user, built from the CRM's own demo data so My Plan
 // and the CRM always tell the same story:
@@ -561,7 +562,9 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
         .forEach((x, j) => {
           const d = dealerById.get(x.dealershipId);
           if (!d) return;
-          const how: HowType = x.assistType === 'google_meet' ? 'meet' : x.assistType === 'join_call' ? 'phone' : 'in_person';
+          const asked: HowType = x.assistType === 'google_meet' ? 'meet' : x.assistType === 'join_call' ? 'phone' : 'in_person';
+          // Far from the manager's home: they joined by Google Meet.
+          const { how } = managerJoinHow(asked as 'in_person' | 'meet' | 'phone', user.homeCoords, d.coordinates);
           slots.push(
             make(user, d, x.proposedDate, j, how, [{ taskId: 'p_assist', outcome: { kind: 'simple', result: 'done' } }], {
               status: 'done',
@@ -584,13 +587,14 @@ export function buildSeed(input: SeedInput): { slots: PlanSlot[]; actionPoints: 
           const d = dealerById.get(x.dealershipId);
           if (!d) return;
           const rep = reps.find(r => r.id === x.originRepId);
+          const join = managerJoinHow(x.assistType === 'strategy_session' || x.assistType === 'google_meet' ? 'meet' : 'in_person', user.homeCoords, d.coordinates);
           slots.push(
-            make(user, d, x.proposedDate, j, x.assistType === 'strategy_session' || x.assistType === 'google_meet' ? 'meet' : 'in_person', [{ taskId: 'p_assist' }], {
+            make(user, d, x.proposedDate, j, join.how, [{ taskId: 'p_assist' }], {
               timeMode: 'exact',
               fixedTime: x.proposedTime,
               locked: true,
               source: 'assist',
-              notes: `Assist for ${rep ? `${rep.firstName} ${rep.lastName}` : x.originRepName}`,
+              notes: `Assist for ${rep ? `${rep.firstName} ${rep.lastName}` : x.originRepName}${join.farMiles ? ` · Joining by Google Meet (${join.farMiles} miles from home). Change it to in person if you're going.` : ''}`,
               contactNames: [x.decisionMakerName]
             })
           );

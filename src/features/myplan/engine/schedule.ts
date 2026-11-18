@@ -7,19 +7,19 @@ import { EngineSettings, LatLng, PlanSlot } from '../types';
 import { distanceBand, estimateDriveMinutes, milesBetween, UNKNOWN_DRIVE_MIN } from './geo';
 import { isLive, isMessage } from './tasks';
 import { dayOfWeek, format12h, toHHMM, toMin } from './time';
+import { wallClock } from './timezones';
 
 export interface LayoutContext {
   home: LatLng;
   settings: EngineSettings;
   /** Minutes to add to the rep's time to get the dealership's local time (time zones / DST). */
   tzDiff?: (slot: PlanSlot) => number;
+  /** The rep's home time zone: check-in and finish times are read in it. */
+  zone?: string;
 }
 
-/** Local wall-clock minutes of an ISO timestamp (device time zone). */
-export const isoToLocalMin = (iso: string): number => {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
-};
+/** Wall-clock minutes of an ISO timestamp in the rep's zone (the device's zone if none is given). */
+export const isoToLocalMin = (iso: string, zone?: string): number => wallClock(new Date(iso), zone).minutes;
 
 /** Round up to the next 5 minutes. */
 export const roundUp5 = (min: number): number => Math.ceil(min / 5) * 5;
@@ -111,7 +111,8 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
   const warnings: DayWarning[] = [];
 
   let cursor = toMin(s.dayStart);
-  let location: LatLng = ctx.home;
+  /** Where the rep is; null after an appointment at an address we can't place on the map. */
+  let location: LatLng | null = ctx.home;
   let lunchTaken = !s.lunch;
   const lunchAt = toMin(s.lunchTime ?? '12:00');
   const lunchLen = s.lunchDurationMin ?? 30;
@@ -127,8 +128,8 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
   let homePending = false;
   let lastName = '';
   const driveHome = () => {
-    const homeMiles = milesBetween(location, ctx.home);
-    const homeDrive = estimateDriveMinutes(homeMiles);
+    const homeMiles = location ? milesBetween(location, ctx.home) : 0;
+    const homeDrive = location ? estimateDriveMinutes(homeMiles) : UNKNOWN_DRIVE_MIN;
     cursor += homeDrive;
     homeAt = cursor;
     driveMin += homeDrive;
@@ -147,22 +148,33 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
     const fixedAt = (holdsTime || slot.timeMode === 'exact') && slot.fixedTime && slot.status === 'planned' ? toMin(slot.fixedTime) : undefined;
 
     if (homePending) {
-      const homeArrival = cursor + estimateDriveMinutes(milesBetween(location, ctx.home));
+      const homeArrival = cursor + (location ? estimateDriveMinutes(milesBetween(location, ctx.home)) : UNKNOWN_DRIVE_MIN);
       if (!(remote && fixedAt !== undefined && fixedAt < homeArrival)) driveHome();
     }
 
-    // Travel (visits only): drive from the previous visit or from home, plus parking.
+    // Travel: drive from where the rep is, plus parking. Dealership visits, and
+    // in-person meetings or appointments that are somewhere: with an address
+    // (or map point) they're a place like a visit; personal time with no
+    // address (dentist, school pickup) is taken to be near home.
+    const block = slot.target.kind === 'block';
+    const placeTrip = block && slot.how === 'in_person' && !!(slot.target.coords || slot.target.address);
+    const personalTrip =
+      block && slot.how === 'in_person' && !placeTrip && (slot.blockType === 'personal' || slot.target.id.startsWith('blk_personal'));
     let travel = 0;
     let miles = 0;
     const fromHome = location === ctx.home;
-    if (isVisit) {
-      if (slot.target.coords) {
+    if (isVisit || placeTrip) {
+      if (slot.target.coords && location) {
         miles = milesBetween(location, slot.target.coords);
         travel = estimateDriveMinutes(miles) + s.parkingMin;
       } else {
         travel = UNKNOWN_DRIVE_MIN + s.parkingMin;
       }
+    } else if (personalTrip && location !== ctx.home) {
+      miles = location ? milesBetween(location, ctx.home) : 0;
+      travel = (location ? estimateDriveMinutes(miles) : UNKNOWN_DRIVE_MIN) + s.parkingMin;
     }
+    const trip = travel > 0;
 
     // Lunch. Flexible: taken in the first free moment from the preferred
     // time (± 1 hour), but never where it would make a set time late.
@@ -186,7 +198,7 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
       }
     }
 
-    if (isVisit) rows.push({ kind: 'travel', toSlotId: slot.id, minutes: travel, miles, fromHome });
+    if (trip) rows.push({ kind: 'travel', toSlotId: slot.id, minutes: travel, miles, fromHome });
 
     // The dealership may be in another time zone: 10–4 is THEIR time.
     const tz = ctx.tzDiff ? ctx.tzDiff(slot) : 0;
@@ -201,7 +213,7 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
 
     let start = earliest;
     const pinned = (holdsTime || slot.timeMode === 'exact') && slot.fixedTime;
-    const actualStart = slot.checkInAt && (slot.status === 'in_progress' || slot.status === 'done') ? isoToLocalMin(slot.checkInAt) : undefined;
+    const actualStart = slot.checkInAt && (slot.status === 'in_progress' || slot.status === 'done') ? isoToLocalMin(slot.checkInAt, ctx.zone) : undefined;
     if (actualStart !== undefined) {
       // What really happened wins.
       start = actualStart;
@@ -214,14 +226,14 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
       // Something already logged as done happened when it happened: nothing to warn about.
       if (!firstOfDay && reachable > fixed + 2 && slot.status !== 'done') {
         const late = reachable - fixed;
-        warnings.push({ code: 'late_for_fixed', slotId: slot.id, message: lateMessage(slot, fixed, reachable, late, lastName, isVisit) });
+        warnings.push({ code: 'late_for_fixed', slotId: slot.id, message: lateMessage(slot, fixed, reachable, late, lastName, isVisit || trip) });
         start = holdsTime ? fixed : reachable;
       } else {
         start = fixed;
       }
     }
     const actualEnd =
-      slot.status === 'done' && slot.completedAt && actualStart !== undefined ? Math.max(actualStart + 5, isoToLocalMin(slot.completedAt)) : undefined;
+      slot.status === 'done' && slot.completedAt && actualStart !== undefined ? Math.max(actualStart + 5, isoToLocalMin(slot.completedAt, ctx.zone)) : undefined;
     const end = actualEnd ?? start + slot.durationMin;
 
     if (actualStart !== undefined) {
@@ -271,6 +283,9 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
     cursor = end;
 
     if (isVisit) location = slot.target.coords ?? location;
+    // After an appointment somewhere: there (or somewhere unknown); after personal time: near home.
+    else if (placeTrip) location = slot.target.coords ?? null;
+    else if (personalTrip) location = ctx.home;
     lastName = slot.target.name;
 
     // Drive home after the last visit of the day (after any set-time calls taken on the spot).

@@ -86,8 +86,7 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
     | null
   >(null);
   const [ownTime, setOwnTime] = useState(() => {
-    const n = new Date();
-    const m = Math.ceil((n.getHours() * 60 + n.getMinutes()) / 5) * 5;
+    const m = Math.ceil(ctx.nowMin / 5) * 5;
     return (preset?.date ?? today) === today && m < 21 * 60 ? `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}` : '10:00';
   });
   const [sendTime, setSendTime] = useState<string | undefined>(undefined);
@@ -272,7 +271,7 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
   };
 
   // --- suggestions for "when" ---
-  const nowMin = ctx.now.getHours() * 60 + ctx.now.getMinutes();
+  const nowMin = ctx.nowMin;
   const notBefore = date === today ? nowMin : undefined;
   const suggestions: PlacementSuggestion[] = useMemo(() => {
     if (!draft || messageHow || step !== 'when') return [];
@@ -857,7 +856,7 @@ const WhenStep: React.FC<{
   onPlanLater?: () => void;
 }> = props => {
   const { draft, messageHow, date, setDate, suggestions, choice, setChoice, ownTime, setOwnTime, roomElsewhere, tripExtras, setTripExtras, onPlanLater } = props;
-  const { home, engine, dealerships, viewUser, tzDiffFor, today, now } = useMyPlan();
+  const { home, engine, dealerships, viewUser, tzDiffFor, today, nowMin } = useMyPlan();
 
   if (messageHow) {
     const suggested = suggestSendTime(messageHow, date);
@@ -952,7 +951,7 @@ const WhenStep: React.FC<{
         </Card>
       )}
       {date === today && (
-        <p className="text-[15px] text-slate-600">Starting from now ({format12h(Math.ceil((now.getHours() * 60 + now.getMinutes()) / 5) * 5)}){draft.how === 'in_person' ? ', including the drive there' : ''}.</p>
+        <p className="text-[15px] text-slate-600">Starting from now ({format12h(Math.ceil(nowMin / 5) * 5)}){draft.how === 'in_person' ? ', including the drive there' : ''}.</p>
       )}
       <div>
         <div className="mb-2 text-[17px] font-bold text-slate-900">Best times on {formatDayLong(date)}</div>

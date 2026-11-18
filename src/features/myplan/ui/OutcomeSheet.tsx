@@ -10,8 +10,9 @@ import { PipelineStage } from '../../../types/crm';
 import { ActionPoint, HowType, InterestLevel, PlanSlot, SimpleResult, SlotTask, TaskOutcome, UpsellResult } from '../types';
 import { durationFor, HOW_LABEL, HOW_SHORT, isMessage, TASK_BY_ID } from '../engine/tasks';
 import { indexForTime, insertAt } from '../engine/schedule';
-import { format12h, formatDuration, toHHMM } from '../engine/time';
-import { pastEditWindow, replanPreview } from '../engine/schedule';
+import { format12h, formatDuration, toHHMM, toMin } from '../engine/time';
+import { isoToLocalMin, pastEditWindow, replanPreview } from '../engine/schedule';
+import { instantAt } from '../engine/timezones';
 import { addActionPoints, dismissToast, isOffline, submitWriteback, updateActionPoint, updateSlot, upsertSlots, useMyPlanState } from '../data/store';
 import { buildWriteback, describeTask, suggestActionPoints, suggestStageChange } from '../services/writeback';
 import { Button, Card, Checkbox, Segmented, Sheet } from './primitives';
@@ -178,7 +179,7 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
   const save = () => {
     const nowISO = new Date().toISOString();
     const timing = ctx.layout(slot.date ?? ctx.today).timings[slot.id];
-    const startedAt = slot.unplanned ? startTime : slot.checkInAt ? toHHMM(new Date(slot.checkInAt).getHours() * 60 + new Date(slot.checkInAt).getMinutes()) : timing ? toHHMM(timing.start) : slot.sendTime;
+    const startedAt = slot.unplanned ? startTime : slot.checkInAt ? toHHMM(isoToLocalMin(slot.checkInAt, ctx.repZone)) : timing ? toHHMM(timing.start) : slot.sendTime;
     const finalSlot: PlanSlot = {
       ...slot,
       ...(slot.unplanned
@@ -186,7 +187,7 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
             how: spoke.how,
             fixedTime: startTime,
             durationMin: slot.durationOverridden ? slot.durationMin : durationFor(spoke.how, tasks),
-            checkInAt: new Date(`${slot.date ?? ctx.today}T${startTime}:00`).toISOString(),
+            checkInAt: instantAt(slot.date ?? ctx.today, toMin(startTime), ctx.repZone).toISOString(),
             sendTime: isMessage(spoke.how) ? startTime : undefined
           }
         : {}),

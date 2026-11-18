@@ -66,3 +66,17 @@ export const roadMiles = (straightLineMiles: number): number =>
 
 /** Fallback when a target has no coordinates. */
 export const UNKNOWN_DRIVE_MIN = 20;
+
+/** A manager joining a rep's meeting further than this from home joins by Google Meet unless they choose in person. */
+export const FAR_JOIN_MILES = 150;
+
+/**
+ * How a manager joins a rep's meeting. An in-person join more than
+ * FAR_JOIN_MILES from the manager's home becomes a Google Meet (nobody drives
+ * Miami to Dallas); the manager can still switch it to in person.
+ */
+export function managerJoinHow(requested: 'in_person' | 'meet' | 'phone', managerHome: LatLng | undefined, dealer: LatLng | undefined): { how: 'in_person' | 'meet' | 'phone'; farMiles?: number } {
+  if (requested !== 'in_person' || !managerHome || !dealer) return { how: requested };
+  const miles = milesBetween(managerHome, dealer);
+  return miles > FAR_JOIN_MILES ? { how: 'meet', farMiles: Math.round(miles) } : { how: 'in_person' };
+}

@@ -54,14 +54,14 @@ export const LogPickerSheet: React.FC<{ onClose: () => void }> = ({ onClose }) =
     .filter(s => s.userId === user.id && s.status === 'planned' && s.target.kind === 'dealership' && !isMessage(s.how))
     .map(s => ({ slotId: s.id, dealershipId: s.target.id, start: timings[s.id]?.start ?? 0, end: timings[s.id]?.end ?? 0, how: s.how }));
   const recent = [...mine].sort((a, b) => (b.lastTouchpointDate ?? '').localeCompare(a.lastTouchpointDate ?? '')).map(d => d.id);
-  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const nowMin = ctx.nowMin;
   const answer = whereAmI({ mine, stops, nowMin, position, recent });
 
   const log = (c: { dealership: Dealership; slotId?: string }) => {
     const planned = c.slotId ?? stops.find(s => s.dealershipId === c.dealership.id)?.slotId;
     if (planned) openSheet({ kind: 'outcome', slotId: planned });
     else {
-      const draft = buildLoggedSlot(c.dealership, user.id, contacts, catalog, today, new Date());
+      const draft = buildLoggedSlot(c.dealership, user.id, contacts, catalog, today, new Date(), ctx.repZone);
       openSheet({ kind: 'outcome', slotId: draft.id, draft });
     }
   };
