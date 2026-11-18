@@ -126,3 +126,11 @@ Don't build a second visit form.
 - **Appointments as places** (`layoutDay`): an in-person meeting with an address (or map point) adds a drive like a visit; personal time with no address (dentist, school pickup) is taken to be near home. Other meetings with no address don't move the rep.
 - **Managers joining far away** (`managerJoinHow`, `FAR_JOIN_MILES = 150`): an in-person join more than 150 miles from the manager's home goes on their plan as a Google Meet, with a note saying they can switch it to in person.
 - Demo data version is now `story-2026-11-v7` (the managers' joins changed), so the demo data rebuilds once.
+
+## Log a visit or call
+
+- Every dealership in the picker shows what it is to us (`RelChip`: Prospect, Signing up, Client, Prospect pool, Lost) and its street, so neighbours on the same road can't be mixed up.
+- "You're here" needs the phone to be sure of its position (accuracy within 300 m). When two of the rep's dealerships are equally close, both are offered and the rep picks (`whereAmI` → `alsoHere`).
+- Search (`engine/logSearch.ts`) matches name, city, street, ZIP, contact name and group name. Matches that aren't on the rep's list come back under "Not on your list" with the reason and what tapping does: lost ("Log it anyway"), prospect pool ("Claim it and log"), a teammate's ("Log it for Kevin", noted on the visit).
+- "Not in the list? Add a new dealership" opens the prospect form and carries straight on to logging.
+- The form says "Logging for <name> · <relationship> · <street>" with "Not this one?" back to the picker.

@@ -170,7 +170,7 @@ export const DealershipDetailModal: React.FC<DealershipDetailModalProps> = props
           <div className="mt-4 flex flex-wrap gap-2">
             {onLogVisit && (
               <Btn variant="primary" icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => onLogVisit(d)}>
-                Log a visit
+                Log a visit or call
               </Btn>
             )}
             {onAddToPlan && (

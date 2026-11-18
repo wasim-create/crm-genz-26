@@ -1,6 +1,7 @@
 // "Log a visit": work out which dealership the rep most likely means, so
 // logging takes one tap. In order:
-//   1. a dealership of theirs within a short walk of where the phone is;
+//   1. a dealership of theirs within a short walk of where the phone is (only when the
+//      phone is sure enough of its position; two close together are both offered);
 //   2. the stop on today's plan that's happening now (or just finished);
 //   3. the next stop on today's plan.
 // Everything else is offered as a short list (nearest first when the phone
@@ -32,6 +33,8 @@ export interface WhereCandidate {
 
 export interface WhereAnswer {
   best?: WhereCandidate;
+  /** Other dealerships of theirs just as close: the rep must pick (two rooftops on the same road). */
+  alsoHere: WhereCandidate[];
   plan: WhereCandidate[];
   others: WhereCandidate[];
 }
@@ -55,6 +58,8 @@ export function whereAmI(input: {
   position?: LatLng | null;
   /** Dealership ids, most recently touched first. */
   recent?: string[];
+  /** How sure the phone is of where it is, in metres. Too vague (indoors) and we don't claim "you're here". */
+  accuracy?: number;
 }): WhereAnswer {
   const { mine, nowMin, position } = input;
   const byId = new Map(mine.map(d => [d.id, d]));
@@ -63,14 +68,22 @@ export function whereAmI(input: {
 
   // 1. Standing at one of their dealerships.
   let best: WhereCandidate | undefined;
-  if (position) {
+  let alsoHere: WhereCandidate[] = [];
+  const sure = (input.accuracy ?? 0) <= AT_DEALERSHIP_M;
+  if (position && sure) {
     const near = mine
       .map(d => ({ d, m: dist(d) }))
       .filter(x => x.m !== undefined && x.m <= AT_DEALERSHIP_M)
-      .sort((a, b) => a.m! - b.m!)[0];
-    if (near) {
-      const stop = stops.find(s => s.dealershipId === near.d.id);
-      best = { dealership: near.d, metres: near.m, slotId: stop?.slotId, start: stop?.start, why: 'nearby' };
+      .sort((a, b) => a.m! - b.m!);
+    const asCandidate = (x: { d: Dealership; m?: number }): WhereCandidate => {
+      const stop = stops.find(s => s.dealershipId === x.d.id);
+      return { dealership: x.d, metres: x.m, slotId: stop?.slotId, start: stop?.start, why: 'nearby' };
+    };
+    if (near[0]) {
+      best = asCandidate(near[0]);
+      // Another of theirs within the phone's margin of error of the closest: don't guess.
+      const margin = Math.max(100, input.accuracy ?? 0);
+      alsoHere = near.slice(1).filter(x => x.m! - near[0].m! <= margin).map(asCandidate);
     }
   }
 
@@ -83,10 +96,10 @@ export function whereAmI(input: {
   }
 
   const plan = stops
-    .filter(s => s.slotId !== best?.slotId)
+    .filter(s => s.slotId !== best?.slotId && !alsoHere.some(a => a.slotId === s.slotId))
     .map(s => ({ dealership: byId.get(s.dealershipId)!, slotId: s.slotId, start: s.start, metres: dist(byId.get(s.dealershipId)!), why: 'plan' as const }));
 
-  const used = new Set([best?.dealership.id, ...plan.map(p => p.dealership.id)]);
+  const used = new Set([best?.dealership.id, ...alsoHere.map(a => a.dealership.id), ...plan.map(p => p.dealership.id)]);
   const rest = mine.filter(d => !used.has(d.id));
   let others: WhereCandidate[];
   if (position) {
@@ -103,7 +116,7 @@ export function whereAmI(input: {
       .slice(0, 6)
       .map(d => ({ dealership: d, why: 'recent' as const }));
   }
-  return { best, plan, others };
+  return { best, alsoHere, plan, others };
 }
 
 /** "120 m away" / "2.4 miles away". */
