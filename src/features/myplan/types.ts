@@ -62,6 +62,8 @@ export interface EditLogEntry {
 }
 
 export interface PlanSlot {
+  /** The meeting's own video link (from the calendar invite), when there is one. */
+  meetUrl?: string;
   id: string;
   userId: string;
   /** YYYY-MM-DD. Undefined while the slot is in the plan-later basket. */

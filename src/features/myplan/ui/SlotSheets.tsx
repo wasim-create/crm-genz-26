@@ -5,7 +5,7 @@ import { Inbox, Lock, Phone, SkipForward, Trash2 } from 'lucide-react';
 import { HowType, PlanSlot, TimeMode } from '../types';
 import { durationFor, HOW_LABEL, isMessage } from '../engine/tasks';
 import { format12h, formatDayShort, nextWeekday } from '../engine/time';
-import { checkDuplicates, indexForTime, insertAt, layoutDay, sendTimeAdvice } from '../engine/schedule';
+import { checkDuplicates, indexForTime, insertAt, layoutDay, sendTimeAdvice, suggestPlacements } from '../engine/schedule';
 import { toMin } from '../engine/time';
 import { addSlots, moveSlotToDay, removeSlot, reorderWithinDay, updateSlot, upsertSlots } from '../data/store';
 import { Button, Card, Checkbox, ChoiceCard, Segmented, Sheet } from './primitives';
@@ -215,28 +215,37 @@ export const MoveSheet: React.FC<{ slotId: string; onClose: () => void }> = ({ s
             subtitle="Next working day"
           />
           <ChoiceCard onClick={() => setMode('pick')} title="Pick another day" />
-          {slot.how === 'in_person' && (
+          {/* Only dealership visits can become calls; a dentist appointment can't. */}
+          {slot.how === 'in_person' && slot.target.kind !== 'block' && (
             <ChoiceCard
               icon={<Phone className="h-6 w-6" />}
               onClick={() =>
-                done(() =>
-                  updateSlot(
-                    slot.id,
-                    { how: 'phone', durationMin: durationFor('phone', slot.tasks), timeMode: 'flow', fixedTime: undefined, locked: false },
-                    { message: `${slot.target.name} is now a phone call — no drive needed` }
-                  )
-                )
+                done(() => {
+                  const call: PlanSlot = { ...slot, how: 'phone', durationMin: durationFor('phone', slot.tasks), timeMode: 'flow', fixedTime: undefined, locked: false, autoPinned: false };
+                  const nowMin = ctx.now.getHours() * 60 + ctx.now.getMinutes();
+                  const day = ctx.daySlots(slot.date!).filter(s => s.id !== slot.id);
+                  // Today: the call goes in from now on, not back at the visit's old (past) time.
+                  const pick = isToday ? suggestPlacements(day, call, ctx.layoutCtx(slot.date!), 1, { notBefore: nowMin })[0] : undefined;
+                  if (pick) {
+                    const placed = { ...call, ...(pick.fixedTime ? { timeMode: 'exact' as const, fixedTime: pick.fixedTime } : {}) };
+                    upsertSlots(insertAt(day, placed, pick.index), `${slot.target.name} is now a phone call at ${pick.label} — no drive needed`);
+                  } else {
+                    updateSlot(slot.id, call, { message: `${slot.target.name} is now a phone call — no drive needed` });
+                  }
+                })
               }
               title="Turn it into a phone call"
               subtitle="Saves the drive"
             />
           )}
-          <ChoiceCard
-            icon={<Inbox className="h-6 w-6" />}
-            onClick={() => done(() => moveSlotToDay(slot.id, undefined, { message: `${slot.target.name} is in your plan-later basket` }))}
-            title="Plan it later"
-            subtitle="Put it in the plan-later basket"
-          />
+          {slot.target.kind !== 'block' && (
+            <ChoiceCard
+              icon={<Inbox className="h-6 w-6" />}
+              onClick={() => done(() => moveSlotToDay(slot.id, undefined, { message: `${slot.target.name} is in your plan-later basket` }))}
+              title="Plan it later"
+              subtitle="Put it in the plan-later basket"
+            />
+          )}
           <ChoiceCard icon={<SkipForward className="h-6 w-6" />} onClick={() => setMode('skip')} title="Skip it" subtitle="Say why — it won’t be lost" />
         </div>
       )}

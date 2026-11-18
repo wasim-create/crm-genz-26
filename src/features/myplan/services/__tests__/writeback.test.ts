@@ -148,3 +148,28 @@ test('seed: every rep gets history, today, a basket, action points and their own
   assert.ok(seed.slots.some(s => s.target.kind === 'group'), 'a dealer-group meeting exists');
   assert.ok(seed.slots.some(s => s.batchId && s.how === 'email'), 'an email batch exists (separate slots)');
 });
+
+test('logging an internal meeting (team call from the calendar) earns no points and is not customer contact', () => {
+  const teamCall: PlanSlot = {
+    ...clientVisit(),
+    id: 'slot_team',
+    how: 'meet',
+    workType: 'block',
+    source: 'calendar',
+    target: { kind: 'block', id: 'blk_team_call', name: 'Weekly team call' },
+    tasks: []
+  };
+  const result = buildWriteback({
+    slot: teamCall,
+    user: kelley,
+    dealerships: INITIAL_DEALERSHIPS,
+    catalog: PRODUCT_CATALOG,
+    gameRules: INITIAL_GAME_RULES,
+    productBonuses: INITIAL_PRODUCT_BONUSES,
+    startedAt: '08:30',
+    now: '2026-11-06T13:40:00.000Z'
+  });
+  assert.equal(result.totalPoints, 0);
+  assert.equal(result.points.length, 0);
+  assert.equal(result.activities.length, 0);
+});

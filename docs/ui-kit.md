@@ -102,3 +102,10 @@ Don't build a second visit form.
 - **Visit cards:** points sit on the time line; the bottom line only shows when it has something in it.
 - **First visit:** a one-line "New to My Plan?" offer instead of opening the tour unasked. The tour stays under ⋯.
 - **Very wide screens (1536 px+):** My Plan widens a little and the side column grows to 380 px.
+
+## Logic rules (logic review, stage A)
+
+- **Lateness fits the item** (`engine/schedule.ts`, tests in `lateness.test.ts`): calls and Meets with a set time after the last visit are taken where the rep is, before the drive home; a flexible lunch never goes where it would make a set time late; the first item of the day is never "late" (the rep just starts earlier). Messages: "You can't reach …" for visits, "… overlaps …" for calls, Meets and meetings, "Running behind …" for stops held after a late check-in.
+- **Re-plan** only suggests moves that help (late items, or held items that can now be earlier) and never moves a call or Meet the rep set with a dealer.
+- **Meetings and time blocks** (`target.kind === 'block'`, including calendar items): no points, no customer activity, the "Did it happen?" sheet, no Start driving / I've arrived / Call now, no "turn into a call" or basket. "Join meeting" uses the meeting's own `meetUrl`; without one, the card says to use the calendar invite. Counted as "meetings" in the day summary.
+- **Turning a visit into a call today** places the call from now on.

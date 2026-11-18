@@ -176,7 +176,10 @@ export function buildWriteback(input: WritebackInput): WritebackResult {
   };
 
   const primary = { id: slot.target.id, name: slot.target.name };
-  award(contactActionType(slot.how, startedAt), `${HOW_LABEL[slot.how]} — ${slot.target.name}`, primary);
+  // Meetings and time blocks (team calls, training, personal time) aren't
+  // dealership contact: no contact points, no customer activity.
+  const isBlock = slot.target.kind === 'block';
+  if (!isBlock) award(contactActionType(slot.how, startedAt), `${HOW_LABEL[slot.how]} — ${slot.target.name}`, primary);
 
   const interestEntries: [string, string][] = [];
   const upsellEntries: [string, string][] = [];
@@ -307,7 +310,7 @@ export function buildWriteback(input: WritebackInput): WritebackResult {
   const productsDiscussed = Array.from(
     new Set(slot.tasks.flatMap(t => t.productIds ?? []).map(productName))
   );
-  const activityTargets = affected.length > 0 ? affected.map(d => ({ id: d.id, name: d.dealershipName })) : [primary];
+  const activityTargets = isBlock ? [] : affected.length > 0 ? affected.map(d => ({ id: d.id, name: d.dealershipName })) : [primary];
   const activities: Activity[] = activityTargets.map((t, i) => ({
     id: uid('act'),
     dealershipId: t.id,
