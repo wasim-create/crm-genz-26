@@ -2,6 +2,8 @@
 // One slot = one contact with ONE target (a dealership, a dealer group, or a
 // non-dealership block such as a team meeting). A slot can hold several tasks.
 
+export type BlockType = 'meeting' | 'training' | 'travel' | 'admin' | 'personal' | 'focus';
+
 export type WorkType = 'prospect' | 'signup' | 'client' | 'group' | 'block';
 
 export type HowType = 'in_person' | 'phone' | 'meet' | 'email' | 'text';
@@ -103,6 +105,13 @@ export interface PlanSlot {
   outcomeNote?: string;
   /** Logged after it happened, without being planned first. */
   unplanned?: boolean;
+  /** A meeting or time block the rep added themselves (not about a dealership visit). */
+  blockType?: BlockType;
+  /** Busy the whole working day. */
+  allDay?: boolean;
+  /** A meeting or block that's about a dealership (counts as contact once it's happened). */
+  relatedDealershipId?: string;
+  relatedDealershipName?: string;
   pointsAwarded?: number;
   skippedReason?: string;
   corrections?: { at: string; byName: string; note: string }[];

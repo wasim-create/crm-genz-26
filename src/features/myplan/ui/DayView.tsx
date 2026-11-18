@@ -266,7 +266,7 @@ export const DayView: React.FC = () => {
         <li key={`add${i}`} className="py-1 pl-6">
           <button
             type="button"
-            onClick={() => openSheet({ kind: 'add', preset: { date, insertIndex: k + 1, nonce: Date.now() } })}
+            onClick={() => openSheet({ kind: 'addchoose', date, insertIndex: k + 1 })}
             className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-dashed border-blue-300 bg-blue-50/60 px-3 text-[14px] font-semibold text-blue-800 hover:bg-blue-100"
           >
             <Plus className="h-4 w-4" /> Add here{free >= 10 ? ` · ${formatDuration(free)} free` : ''}
@@ -386,7 +386,7 @@ export const DayView: React.FC = () => {
           <button
             type="button"
             aria-label="Add to my plan"
-            onClick={() => openSheet({ kind: 'add', preset: { date, nonce: Date.now() } })}
+            onClick={() => openSheet({ kind: 'addchoose', date })}
             className="flex h-16 w-16 items-center justify-center rounded-full bg-brand text-onaccent shadow-xl active:scale-95"
           >
             <Plus className="h-8 w-8" />
@@ -418,7 +418,7 @@ const DaySummary: React.FC<{ layout: DayLayout; slots: PlanSlot[] }> = ({ layout
         action={
           readOnly ? undefined : (
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button variant="primary" size="lg" icon={<Plus className="h-5 w-5" />} onClick={() => openSheet({ kind: 'add', preset: { date } })}>
+              <Button variant="primary" size="lg" icon={<Plus className="h-5 w-5" />} onClick={() => openSheet({ kind: 'addchoose', date })}>
                 Add to my plan
               </Button>
               {basket.length > 0 && (

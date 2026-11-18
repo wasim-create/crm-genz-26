@@ -162,7 +162,7 @@ export const Header: React.FC<{ viewers: User[]; onViewUser: (id: string) => voi
         )}
         {view === 'day' && !readOnly && date >= today && (
           <span className="hidden sm:block">
-            <Button variant="primary" onClick={() => openSheet({ kind: 'add', preset: { date, nonce: Date.now() } })} icon={<Plus className="h-5 w-5" />}>
+            <Button variant="primary" onClick={() => openSheet({ kind: 'addchoose', date })} icon={<Plus className="h-5 w-5" />}>
             <span className="hidden sm:inline">Add</span>
           </Button>
           </span>

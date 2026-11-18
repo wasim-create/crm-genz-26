@@ -72,3 +72,8 @@ Don't build a second visit form.
 - `src/features/inventory/stock.ts` (rules, tested): on hand = opening stock or latest count + deliveries/office dispatches − contracts (each contract number once) since the tracking start date. Pace = contracts per week (or the drop between counts for stores where not every contract uses a keychain). Factory-supplied stores: Order now under lead time + cushion (9 + 1 weeks), Order soon under 14. Office-supplied stores (the held group): Send from office under 3 weeks. Office stock: the group's whole pace against office + store stock.
 - Sheets: `csv.ts` reads the order tracking sheet, the weekly contracts sheet (replaces the last upload) and the group's "Form Responses 1" by header name. `demo.ts` builds the same shapes from the CRM; `store.ts` keeps uploads, counts, switches and rules.
 - Screens: Keyfetch stock (Inventory Manager home), the Keyfetch card on a dealership's Products tab, and stock flags in reps' "Worth a look" and on My team.
+
+## Adding to My plan
+
+- Every general "+ Add" opens "What are you adding?" (`ui/BlockSheets.tsx`): Dealership work (the Add flow), A meeting or time block, A to-do, or Something that already happened. Adding from a dealership still goes straight to the Add flow.
+- Meetings and time blocks are block slots with `blockType` (meeting, training, travel, admin, personal, focus), a fixed time or all day, optional place, people, notes, weekly repeats and an optional dealership. They hold their time on the timeline, earn no points, and only count as dealership contact (an Activity) when linked to a dealership and done.

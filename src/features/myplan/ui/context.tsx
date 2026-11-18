@@ -47,6 +47,8 @@ export type SheetState =
   | { kind: 'replan'; date: string }
   | { kind: 'nextstep'; dealershipId: string }
   | { kind: 'logpick' }
+  | { kind: 'addchoose'; date?: string; insertIndex?: number }
+  | { kind: 'block'; date?: string; slotId?: string; past?: boolean; title?: string; insertIndex?: number; blockType?: import('../types').BlockType }
   | null;
 
 export interface MyPlanContextValue {
