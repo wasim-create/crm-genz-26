@@ -455,7 +455,15 @@ export function suggestPlacements(
     const prev = prevId ? daySlots.find(x => x.id === prevId) : undefined;
     let reason: string;
     if (!fits) {
-      reason = newWarnings[0].message;
+      // A knock-on problem for another stop is worded as what adding this does to it,
+      // so the rep isn't left wondering why a different dealership is mentioned.
+      const w = newWarnings[0];
+      const other = w.slotId && w.slotId !== candidate.id ? daySlots.find(x => x.id === w.slotId) : undefined;
+      const ot = other ? layout.timings[other.id] : undefined;
+      reason =
+        other && ot
+          ? `Pushes ${other.target.name} later, to end at ${format12h(ot.end)}${w.code === 'outside_live' ? ', outside 10–4' : w.code === 'late_for_fixed' ? ', past its set time' : ''}.`
+          : w.message;
     } else if (!prev) {
       reason = candidate.how === 'in_person' && layout.leaveBy !== undefined
         ? `First stop of the day — leave home by ${format12h(layout.leaveBy)}`

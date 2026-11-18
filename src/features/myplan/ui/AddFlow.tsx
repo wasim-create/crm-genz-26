@@ -79,6 +79,7 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
   const [batchProducts, setBatchProducts] = useState<string[]>(catalog.filter(p => p.isNewLaunch).map(p => p.id).slice(0, 1));
   const [message, setMessage] = useState<string>(DEFAULT_MESSAGE.followup);
   const [date, setDate] = useState<string>(preset?.date && preset.date >= today ? preset.date : today);
+  const [needPick, setNeedPick] = useState(false);
   const [choice, setChoice] = useState<
     | { type: 'suggest'; s: PlanSuggestionLike }
     | { type: 'mode'; mode: 'morning' | 'afternoon' | 'flow' }
@@ -233,7 +234,12 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
     const lay = layoutDay(daySlots, ctx.layoutCtx(date));
     let index = lay.sequence.length;
     let slot: PlanSlot = { ...draft, date, status: 'planned', timeMode: 'flow', fixedTime: draft.locked ? draft.fixedTime : undefined };
-    const ch = choice ?? (suggestions[0] ? { type: 'suggest' as const, s: suggestions[0] } : { type: 'mode' as const, mode: 'flow' as const });
+    if (!choice && !defaultSuggest && !messageHow) {
+      // Nothing on this day fits and nothing was picked: ask, rather than squeezing it in.
+      setNeedPick(true);
+      return;
+    }
+    const ch = choice ?? (defaultSuggest ? { type: 'suggest' as const, s: defaultSuggest } : { type: 'mode' as const, mode: 'flow' as const });
     if (ch.type === 'suggest') {
       index = ch.s.index;
       if (ch.s.fixedTime) slot = { ...slot, timeMode: 'exact', fixedTime: ch.s.fixedTime };
@@ -295,6 +301,9 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
     return list;
   }, [draft, date, step, messageHow, ctx, notBefore, preset?.insertIndex, preset?.date]);
 
+  // Only a time that fits is picked for the rep; otherwise they choose.
+  const defaultSuggest = suggestions[0]?.fits ? suggestions[0] : undefined;
+
   const roomElsewhere = useMemo(() => {
     if (!draft || messageHow || step !== 'when' || suggestions.some(s => s.fits)) return undefined;
     let d = date;
@@ -324,7 +333,7 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
       });
     }
     if (!draft) return [];
-    const ch = choice ?? (suggestions[0] ? { type: 'suggest' as const, s: suggestions[0] } : null);
+    const ch = choice ?? (defaultSuggest ? { type: 'suggest' as const, s: defaultSuggest } : null);
     const start = ch?.type === 'suggest' ? ch.s.start : ch?.type === 'exact' ? toMin(ch.time) : undefined;
     return checkDuplicates({ candidate: draft, start, date, daySlots: day, layout: lay, teammates });
   }, [step, basketSlot, ctx, date, viewUser.id, messageHow, isBatch, multi, draft, dealershipById, how, choice, suggestions]);
@@ -351,6 +360,11 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
             </span>
           </div>
         ))}
+        {needPick && !choice && (
+          <p className="rounded-xl bg-amber-50 p-3 text-[15px] font-semibold text-amber-950" role="alert">
+            Pick a time, or use another day.
+          </p>
+        )}
         <Button variant="primary" size="lg" block onClick={confirm} disabled={blocked} icon={<CheckCircle2 className="h-5 w-5" />}>
           Add to my plan
         </Button>
@@ -509,6 +523,7 @@ export const AddFlow: React.FC<{ preset?: AddPreset; onClose: () => void }> = ({
 
       {step === 'when' && (
         <WhenStep
+          onDayChange={() => setNeedPick(false)}
           draft={draft}
           messageHow={messageHow ? (how as 'email' | 'text') : undefined}
           batchCount={isBatch ? multi.length : 1}
@@ -854,9 +869,11 @@ const WhenStep: React.FC<{
   tripExtras: string[];
   setTripExtras: (ids: string[]) => void;
   onPlanLater?: () => void;
+  onDayChange?: () => void;
 }> = props => {
   const { draft, messageHow, date, setDate, suggestions, choice, setChoice, ownTime, setOwnTime, roomElsewhere, tripExtras, setTripExtras, onPlanLater } = props;
   const { home, engine, dealerships, viewUser, tzDiffFor, today, nowMin } = useMyPlan();
+  const defaultSuggest = suggestions[0]?.fits ? suggestions[0] : undefined;
 
   if (messageHow) {
     const suggested = suggestSendTime(messageHow, date);
@@ -907,7 +924,7 @@ const WhenStep: React.FC<{
         .slice(0, 5)
     : [];
 
-  const isChosen = (c: any) => JSON.stringify(c) === JSON.stringify(choice ?? (suggestions[0] ? { type: 'suggest', s: suggestions[0] } : null));
+  const isChosen = (c: any) => JSON.stringify(c) === JSON.stringify(choice ?? (defaultSuggest ? { type: 'suggest', s: defaultSuggest } : null));
 
   return (
     <div className="space-y-5">
@@ -955,6 +972,16 @@ const WhenStep: React.FC<{
       )}
       <div>
         <div className="mb-2 text-[17px] font-bold text-slate-900">Best times on {formatDayLong(date)}</div>
+        {suggestions.length > 0 && !suggestions.some(s => s.fits) && (
+          <Card className="mb-2 border-amber-300 bg-amber-50 p-3 text-[15px] text-amber-950">
+            <span className="font-semibold">This day is already full.</span> Any time below would push something late.
+            {roomElsewhere && (
+              <Button variant="primary" className="mt-2 block" onClick={() => { setDate(roomElsewhere.date); setChoice(null); props.onDayChange?.(); }}>
+                Use {formatDayShort(roomElsewhere.date)} instead, at {roomElsewhere.s.label}
+              </Button>
+            )}
+          </Card>
+        )}
         <div className="space-y-2">
           {suggestions.map((s, i) => (
             <ChoiceCard
@@ -965,16 +992,6 @@ const WhenStep: React.FC<{
               subtitle={s.reason}
             />
           ))}
-          {!suggestions.some(s => s.fits) && (
-            <Card className="border-amber-300 bg-amber-50 p-3 text-[15px] text-amber-950">
-              This day is already full.
-              {roomElsewhere && (
-                <Button variant="secondary" className="ml-2 mt-2" onClick={() => setDate(roomElsewhere.date)}>
-                  {formatDayShort(roomElsewhere.date)} has room at {roomElsewhere.s.label}
-                </Button>
-              )}
-            </Card>
-          )}
         </div>
       </div>
 

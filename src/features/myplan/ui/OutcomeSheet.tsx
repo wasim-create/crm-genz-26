@@ -22,6 +22,7 @@ import { useMyPlan } from './context';
 import { ContactsEditor, TasksEditor } from './parts';
 import { newId, productName } from './slotHelpers';
 import { readNote } from '../engine/nextStep';
+import { parseISODate } from '../engine/time';
 import { NextStepCard, NextStepValue, buildNextSlot, nextStepSummary, placeNextSlot, valueFromReading } from './NextStepCard';
 import { NEXT_SKIP_REASONS } from '../engine/nextStep';
 
@@ -80,8 +81,8 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
 
   const [tasks, setTasks] = useState<SlotTask[]>(() => (slot?.tasks ?? []).map(t => ({ ...t, outcome: t.outcome ?? emptyOutcome(t) })));
   const [spoke, setSpoke] = useState<Pick<PlanSlot, 'target' | 'contactIds' | 'contactNames' | 'how'>>(() => ({
-    target: slot!.target,
-    how: slot!.how,
+    target: slot?.target ?? { kind: 'dealership', id: '', name: '' },
+    how: slot?.how ?? 'in_person',
     contactIds: slot?.spokeWithContactIds ?? slot?.contactIds ?? [],
     contactNames: slot?.spokeWithNames ?? slot?.contactNames ?? []
   }));
@@ -124,14 +125,23 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
   const stageSug = stageSuggestion ?? (reading.stage && dealership && reading.stage.to !== dealership.stage ? { to: reading.stage.to, reason: `${reading.stage.reason} (“${reading.stage.from}”)` } : null);
   const showNext = !wasDone && !!slot && slot.target.kind !== 'block';
 
-  if (!slot) return null;
-
-  const setOutcome = (taskId: string, outcome: TaskOutcome) => setTasks(ts => ts.map(t => (t.taskId === taskId ? { ...t, outcome } : t)));
-
   // Speak a note: keeps listening until you tap Stop (or pause for a while),
   // showing the words as they come. Works in Chrome and Safari.
   const recRef = React.useRef<any>(null);
   const [heard, setHeard] = useState('');
+  React.useEffect(() => () => recRef.current?.stop(), []);
+  // Results the rep has actually picked: nothing counts as "Done" until they say so.
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(slot?.status === 'done' ? (slot.tasks ?? []).map(t => t.taskId) : []));
+  const [askResult, setAskResult] = useState(false);
+
+  // Every hook is above this line: the item can disappear while the form is open
+  // (synced away, removed by a manager, or the person switched), and then the form just closes.
+  if (!slot) return null;
+
+  const setOutcome = (taskId: string, outcome: TaskOutcome) => {
+    setTasks(ts => ts.map(t => (t.taskId === taskId ? { ...t, outcome } : t)));
+    setPicked(p => new Set(p).add(taskId));
+  };
   const listen = () => {
     if (listening) {
       recRef.current?.stop();
@@ -173,12 +183,20 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
     setListening(true);
     rec.start();
   };
-  React.useEffect(() => () => recRef.current?.stop(), []);
 
   const keyfetchQty = tasks.map(t => t.outcome).find(o => o?.kind === 'keyfetch' && o.needsRefill) as Extract<TaskOutcome, { kind: 'keyfetch' }> | undefined;
   const missingQty = keyfetchQty && !(keyfetchQty.quantity && keyfetchQty.quantity > 0);
 
+  // Simple results ("Done", "Needs follow-up"…) the rep hasn't picked yet.
+  const unanswered = wasDone || isMessage(spoke.how) ? [] : tasks.filter(t => t.outcome?.kind === 'simple' && !picked.has(t.taskId)).map(t => t.taskId);
+
   const save = () => {
+    if (unanswered.length) {
+      setAskResult(true);
+      document.getElementById(`result-${unanswered[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById(`result-${unanswered[0]}`)?.querySelector<HTMLButtonElement>('[role="radio"]')?.focus();
+      return;
+    }
     const nowISO = new Date().toISOString();
     const timing = ctx.layout(slot.date ?? ctx.today).timings[slot.id];
     const startedAt = slot.unplanned ? startTime : slot.checkInAt ? toHHMM(isoToLocalMin(slot.checkInAt, ctx.repZone)) : timing ? toHHMM(timing.start) : slot.sendTime;
@@ -345,7 +363,7 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
             </div>
           </Card>
         )}
-        <Card className="flex flex-col items-center p-6 text-center">
+        <Card className="flex flex-col items-center p-6 text-center" role="status">
           {result.points > 0 ? <Trophy className="h-12 w-12 text-amber-500" /> : <CheckCircle2 className="h-12 w-12 text-emerald-600" />}
           <div className="mt-2 text-[22px] font-extrabold text-slate-900">{result.points > 0 ? `+${result.points} points` : wasDone ? 'Changes saved' : 'Saved'}</div>
           <p className="mt-1 text-[16px] text-slate-600">
@@ -404,7 +422,7 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
       onClose={onClose}
       footer={
         <Button variant="primary" size="lg" block onClick={save} disabled={!!missingQty || (needsReason && !reason.trim())}>
-          {wasDone ? 'Save changes' : 'Save'}
+          {wasDone ? 'Save changes' : showNext && nextValue.mode === 'plan' ? `Save · adds a ${HOW_SHORT[nextValue.how].toLowerCase()} ${parseISODate(nextValue.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}` : showNext && nextValue.mode === 'later' ? 'Save · next step goes to your basket' : 'Save'}
         </Button>
       }
     >
@@ -463,7 +481,7 @@ export const OutcomeSheet: React.FC<{ slotId: string; draft?: PlanSlot; onClose:
         )}
 
         {tasks.map(task => (
-          <TaskOutcomeCard key={task.taskId} task={task} onChange={o => setOutcome(task.taskId, o)} />
+          <TaskOutcomeCard key={task.taskId} task={task} unpicked={!wasDone && !picked.has(task.taskId)} ask={askResult && unanswered.includes(task.taskId)} onChange={o => setOutcome(task.taskId, o)} />
         ))}
         {tasks.length === 0 && isMessage(spoke.how) && <Card className="p-4 text-[16px]">Mark this message as sent.</Card>}
 
@@ -598,15 +616,20 @@ function alertless(msg: string) {
   console.info(msg);
 }
 
-const TaskOutcomeCard: React.FC<{ task: SlotTask; onChange: (o: TaskOutcome) => void }> = ({ task, onChange }) => {
+const TaskOutcomeCard: React.FC<{ task: SlotTask; unpicked?: boolean; ask?: boolean; onChange: (o: TaskOutcome) => void }> = ({ task, unpicked, ask, onChange }) => {
   const { catalog } = useMyPlan();
   const def = TASK_BY_ID[task.taskId];
   const o = task.outcome!;
   const name = (id: string) => productName(catalog, id);
   return (
-    <Card className="p-4">
+    <Card className={`p-4 ${ask ? 'border-amber-400 ring-2 ring-amber-200' : ''}`}>
       <div className="mb-3 text-[18px] font-bold text-slate-900">{def?.label ?? task.taskId}</div>
-      {o.kind === 'simple' && <Segmented ariaLabel={def?.label ?? 'Result'} value={o.result} onChange={v => onChange({ kind: 'simple', result: v })} options={SIMPLE} />}
+      {o.kind === 'simple' && (
+        <div id={`result-${task.taskId}`}>
+          <Segmented ariaLabel={`${def?.label ?? 'Result'}: how did it go?`} value={unpicked ? undefined : o.result} onChange={v => onChange({ kind: 'simple', result: v })} options={SIMPLE} />
+          {ask && <p className="mt-2 text-[15px] font-semibold text-amber-900" role="alert">Pick how it went, then save.</p>}
+        </div>
+      )}
       {o.kind === 'interest' && (
         <div className="space-y-3">
           {Object.keys(o.levels).length === 0 && <p className="text-[15px] text-slate-600">No products picked for this task.</p>}
