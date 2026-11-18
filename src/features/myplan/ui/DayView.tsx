@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CalendarPlus,
@@ -25,7 +25,7 @@ import {
   History
 } from 'lucide-react';
 import { PlanSlot } from '../types';
-import { DayLayout, dragIntent, holdRestOfDay, layoutDay, nudgedTime, replanPreview } from '../engine/schedule';
+import { DayLayout, dragIntent, holdRestOfDay, insertAt, layoutDay, nudgedTime, replanPreview, suggestEarlierGap } from '../engine/schedule';
 import { addDays, format12h, formatDayLong, formatDuration, toHHMM } from '../engine/time';
 import { isClockChangeDay } from '../engine/timezones';
 import { arrowMove, updateActionPoint, updateSettings, updateSlot, upsertSlots, useMyPlanState } from '../data/store';
@@ -33,7 +33,8 @@ import { Button, Card, EmptyState, SectionTitle } from './primitives';
 import { SlotCard } from './SlotCard';
 import { useMyPlan } from './context';
 import { mapsUrl } from './slotHelpers';
-import { pickNextUp } from '../engine/nextUp';
+import { nextMessage, overdueMessages, pickNextUp } from '../engine/nextUp';
+import { isMessage } from '../engine/tasks';
 
 const FULLNESS_TEXT: Record<DayLayout['fullness'], { label: string; tone: string; width: string }> = {
   empty: { label: 'Nothing planned', tone: 'bg-slate-200', width: 'w-0' },
@@ -74,7 +75,11 @@ export const DayView: React.FC = () => {
   const showNext = isToday && !readOnly;
   const picked = showNext ? pickNextUp(sequence, id => lay.timings[id]?.end, nowMin) : { next: undefined, missed: [] as PlanSlot[] };
   const nextSlot = picked.next;
-  const missed = picked.missed;
+  const sendAt = new Map(lay.messages.map(m => [m.slotId, m.sendTime]));
+  // Unsent emails and texts past their time join "Still to log" (in time order with everything else).
+  const startOf = (x: PlanSlot) => lay.timings[x.id]?.start ?? sendAt.get(x.id) ?? 0;
+  const missed = showNext ? [...picked.missed, ...overdueMessages(messages, id => sendAt.get(id), nowMin)].sort((a, b) => startOf(a) - startOf(b)) : [];
+  const hasPlans = sequence.length + messages.length > 0;
   const goToNext = () => {
     const el = document.getElementById('next-up');
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -362,13 +367,15 @@ export const DayView: React.FC = () => {
 
       <DaySummary layout={lay} slots={slots} />
 
+      {editable && <EarlierGap />}
+
       {showNext && (() => {
-        const target = nextSlot ?? messages.find(m => m.status === 'planned');
-        // "All done" only once nothing is left to log either.
-        return target || missed.length === 0 ? <NextCard target={target} layout={lay} /> : null;
+        const target = nextSlot ?? nextMessage(messages, id => sendAt.get(id), nowMin);
+        // "All done" only once nothing is left to log either, and only on a day that had something in it.
+        return target || (missed.length === 0 && hasPlans) ? <NextCard target={target} layout={lay} /> : null;
       })()}
 
-      {missed.length > 0 && <StillToLog slots={missed} layout={lay} />}
+      {missed.length > 0 && <StillToLog slots={missed} layout={lay} sendAt={sendAt} />}
 
       {(sequence.length > 0 || messages.length > 0) && (
         <>
@@ -466,7 +473,10 @@ export const DayView: React.FC = () => {
 };
 
 const DaySummary: React.FC<{ layout: DayLayout; slots: PlanSlot[] }> = ({ layout, slots }) => {
-  const { date, today, readOnly, openSheet, basket } = useMyPlan();
+  const { date, today, readOnly, openSheet, basket, now } = useMyPlan();
+  // Once the leave time has passed today, the useful headline is when you'll be home.
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const onTheRoad = date === today && layout.leaveBy !== undefined && layout.homeAt !== undefined && nowMin >= layout.leaveBy;
   const scheduled = slots.filter(s => s.status !== 'skipped');
   const visits = scheduled.filter(s => s.how === 'in_person' && s.target.kind !== 'block').length;
   const calls = scheduled.filter(s => (s.how === 'phone' || s.how === 'meet') && s.target.kind !== 'block').length;
@@ -519,12 +529,16 @@ const DaySummary: React.FC<{ layout: DayLayout; slots: PlanSlot[] }> = ({ layout
               <Car className="h-6 w-6" />
             </div>
             <div>
-              <div className="text-[15px] font-medium text-slate-500">Leave home by</div>
-              <div className="text-[26px] font-extrabold leading-tight text-slate-900 tabular-nums">{format12h(layout.leaveBy)}</div>
+              <div className="text-[15px] font-medium text-slate-500">{onTheRoad ? (nowMin >= layout.homeAt! ? 'Back home around' : 'Home around') : 'Leave home by'}</div>
+              <div className="text-[26px] font-extrabold leading-tight text-slate-900 tabular-nums">{format12h(onTheRoad ? layout.homeAt! : layout.leaveBy)}</div>
             </div>
           </div>
           <div className="text-right text-[15px] text-slate-600">
-            {layout.homeAt !== undefined && (
+            {onTheRoad ? (
+              <div>
+                Planned to leave by <span className="font-bold text-slate-900">{format12h(layout.leaveBy)}</span>
+              </div>
+            ) : layout.homeAt !== undefined && (
               <div>
                 Home around <span className="font-bold text-slate-900">{format12h(layout.homeAt)}</span>
               </div>
@@ -582,6 +596,33 @@ const DaySummary: React.FC<{ layout: DayLayout; slots: PlanSlot[] }> = ({ layout
   );
 };
 
+/** A late-in-the-day visit that would fit in free time earlier: offer the move (one tap, never automatic). */
+const EarlierGap: React.FC = () => {
+  const ctx = useMyPlan();
+  const { date, today, now, daySlots, layoutCtx } = ctx;
+  const slots = daySlots(date);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const g = useMemo(() => suggestEarlierGap(slots, layoutCtx(date), date === today ? { notBefore: nowMin } : {}), [slots, date, today, nowMin]);
+  if (!g) return null;
+  const move = () => {
+    const c = slots.find(x => x.id === g.slotId);
+    if (!c) return;
+    upsertSlots(insertAt(slots.filter(x => x.id !== g.slotId), c, g.index), `${g.name} moved to ${format12h(g.start)}`);
+  };
+  return (
+    <Card className="mt-3 flex flex-wrap items-center gap-3 border-blue-200 bg-blue-50 p-4">
+      <Clock className="h-6 w-6 shrink-0 text-blue-700" />
+      <div className="min-w-[12rem] flex-1 text-[15px] text-blue-950">
+        <span className="font-semibold">{g.name} fits earlier</span>, at {format12h(g.start)}
+        {g.beforeName ? ` (before ${g.beforeName})` : ''}. You'd finish around {format12h(g.finishAfter)} instead of {format12h(g.finishBefore)}.
+      </div>
+      <Button variant="primary" onClick={move}>
+        Move it earlier
+      </Button>
+    </Card>
+  );
+};
+
 /** First visit: offer the short tour in one line instead of opening it unasked. */
 const TourHint: React.FC = () => {
   const { user, openSheet } = useMyPlan();
@@ -601,7 +642,7 @@ const TourHint: React.FC = () => {
 };
 
 /** Things on today's plan whose time has passed and haven't been logged. */
-const StillToLog: React.FC<{ slots: PlanSlot[]; layout: DayLayout }> = ({ slots, layout }) => {
+const StillToLog: React.FC<{ slots: PlanSlot[]; layout: DayLayout; sendAt: Map<string, number> }> = ({ slots, layout, sendAt }) => {
   const { openSheet } = useMyPlan();
   const [all, setAll] = useState(false);
   const shown = all ? slots : slots.slice(0, 2);
@@ -614,19 +655,26 @@ const StillToLog: React.FC<{ slots: PlanSlot[]; layout: DayLayout }> = ({ slots,
       <ul className="mt-2 divide-y divide-amber-200/70">
         {shown.map(s => {
           const t = layout.timings[s.id];
+          const msg = isMessage(s.how);
+          const send = sendAt.get(s.id);
           return (
             <li key={s.id} className="flex flex-wrap items-center gap-2 py-2.5">
               <div className="min-w-[10rem] flex-1">
                 <div className="text-[16px] font-semibold text-slate-900 [overflow-wrap:anywhere]">{s.target.name}</div>
                 {t && <div className="text-[14px] text-slate-600">{format12h(t.start)} – {format12h(t.end)}</div>}
+                {msg && send !== undefined && (
+                  <div className="text-[14px] text-slate-600">
+                    {s.how === 'email' ? 'Email' : 'Text'} due at {format12h(send)}
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" className="!px-3" onClick={() => openSheet({ kind: 'outcome', slotId: s.id })}>
-                  {s.target.kind === 'block' ? 'Log it' : 'How did it go?'}
+                  {msg ? 'Mark as sent' : s.target.kind === 'block' ? 'Log it' : 'How did it go?'}
                 </Button>
                 {s.target.kind !== 'block' && (
                   <Button variant="ghost" className="!px-3" onClick={() => openSheet({ kind: 'move', slotId: s.id })}>
-                    Didn't happen
+                    {msg ? 'Not sent' : "Didn't happen"}
                   </Button>
                 )}
               </div>

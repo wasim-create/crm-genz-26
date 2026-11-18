@@ -21,3 +21,16 @@ export function pickNextUp<T extends Pick<PlanSlot, 'id' | 'status'>>(sequence: 
   const missed = sequence.filter(s => s.status === 'planned' && over(s));
   return { next, missed };
 }
+
+/**
+ * Emails and texts whose send time has passed but that aren't marked as sent.
+ * They belong in "Still to log", not in Next up.
+ */
+export function overdueMessages<T extends Pick<PlanSlot, 'id' | 'status'>>(messages: T[], sendTimeOf: (id: string) => number | undefined, nowMin: number): T[] {
+  return messages.filter(m => m.status === 'planned' && (sendTimeOf(m.id) ?? 24 * 60) <= nowMin);
+}
+
+/** The next email or text still to go out (for Next up when nothing else is left). */
+export function nextMessage<T extends Pick<PlanSlot, 'id' | 'status'>>(messages: T[], sendTimeOf: (id: string) => number | undefined, nowMin: number): T | undefined {
+  return messages.find(m => m.status === 'planned' && (sendTimeOf(m.id) ?? 24 * 60) > nowMin);
+}

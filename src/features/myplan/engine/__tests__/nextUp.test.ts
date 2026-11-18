@@ -40,3 +40,13 @@ test('Items with no time yet are treated as not over', () => {
   const r = pickNextUp([{ id: 'x', status: 'planned' }] as S[], () => undefined, 23 * 60);
   assert.equal(r.next?.id, 'x');
 });
+
+import { nextMessage, overdueMessages } from '../nextUp';
+
+test('Unsent emails past their time go to Still to log; Next up only offers ones still to go out', () => {
+  const msgs = [{ id: 'e1', status: 'planned' }, { id: 'e2', status: 'planned' }, { id: 'e3', status: 'done' }] as S[];
+  const send: Record<string, number> = { e1: 10 * 60 + 15, e2: 15 * 60, e3: 9 * 60 };
+  assert.deepEqual(overdueMessages(msgs, id => send[id], 18 * 60 + 30).map(m => m.id), ['e1', 'e2']);
+  assert.equal(nextMessage(msgs, id => send[id], 18 * 60 + 30), undefined);
+  assert.equal(nextMessage(msgs, id => send[id], 11 * 60)?.id, 'e2');
+});

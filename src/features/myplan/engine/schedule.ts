@@ -74,6 +74,7 @@ export interface DayLayout {
 const LUNCH_WINDOW = 60; // a flexible lunch can move up to an hour either way
 const AFTERNOON_START = 13 * 60;
 const MORNING_END = 12 * 60;
+const LATE_EVENING = 18 * 60;
 
 /** Slots that count for a day's timeline (not in the basket, not skipped). */
 export const isScheduled = (s: PlanSlot): boolean => s.status !== 'basket' && s.status !== 'skipped' && !!s.date;
@@ -232,10 +233,14 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
         message: `${slot.target.name} is at ${format12h(start)}. Dealerships are usually busy before 10 AM.`
       });
     } else if (live && end > liveEndRep) {
+      // After about 6 PM (their time) it isn't "busy", it's too late in the day for a visit or call.
+      const tooLate = end + tz > LATE_EVENING;
       warnings.push({
         code: 'outside_live',
         slotId: slot.id,
-        message: `${slot.target.name} ends at ${format12h(end)}. Dealerships are usually busy after 4 PM.`
+        message: tooLate
+          ? `${slot.target.name} would end at ${format12h(end)}. That's too late in the day for a dealership ${isVisit ? 'visit' : 'call'}; move it earlier or to another day.`
+          : `${slot.target.name} ends at ${format12h(end)}. Dealerships are usually busy after 4 PM.`
       });
     }
     if (actualStart === undefined && slot.timeMode === 'morning' && start >= MORNING_END) {
@@ -295,7 +300,9 @@ export function layoutDay(daySlots: PlanSlot[], ctx: LayoutContext): DayLayout {
     const ratio = used / available;
     fullness = ratio < 0.35 ? 'light' : ratio < 0.75 ? 'good' : ratio <= 1 ? 'full' : 'too_much';
   }
-  if (fullness === 'too_much') {
+  if (finish !== undefined && finish >= 24 * 60) {
+    warnings.push({ code: 'too_much', message: "This day runs past midnight, so it can't all happen. Move some stops to another day." });
+  } else if (fullness === 'too_much') {
     warnings.push({ code: 'too_much', message: 'This day has more than you can realistically do. Move something to another day?' });
   }
 
@@ -667,4 +674,57 @@ export function pastEditWindow(slot: Pick<PlanSlot, 'completedAt' | 'date'>, now
   if (!base) return { open: true };
   const closesAt = new Date(base.getTime() + EDIT_WINDOW_HOURS * 3600 * 1000);
   return { open: now.getTime() < closesAt.getTime(), closesAt };
+}
+
+// ---------- Using free time earlier in the day ----------
+
+export interface GapSuggestion {
+  slotId: string;
+  name: string;
+  /** Position in the day's sequence to move it to. */
+  index: number;
+  /** New start time, and when the day would finish before and after. */
+  start: number;
+  finishBefore: number;
+  finishAfter: number;
+  /** The item it would go before. */
+  beforeName?: string;
+}
+
+/**
+ * A visit or call that ends up late in the day (after 4 PM their time) while
+ * there's room for it earlier: suggest the earlier spot. Only a suggestion; the
+ * rep taps to move it. It never makes anything else late or outside 10–4, and
+ * never goes before something that has already started (or before `notBefore`).
+ */
+export function suggestEarlierGap(daySlots: PlanSlot[], ctx: LayoutContext, opts: { notBefore?: number } = {}): GapSuggestion | undefined {
+  const base = layoutDay(daySlots, ctx);
+  const baseFinish = base.finish;
+  if (baseFinish === undefined) return undefined;
+  const byId = new Map(daySlots.map(x => [x.id, x]));
+  const count = (l: DayLayout, code: WarningCode) => l.warnings.filter(w => w.code === code).length;
+  const lastStarted = base.sequence.map(id => byId.get(id)!).map(x => x.status !== 'planned').lastIndexOf(true);
+  let best: GapSuggestion | undefined;
+  base.sequence.forEach((id, from) => {
+    const c = byId.get(id)!;
+    const movable = c.status === 'planned' && !c.locked && !c.autoPinned && c.timeMode !== 'exact' && c.target.kind !== 'block';
+    if (!movable || !base.warnings.some(w => w.code === 'outside_live' && w.slotId === id && (base.timings[id]?.end ?? 0) > (base.timings[id]?.start ?? 0))) return;
+    if ((base.timings[id]?.start ?? 0) < toMin(ctx.settings.liveStart)) return; // only late-in-the-day problems
+    const rest = daySlots.filter(x => x.id !== id);
+    for (let to = Math.max(0, lastStarted + 1); to < from; to++) {
+      const trial = layoutDay(insertAt(rest, c, to), ctx);
+      const t = trial.timings[id];
+      if (!t || trial.finish === undefined) continue;
+      if (opts.notBefore !== undefined && t.start - t.travelBefore < opts.notBefore) continue;
+      if (trial.warnings.some(w => w.slotId === id && (w.code === 'outside_live' || w.code === 'late_for_fixed'))) continue;
+      if (count(trial, 'late_for_fixed') > count(base, 'late_for_fixed')) continue;
+      if (count(trial, 'outside_live') >= count(base, 'outside_live')) continue;
+      if (trial.finish > baseFinish) continue;
+      if (!best || trial.finish < best.finishAfter) {
+        const after = trial.sequence[trial.sequence.indexOf(id) + 1];
+        best = { slotId: id, name: c.target.name, index: to, start: t.start, finishBefore: baseFinish, finishAfter: trial.finish, beforeName: after ? byId.get(after)?.target.name : undefined };
+      }
+    }
+  });
+  return best;
 }

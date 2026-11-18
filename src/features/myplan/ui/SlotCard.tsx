@@ -7,7 +7,7 @@ import { BandChip, Card, HowLabel, TargetIcon, WORK_STYLE, WorkChip } from './pr
 import { useMyPlan } from './context';
 import { taskSummary, timeText } from './slotHelpers';
 import { ZONE_SHORT } from '../engine/timezones';
-import { format12h } from '../engine/time';
+import { format12h, toHHMM } from '../engine/time';
 import { Clock3, Info } from 'lucide-react';
 import { NextStepLine } from './NextStepLine';
 import { BLOCK_LABEL } from './BlockSheets';
@@ -53,7 +53,8 @@ export const SlotCard: React.FC<SlotCardProps> = ({
   const skipped = slot.status === 'skipped';
   const tasks = taskSummary(slot, catalog);
   // Meetings and time blocks (added here or from the calendar) don't earn points.
-  const points = slot.target.kind === 'block' ? 0 : done ? slot.pointsAwarded : estimatePoints(slot, gameRules);
+  // Estimated from when it's actually planned to happen (a visit at 5:55 PM earns the outside-10–4 rate).
+  const points = slot.target.kind === 'block' ? 0 : done ? slot.pointsAwarded : estimatePoints({ how: slot.how, fixedTime: start !== undefined ? toHHMM(start) : slot.fixedTime }, gameRules);
   const showArrows = !readOnly && !done && !skipped && (onMoveUp || onMoveDown);
   const open = onOpen ?? (() => openSheet(done || skipped ? { kind: 'outcome', slotId: slot.id } : { kind: 'edit', slotId: slot.id }));
 
