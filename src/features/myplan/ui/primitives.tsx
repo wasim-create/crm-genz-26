@@ -126,6 +126,25 @@ export const Sheet: React.FC<{
       if (opener && opener.isConnected && opener !== document.body) opener.focus({ preventScroll: true });
     };
   }, []);
+  // When the panel swaps what it shows (a form becomes "Saved"), the button that
+  // had focus is gone: put focus on the new title so keyboards and screen readers
+  // carry on from there.
+  useEffect(() => {
+    if (!root.current?.contains(document.activeElement)) heading.current?.focus({ preventScroll: true });
+  }, [title]);
+  // Escape still works if focus has fallen out to the page (only for the top-most panel).
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const panels = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (panels[panels.length - 1] !== root.current) return;
+      if (document.activeElement && document.activeElement !== document.body && root.current?.contains(document.activeElement)) return;
+      e.preventDefault();
+      close.current();
+    };
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, []);
   const onKeyDown = (e: React.KeyboardEvent) => {
     const panel = root.current;
     if (!panel || e.defaultPrevented) return;

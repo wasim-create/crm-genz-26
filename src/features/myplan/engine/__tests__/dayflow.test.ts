@@ -71,3 +71,14 @@ test('card points follow the planned time: a 5:55 PM visit shows the outside-10â
   const late = estimatePoints({ how: 'in_person', fixedTime: '17:55' }, INITIAL_GAME_RULES);
   assert.ok(late < good);
 });
+
+import { suggestPlacements } from '../schedule';
+
+test('a suggested time that pushes another stop late says so, naming that stop', () => {
+  const a = slot({ name: 'Ocean State Honda', coords: PROVIDENCE, timeMode: 'exact', fixedTime: '10:00', durationMin: 90 });
+  const b = slot({ name: 'Golden Mile Hyundai', coords: WORCESTER, durationMin: 120 });
+  const add = slot({ name: 'Blackstone Valley Subaru', coords: WORCESTER, durationMin: 120 });
+  const between = suggestPlacements([a, b], add, ctx, 1, { onlyIndex: 1 })[0];
+  assert.ok(between && !between.fits);
+  assert.match(between.reason, /^Pushes Golden Mile Hyundai later, to end at .+, outside 10â€“4\.$/);
+});
