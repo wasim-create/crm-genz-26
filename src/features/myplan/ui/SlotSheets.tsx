@@ -222,7 +222,7 @@ export const MoveSheet: React.FC<{ slotId: string; onClose: () => void }> = ({ s
               onClick={() =>
                 done(() => {
                   const call: PlanSlot = { ...slot, how: 'phone', durationMin: durationFor('phone', slot.tasks), timeMode: 'flow', fixedTime: undefined, locked: false, autoPinned: false };
-                  const nowMin = ctx.now.getHours() * 60 + ctx.now.getMinutes();
+                  const nowMin = ctx.nowMin;
                   const day = ctx.daySlots(slot.date!).filter(s => s.id !== slot.id);
                   // Today: the call goes in from now on, not back at the visit's old (past) time.
                   const pick = isToday ? suggestPlacements(day, call, ctx.layoutCtx(slot.date!), 1, { notBefore: nowMin })[0] : undefined;

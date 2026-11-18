@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BellRing, CalendarRange, CheckCircle2, Inbox, ListTodo, Plus, RefreshCw, Trash2, WifiOff } from 'lucide-react';
 import { ActionPoint } from '../types';
-import { DAY_NAMES, format12h, formatDayShort, startOfWeek, toISODate } from '../engine/time';
+import { addDays, DAY_NAMES, format12h, formatDayShort, startOfWeek, toISODate } from '../engine/time';
 import {
   addActionPoints,
   getTasksConnector,
@@ -366,13 +366,13 @@ export const SettingsSheet: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 // ---------- Weekly reminder banner ----------
 
 export const ReminderBanner: React.FC = () => {
-  const { user, settings, now, basket, openSheet, setView, setDate, today, readOnly } = useMyPlan();
+  const { user, settings, nowMin, weekday, basket, openSheet, setView, setDate, today, readOnly } = useMyPlan();
   const r = settings.reminder;
   if (readOnly || !r.enabled) return null;
   const weekKey = startOfWeek(today);
   const due =
     r.forceShow ||
-    (now.getDay() === r.day && now.getHours() * 60 + now.getMinutes() >= Number(r.time.split(':')[0]) * 60 + Number(r.time.split(':')[1]) && r.lastShownWeek !== weekKey);
+    (weekday === r.day && nowMin >= Number(r.time.split(':')[0]) * 60 + Number(r.time.split(':')[1]) && r.lastShownWeek !== weekKey);
   if (!due) return null;
   const dismiss = () => updateSettings(user.id, { reminder: { ...settings.reminder, lastShownWeek: weekKey, forceShow: false } });
   return (
@@ -386,7 +386,7 @@ export const ReminderBanner: React.FC = () => {
         variant="primary"
         onClick={() => {
           dismiss();
-          const nextMonday = now.getDay() === 0 || now.getDay() === 6 ? toISODate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + (now.getDay() === 0 ? 1 : 2))) : today;
+          const nextMonday = weekday === 0 || weekday === 6 ? addDays(today, weekday === 0 ? 1 : 2) : today;
           setDate(nextMonday);
           setView('week');
         }}

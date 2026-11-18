@@ -344,7 +344,7 @@ export const NextStepSheet: React.FC<{ dealershipId: string; onClose: () => void
             communicationType: 'System',
             status: 'completed',
             plannedDate: ctx.today,
-            plannedTime: toHHMM(ctx.now.getHours() * 60 + ctx.now.getMinutes()),
+            plannedTime: toHHMM(ctx.nowMin),
             completedAt: now,
             notes: `No next step: ${label}${value.skipReason === 'not_now' && value.nurtureDate ? ` — follow up ${value.nurtureDate}` : ''}.`,
             productsDiscussed: [],

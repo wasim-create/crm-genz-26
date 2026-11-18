@@ -21,7 +21,7 @@ import { layoutDay } from './engine/schedule';
 import { isMessage } from './engine/tasks';
 import { addDays, todayISO, toHHMM } from './engine/time';
 import { dismissToast, ensureSeeded, getSettings, lunchFor, setActiveUser, undo, useMyPlanState } from './data/store';
-import { zoneDiffMinutes, zoneFor, zoneForRegion } from './engine/timezones';
+import { wallClock, zoneDiffMinutes, zoneFor, zoneForRegion } from './engine/timezones';
 import type { LayoutContext } from './engine/schedule';
 import type { PlanSlot } from './types';
 import type { ProspectFormResult } from '../../components/forms/ProspectForm';
@@ -76,12 +76,16 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
   const { currentUser, users, dealerships, contacts, groups, catalog } = props;
   const pageVisible = props.pageVisible !== false;
   const state = useMyPlanState();
-  const today = todayISO();
+  const [viewUserId, setViewUserId] = useState(currentUser.id);
+  const [now, setNow] = useState(() => new Date());
+  // Everything time-of-day in My Plan is in the viewed rep's home time zone, whatever the device's.
+  const viewUserEarly = users.find(u => u.id === viewUserId) ?? currentUser;
+  const zone = zoneForRegion(viewUserEarly.region);
+  const clock = wallClock(now, zone);
+  const today = clock.date;
   const [date, setDate] = useState(today);
   const [view, setView] = useState<'day' | 'week' | 'month'>('day');
   const [sheet, setSheet] = useState<SheetState>(null);
-  const [viewUserId, setViewUserId] = useState(currentUser.id);
-  const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000);
@@ -126,7 +130,8 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
     return {
       home,
       settings: { ...engine, lunch: lunch.enabled, lunchTime: lunch.time, lunchDurationMin: lunch.durationMin, lunchFlexible: lunch.flexible },
-      tzDiff: slot => tzDiffFor(slot, d)
+      tzDiff: slot => tzDiffFor(slot, d),
+      zone: repZone
     };
   };
   const layoutCache = useMemo(() => new Map<string, ReturnType<typeof layoutDay>>(), [byDate, engine, home, state.dayOverrides, state.settings]);
@@ -177,7 +182,7 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
       const open = state.slots.find(s => s.userId === currentUser.id && s.date === today && s.status === 'planned' && !isMessage(s.how) && s.target.kind === 'dealership' && s.target.id === d.id);
       if (open) setSheet({ kind: 'outcome', slotId: open.id });
       else {
-        const draft = buildLoggedSlot(d, currentUser.id, contacts, catalog, today, new Date());
+        const draft = buildLoggedSlot(d, currentUser.id, contacts, catalog, today, new Date(), zone);
         setSheet({ kind: 'outcome', slotId: draft.id, draft });
       }
     } else if (props.request.nextStep) setSheet({ kind: 'nextstep', dealershipId: props.request.dealershipId });
@@ -211,6 +216,8 @@ export const MyPlanModule: React.FC<MyPlanModuleProps> = props => {
   const value: MyPlanContextValue = {
     today,
     now,
+    nowMin: clock.minutes,
+    weekday: clock.weekday,
     user: currentUser,
     viewUser,
     readOnly,

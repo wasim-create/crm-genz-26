@@ -118,3 +118,11 @@ Don't build a second visit form.
 - **Fits earlier** (`suggestEarlierGap` in `engine/schedule.ts`, tests in `dayflow.test.ts`): when a flexible visit or call ends after 4 PM their time and fits in free time earlier without making anything else late, the day offers "Move it earlier". One tap, never automatic, never before now.
 - **Evenings and midnight:** ending after 6 PM their time reads "too late in the day"; times past midnight show "(next day)" and the day says it can't all happen.
 - **Card points** are estimated from the planned time, so an evening visit shows the outside-10–4 rate.
+
+## Logic rules (logic review, stage C)
+
+- **Rep's own time zone** (`engine/timezones.ts`: `wallClock`, `instantAt`): My Plan reads every time of day (now, today, check-ins, logged times) in the viewed rep's home zone (from their region), wherever the device is. Stored times stay real instants. In context: `nowMin`, `weekday`, `repZone`; `LayoutContext.zone`.
+- **Demo clock** picks and shows times in the signed-in person's zone, with the zone shown (e.g. "10:55 AM EST").
+- **Appointments as places** (`layoutDay`): an in-person meeting with an address (or map point) adds a drive like a visit; personal time with no address (dentist, school pickup) is taken to be near home. Other meetings with no address don't move the rep.
+- **Managers joining far away** (`managerJoinHow`, `FAR_JOIN_MILES = 150`): an in-person join more than 150 miles from the manager's home goes on their plan as a Google Meet, with a note saying they can switch it to in person.
+- Demo data version is now `story-2026-11-v7` (the managers' joins changed), so the demo data rebuilds once.

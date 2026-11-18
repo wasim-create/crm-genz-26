@@ -26,7 +26,7 @@ import {
 import { buildDemoData, DemoData } from './demo/story';
 
 /** Bump when the demo story changes so saved browser data is refreshed. */
-export const SEED_VERSION = 'story-2026-11-v6';
+export const SEED_VERSION = 'story-2026-11-v7';
 
 function hiredBusinessDaysAgo(n: number): string {
   const d = new Date();

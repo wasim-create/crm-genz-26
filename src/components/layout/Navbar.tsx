@@ -1,6 +1,7 @@
 import React from 'react';
 import { ThemeMenu } from '../ui/ThemeToggle';
 import { DemoClock } from '../ui/DemoClock';
+import { zoneForRegion } from '../../features/myplan/engine/timezones';
 import { User, UserRole, GamificationProfile } from '../../types/crm';
 import { 
   Compass, 
@@ -119,7 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
 
-        <DemoClock />
+        <DemoClock zone={zoneForRegion(currentUser.region)} />
         <ThemeMenu />
 
         <button

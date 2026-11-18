@@ -15,6 +15,7 @@ import type { BlockType, HowType, PlanSlot } from '../types';
 import { useMyPlan } from './context';
 import { Button, Card, ChoiceCard, Sheet } from './primitives';
 import { newId } from './slotHelpers';
+import { instantAt } from '../engine/timezones';
 
 export const BLOCK_TYPES: { id: BlockType; label: string; placeholder: string }[] = [
   { id: 'meeting', label: 'Meeting', placeholder: 'e.g. Pipeline review with Jason' },
@@ -86,13 +87,13 @@ const field = 'min-h-[48px] w-full rounded-xl border border-slate-300 bg-white p
 
 export const BlockSheet: React.FC<{ date?: string; slotId?: string; past?: boolean; title?: string; insertIndex?: number; blockType?: BlockType; onClose: () => void }> = props => {
   const ctx = useMyPlan();
-  const { user, viewUser, today, now, slots, dealerships, readOnly } = ctx;
+  const { user, viewUser, today, now, nowMin: clockMin, slots, dealerships, readOnly, repZone } = ctx;
   const existing = props.slotId ? slots.find(s => s.id === props.slotId) : undefined;
 
   // A sensible start: the gap it was added into, else the next half hour (or an hour ago for "already happened").
   const defaultStart = useMemo(() => {
     if (existing?.fixedTime) return existing.fixedTime;
-    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const nowMin = clockMin;
     if (props.past) return toHHMM(Math.max(7 * 60, Math.floor((nowMin - 60) / 15) * 15));
     if (props.date && props.insertIndex !== undefined) {
       const lay = ctx.layout(props.date);
@@ -126,7 +127,7 @@ export const BlockSheet: React.FC<{ date?: string; slotId?: string; past?: boole
   const mine = dealerships.filter(d => d.assignedRepId === viewUser.id && !d.isPlaceholder).sort((a, b) => a.dealershipName.localeCompare(b.dealershipName));
   const deal = dealerships.find(d => d.id === dealerId);
   const endMin = toMin(start) + duration;
-  const happened = props.past || date < today || (date === today && endMin <= now.getHours() * 60 + now.getMinutes());
+  const happened = props.past || date < today || (date === today && endMin <= clockMin);
   const isPersonal = type === 'personal';
   const placeholder = BLOCK_TYPES.find(b => b.id === type)!.placeholder;
   const valid = title.trim().length > 0 && !!date && (allDay || !!start);
@@ -136,7 +137,7 @@ export const BlockSheet: React.FC<{ date?: string; slotId?: string; past?: boole
     if (!slot.relatedDealershipId) return;
     const d = dealerships.find(x => x.id === slot.relatedDealershipId);
     if (!d) return;
-    const at = new Date(`${slot.date}T${slot.fixedTime ?? '12:00'}:00`).toISOString();
+    const at = instantAt(slot.date!, toMin(slot.fixedTime ?? '12:00'), repZone).toISOString();
     const act: Activity = {
       id: `act_${slot.id}`,
       dealershipId: d.id,
@@ -253,7 +254,7 @@ export const BlockSheet: React.FC<{ date?: string; slotId?: string; past?: boole
     props.onClose();
   };
 
-  const isPastOrNow = existing && existing.status === 'planned' && (existing.date! < today || (existing.date === today && toMin(existing.fixedTime) <= now.getHours() * 60 + now.getMinutes()));
+  const isPastOrNow = existing && existing.status === 'planned' && (existing.date! < today || (existing.date === today && toMin(existing.fixedTime) <= clockMin));
   const sheetTitle = existing ? (readOnly ? existing.target.name : 'Edit meeting or time block') : props.past ? 'Log a meeting or other time' : 'Add a meeting or time block';
 
   return (

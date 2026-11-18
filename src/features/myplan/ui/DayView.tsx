@@ -71,7 +71,7 @@ export const DayView: React.FC = () => {
 
   // Next up = what's happening now, or the next thing that isn't over yet.
   // Anything already over and not logged goes in "Still to log" instead.
-  const nowMin = ctx.now.getHours() * 60 + ctx.now.getMinutes();
+  const nowMin = ctx.nowMin;
   const showNext = isToday && !readOnly;
   const picked = showNext ? pickNextUp(sequence, id => lay.timings[id]?.end, nowMin) : { next: undefined, missed: [] as PlanSlot[] };
   const nextSlot = picked.next;
@@ -473,9 +473,8 @@ export const DayView: React.FC = () => {
 };
 
 const DaySummary: React.FC<{ layout: DayLayout; slots: PlanSlot[] }> = ({ layout, slots }) => {
-  const { date, today, readOnly, openSheet, basket, now } = useMyPlan();
+  const { date, today, readOnly, openSheet, basket, nowMin } = useMyPlan();
   // Once the leave time has passed today, the useful headline is when you'll be home.
-  const nowMin = now.getHours() * 60 + now.getMinutes();
   const onTheRoad = date === today && layout.leaveBy !== undefined && layout.homeAt !== undefined && nowMin >= layout.leaveBy;
   const scheduled = slots.filter(s => s.status !== 'skipped');
   const visits = scheduled.filter(s => s.how === 'in_person' && s.target.kind !== 'block').length;
@@ -599,9 +598,8 @@ const DaySummary: React.FC<{ layout: DayLayout; slots: PlanSlot[] }> = ({ layout
 /** A late-in-the-day visit that would fit in free time earlier: offer the move (one tap, never automatic). */
 const EarlierGap: React.FC = () => {
   const ctx = useMyPlan();
-  const { date, today, now, daySlots, layoutCtx } = ctx;
+  const { date, today, nowMin, daySlots, layoutCtx } = ctx;
   const slots = daySlots(date);
-  const nowMin = now.getHours() * 60 + now.getMinutes();
   const g = useMemo(() => suggestEarlierGap(slots, layoutCtx(date), date === today ? { notBefore: nowMin } : {}), [slots, date, today, nowMin]);
   if (!g) return null;
   const move = () => {
@@ -710,7 +708,7 @@ const NextCard: React.FC<{ target?: PlanSlot; layout: DayLayout }> = ({ target, 
   // to come keeps its time (nothing moves by itself) until the rep re-plans.
   const checkIn = () => {
     const now = new Date();
-    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const nowMin = ctx.nowMin;
     const planned = timing?.start ?? nowMin;
     const diff = nowMin - planned;
     const held = holdRestOfDay(ctx.daySlots(ctx.date), layout, target.id).map(s =>

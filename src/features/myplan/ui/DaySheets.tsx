@@ -187,7 +187,7 @@ export const TimeSheet: React.FC<{ slotId: string; onClose: () => void }> = ({ s
   const pushedLater = trial ? Object.keys(trial.timings).filter(id => id !== slot.id && (trial.timings[id].start - (lay.timings[id]?.start ?? 0)) >= 5).length : 0;
   const newWarnings = trial ? trial.warnings.filter(w => !lay.warnings.some(b => b.code === w.code && b.slotId === w.slotId)) : [];
 
-  const nowMin = roundUp5(ctx.now.getHours() * 60 + ctx.now.getMinutes());
+  const nowMin = roundUp5(ctx.nowMin);
   const chips = [-30, -15, -5, 5, 15, 30, 60];
 
   const save = () => {
